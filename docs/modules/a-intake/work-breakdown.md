@@ -49,8 +49,8 @@
 |---|---|---|---|
 | 1 | GET | `/api/v1/projects` | 项目列表 |
 | 2 | POST | `/api/v1/projects` | 创建项目 |
-| 3 | GET | `/api/v1/projects/{id}` | 项目详情 |
-| 4 | DELETE | `/api/v1/projects/{id}` | 删除项目 |
+| 3 | GET | `/api/v1/projects/{project_id}` | 项目详情 |
+| 4 | DELETE | `/api/v1/projects/{project_id}` | 删除项目 |
 
 **资产管理（4 个）**：
 
@@ -58,15 +58,15 @@
 |---|---|---|---|
 | 5 | POST | `/api/v1/assets/upload` | 上传文件（multipart） |
 | 6 | POST | `/api/v1/assets/git` | 接入 Git 仓库 |
-| 7 | GET | `/api/v1/assets?project_id={id}` | 资产列表 |
-| 8 | DELETE | `/api/v1/assets/{id}` | 删除资产 |
+| 7 | GET | `/api/v1/assets?project_id={project_id}` | 资产列表 |
+| 8 | DELETE | `/api/v1/assets/{asset_id}` | 删除资产 |
 
 **补充文本（2 个）**：
 
 | # | 方法 | 路径 | 说明 |
 |---|---|---|---|
 | 9 | POST | `/api/v1/assets/notes` | 添加补充文本 |
-| 10 | PUT | `/api/v1/assets/notes/{id}` | 编辑补充文本 |
+| 10 | PUT | `/api/v1/assets/notes/{note_id}` | 编辑补充文本 |
 
 ### 3.2 后端服务
 
@@ -131,4 +131,4 @@
 - [ ] 测试：5 个后端单元测试 + 3 个前端测试
 - [ ] API 响应格式符合 api-conventions.md
 - [ ] UI 风格符合 ui-design-system.md
-- [ ] 错误码使用 01xxx 范围
+- [ ] 错误码使用 1001–1999 范围

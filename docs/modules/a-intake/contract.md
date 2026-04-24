@@ -50,8 +50,8 @@
 |---|---|---|
 | GET | `/api/v1/projects` | 项目列表 |
 | POST | `/api/v1/projects` | 创建项目 |
-| GET | `/api/v1/projects/{id}` | 项目详情 |
-| DELETE | `/api/v1/projects/{id}` | 删除项目 |
+| GET | `/api/v1/projects/{project_id}` | 项目详情 |
+| DELETE | `/api/v1/projects/{project_id}` | 删除项目 |
 
 ### 4.2 资产管理
 
@@ -59,15 +59,15 @@
 |---|---|---|
 | POST | `/api/v1/assets/upload` | 上传文件（multipart） |
 | POST | `/api/v1/assets/git` | 接入 Git 仓库 |
-| GET | `/api/v1/assets?project_id={id}` | 资产列表 |
-| DELETE | `/api/v1/assets/{id}` | 删除资产 |
+| GET | `/api/v1/assets?project_id={project_id}` | 资产列表 |
+| DELETE | `/api/v1/assets/{asset_id}` | 删除资产 |
 
 ### 4.3 补充文本
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/api/v1/assets/notes` | 添加补充文本 |
-| PUT | `/api/v1/assets/notes/{id}` | 编辑补充文本 |
+| PUT | `/api/v1/assets/notes/{note_id}` | 编辑补充文本 |
 
 ### 关键端点详情
 
@@ -161,12 +161,12 @@ Response:
 
 | 错误码 | HTTP | 含义 |
 |---|---|---|
-| 01001 | 400 | 文件格式不支持 |
-| 01002 | 400 | 文件大小超限（≤ 20MB） |
-| 01003 | 400 | Git 仓库 URL 无效 |
-| 01004 | 404 | 项目不存在 |
-| 01005 | 409 | 资料已存在（重复上传同文件） |
-| 01006 | 404 | 资料不存在 |
+| 1001 | 400 | 文件格式不支持 |
+| 1002 | 400 | 文件大小超限（≤ 20MB） |
+| 1003 | 400 | Git 仓库 URL 无效 |
+| 1004 | 404 | 项目不存在 |
+| 1005 | 409 | 资料已存在（重复上传同文件） |
+| 1006 | 404 | 资料不存在 |
 
 ## 7. 测试策略
 

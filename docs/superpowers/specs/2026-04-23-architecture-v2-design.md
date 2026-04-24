@@ -166,17 +166,20 @@ AI 交互模式：
 版本管理：
 - 每次用户手动保存或 AI 确认修改后，自动创建 HTML 快照
 - 版本列表（版本号 + 时间 + 标签）
-- 回退：将历史快照加载回编辑器
+- 回退：将历史快照写回 `drafts.html_content` 并自动新增快照
 - 版本快照只存 HTML，一份简历 HTML 约 5-10KB
 
-PDF 导出：
+PDF 导出（异步任务模式）：
 - 前端将当前编辑器 HTML 发送到后端
+- 后端创建异步导出任务，立即返回 `task_id`
 - 后端校验用户导出权限（付费用户）
 - 后端启动 chromedp（Go 原生库控制 Chromium）
 - Chromium 以固定 A4 尺寸渲染 HTML
 - 调用 page.PrintToPDF() 生成 PDF
-- 返回 PDF 二进制流给前端
-- 导出完成后释放 Chromium 进程
+- PDF 文件存储至本地文件系统
+- 客户端通过 `GET /api/v1/tasks/{task_id}` 轮询任务状态
+- 导出完成后从 `result.download_url` 获取 PDF 下载链接
+- 释放 Chromium 进程
 
 并发控制：同一时间只允许一个导出任务，其余排队等待。
 
@@ -189,15 +192,28 @@ PDF 导出：
 ## 7. 数据库设计
 
 ```sql
--- 项目
+-- 项目（先创建，不含外键）
 CREATE TABLE projects (
     id          SERIAL PRIMARY KEY,
     title       VARCHAR(200) NOT NULL,
     status      VARCHAR(20) NOT NULL DEFAULT 'active',  -- active / archived
-    current_draft_id INTEGER REFERENCES drafts(id),
+    current_draft_id INTEGER,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- 草稿（核心表，HTML 是唯一数据源）
+CREATE TABLE drafts (
+    id           SERIAL PRIMARY KEY,
+    project_id   INTEGER NOT NULL REFERENCES projects(id),
+    html_content TEXT NOT NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 补充 projects 外键（drafts 表已存在）
+ALTER TABLE projects ADD CONSTRAINT fk_projects_current_draft
+    FOREIGN KEY (current_draft_id) REFERENCES drafts(id);
 
 -- 资产（文件、Git、文本）
 CREATE TABLE assets (
@@ -210,15 +226,6 @@ CREATE TABLE assets (
     metadata    JSONB,                   -- {filename, size_bytes, uploaded_at}
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
--- 草稿（核心表，HTML 是唯一数据源）
-CREATE TABLE drafts (
-    id           SERIAL PRIMARY KEY,
-    project_id   INTEGER NOT NULL REFERENCES projects(id),
-    html_content TEXT NOT NULL,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- 版本快照
@@ -255,14 +262,14 @@ CREATE TABLE ai_messages (
 |---|---|---|
 | GET | /api/v1/projects | 项目列表 |
 | POST | /api/v1/projects | 创建项目 |
-| GET | /api/v1/projects/{id} | 项目详情 |
-| DELETE | /api/v1/projects/{id} | 删除项目 |
+| GET | /api/v1/projects/{project_id} | 项目详情 |
+| DELETE | /api/v1/projects/{project_id} | 删除项目 |
 | POST | /api/v1/assets/upload | 上传文件 |
 | POST | /api/v1/assets/git | 接入 Git 仓库 |
-| GET | /api/v1/assets?project_id={id} | 资产列表 |
-| DELETE | /api/v1/assets/{id} | 删除资产 |
+| GET | /api/v1/assets?project_id={project_id} | 资产列表 |
+| DELETE | /api/v1/assets/{asset_id} | 删除资产 |
 | POST | /api/v1/assets/notes | 添加补充文本 |
-| PUT | /api/v1/assets/notes/{id} | 编辑补充文本 |
+| PUT | /api/v1/assets/notes/{note_id} | 编辑补充文本 |
 
 ### 模块 B（解析与初稿）
 
@@ -276,24 +283,24 @@ CREATE TABLE ai_messages (
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | /api/v1/ai/sessions | 创建对话会话 |
-| POST | /api/v1/ai/sessions/{id}/chat | 发送消息（SSE 流式） |
-| GET | /api/v1/ai/sessions/{id}/history | 获取对话历史 |
+| POST | /api/v1/ai/sessions/{session_id}/chat | 发送消息（SSE 流式） |
+| GET | /api/v1/ai/sessions/{session_id}/history | 获取对话历史 |
 
 ### 模块 D（草稿编辑）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | /api/v1/drafts/{id} | 获取草稿 HTML |
-| PUT | /api/v1/drafts/{id} | 保存草稿 HTML（自动保存） |
+| GET | /api/v1/drafts/{draft_id} | 获取草稿 HTML |
+| PUT | /api/v1/drafts/{draft_id} | 保存草稿 HTML（自动保存） |
 
 ### 模块 E（版本与导出）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | /api/v1/drafts/{id}/versions | 版本列表 |
-| POST | /api/v1/drafts/{id}/versions | 手动创建快照 |
-| POST | /api/v1/drafts/{id}/rollback | 回退到指定版本 |
-| POST | /api/v1/drafts/{id}/export | 导出 PDF（需权限） |
+| GET | /api/v1/drafts/{draft_id}/versions | 版本列表 |
+| POST | /api/v1/drafts/{draft_id}/versions | 手动创建快照 |
+| POST | /api/v1/drafts/{draft_id}/rollback | 回退到指定版本（写回 + 自动快照） |
+| POST | /api/v1/drafts/{draft_id}/export | 创建 PDF 导出异步任务 |
 
 ## 9. 简历 HTML 模板骨架
 
