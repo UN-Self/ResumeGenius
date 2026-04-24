@@ -15,7 +15,6 @@
 docs/
   README.md
   prd_v2.md                        # v2 产品需求文档
-  prd_v1.md                        # 已废弃（v1 LaTeX 架构）
   01-product/                      # 共享规范
     product-logic-diagrams.md      # 功能关系图 + 用户流程图
     functional-breakdown.md        # 功能划分 + 5 人模块切分
@@ -34,7 +33,6 @@ docs/
     e-render/                      # E 版本导出
   superpowers/specs/               # 架构设计规格
     2026-04-23-architecture-v2-design.md   # v2 架构设计（已批准）
-    2026-04-24-v2-doc-consistency-fix-design.md  # 文档一致性修复设计
 ```
 
 ## 架构总览
@@ -89,4 +87,3 @@ docs/
 
 - `prd_v2.md` 是 v2 的产品需求文档
 - `superpowers/specs/` 目录下存放架构设计规格
-- v1 的 6 层数据结构和 Patch 协议已废弃，详见 v2 架构设计文档 §12 和 §13

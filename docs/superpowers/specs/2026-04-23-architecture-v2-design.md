@@ -439,7 +439,7 @@ volumes:
 以下 v1 的设计在 v2 中不再需要：
 
 - **数据结构**：ResumeDraftState、ResolvedResumeSpec、EvidenceSet、PatchEnvelope、PatchOp、TargetRef、RevisionRecord
-- **协议文档**：patch-schema.md（整个文件）
+- **协议文档**：patch-schema.md（已删除，v2 不需要 Patch 协议）
 - **后端服务**：PatchEngine、ResolveEngine、TemplateManager、EvidenceBuilder、SuggestionBuilder、PatchComposer、IntentRecognizer
 - **前端组件**：三栏编辑器（section 导航 + 编辑区 + 样式面板）、建议卡片（SuggestionCard）、确认/拒绝按钮
 - **依赖**：LaTeX、TeX Live、ctexart、PyMuPDF（替换为 ledongthuc/pdf）、python-docx（替换为 nguyenthenguyen/docx）
