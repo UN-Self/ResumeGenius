@@ -84,11 +84,11 @@ ResumeGenius/
 
 | 模块 | 负责人 | 前端页面 | 后端 API 数 | 核心产出 |
 |---|---|---|---|---|
-| A 项目管理 | — | 3 页 | 10 个 | projects + assets 表操作 |
-| B 解析与初稿 | — | 2 页 | 2 个 | 文本提取 → AI 生成 HTML |
+| A 资料接入 | — | 3 页 | 10 个 | projects + assets 表操作 |
+| B 解析初稿 | — | 2 页 | 2 个 | 文本提取 → AI 生成 HTML |
 | C AI 对话 | — | 集成在工作台 | 3 个 | SSE 流式对话 |
-| D 编辑器 | — | 工作台主体 | 2 个 | TipTap 集成 + 自动保存 |
-| E 版本导出 | — | 弹窗/抽屉 | 4 个 | HTML 快照 + chromedp PDF |
+| D 可视化编辑 | — | 工作台主体 | 2 个 | TipTap 集成 + 自动保存 |
+| E 版本导出 | — | 弹窗/抽屉 | 5 个 | HTML 快照 + chromedp PDF |
 
 ## 4. 开发顺序建议
 
@@ -129,8 +129,8 @@ ResumeGenius/
 
 | 模块 | 工作明细文档 |
 |---|---|
-| A 项目管理 | [modules/a-intake/work-breakdown.md](../modules/a-intake/work-breakdown.md) |
-| B 解析与初稿 | [modules/b-parsing/work-breakdown.md](../modules/b-parsing/work-breakdown.md) |
+| A 资料接入 | [modules/a-intake/work-breakdown.md](../modules/a-intake/work-breakdown.md) |
+| B 解析初稿 | [modules/b-parsing/work-breakdown.md](../modules/b-parsing/work-breakdown.md) |
 | C AI 对话 | [modules/c-agent/work-breakdown.md](../modules/c-agent/work-breakdown.md) |
-| D 编辑器 | [modules/d-workbench/work-breakdown.md](../modules/d-workbench/work-breakdown.md) |
+| D 可视化编辑 | [modules/d-workbench/work-breakdown.md](../modules/d-workbench/work-breakdown.md) |
 | E 版本导出 | [modules/e-render/work-breakdown.md](../modules/e-render/work-breakdown.md) |

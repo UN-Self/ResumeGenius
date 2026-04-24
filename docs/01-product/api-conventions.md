@@ -33,12 +33,11 @@
 
 | 模块 | 前缀 | 示例 |
 |---|---|---|
-| A 项目管理 | `/api/v1/projects/` | `GET /api/v1/projects/{project_id}` |
-| A 资产管理 | `/api/v1/assets/` | `POST /api/v1/assets/upload` |
-| B 解析与初稿 | `/api/v1/parsing/` | `POST /api/v1/parsing/parse` |
+| A 资料接入 | `/api/v1/projects/`、`/api/v1/assets/` | `GET /api/v1/projects/{project_id}` |
+| B 解析初稿 | `/api/v1/parsing/` | `POST /api/v1/parsing/parse` |
 | C AI 对话 | `/api/v1/ai/` | `POST /api/v1/ai/sessions/{session_id}/chat` |
-| D 草稿编辑 | `/api/v1/drafts/` | `GET /api/v1/drafts/{draft_id}` |
-| E 版本导出 | `/api/v1/drafts/{draft_id}/` | `POST /api/v1/drafts/{draft_id}/export` |
+| D 可视化编辑 | `/api/v1/drafts/` | `GET /api/v1/drafts/{draft_id}` |
+| E 版本导出 | `/api/v1/drafts/{draft_id}/`（drafts 子资源） | `POST /api/v1/drafts/{draft_id}/export` |
 
 ### 2.2 命名规则
 
@@ -88,18 +87,22 @@
 
 ### 4.1 错误码结构
 
-5 位纯数字分段（示例格式：`01001`）
+纯数字分段编码：
 
-- `SS`：模块编号（00 = 通用，模块 A-E 对应 01-05）
-- `CCC`：模块内错误编号
+- 通用错误码：40000、40001、40100、40300、40400、40900、50000
+- 模块 A（资料接入）：1001–1999
+- 模块 B（解析初稿）：2001–2999
+- 模块 C（AI 对话）：3001–3999
+- 模块 D（可视化编辑）：4001–4999
+- 模块 E（版本导出）：5001–5999
 
-示例：`01001` 表示模块 A 的第 1 号错误。
+各模块在 contract.md 中定义自己的错误码明细。
 
 ### 4.2 通用错误码（00xxx）
 
 | 错误码 | HTTP 状态 | 含义 |
 |---|---|---|
-| 0 | 200 | 成功 |
+| 0 | 200 | 成功（`code` 字段类型为整数，固定值 `0`） |
 | 40000 | 400 | 请求参数错误 |
 | 40001 | 400 | 数据校验失败 |
 | 40100 | 401 | 未认证（v1 预留） |
@@ -113,10 +116,10 @@
 | 模块 | 编号范围 | 示例 |
 |---|---|---|
 | A 资料接入 | 1001–1999 | 1001 = 文件格式不支持 |
-| B 解析与初稿 | 2001–2999 | 2001 = PDF 解析失败 |
+| B 解析初稿 | 2001–2999 | 2001 = PDF 解析失败 |
 | C AI 对话 | 3001–3999 | 3001 = 模型调用超时 |
-| D 草稿编辑 | 4001–4999 | 4001 = 草稿不存在 |
-| E 版本与导出 | 5001–5999 | 5001 = PDF 导出失败 |
+| D 可视化编辑 | 4001–4999 | 4001 = 草稿不存在 |
+| E 版本导出 | 5001–5999 | 5001 = PDF 导出失败 |
 
 各模块在 contract.md 中定义自己的错误码明细。
 
@@ -200,6 +203,8 @@ data: {"type": "done"}
 ```
 
 任务状态枚举：`pending` → `processing` → `completed` / `failed`
+
+> `GET /api/v1/tasks/{task_id}` 归属于模块 E（详见 E 契约）。
 
 ## 9. 请求/字段命名
 

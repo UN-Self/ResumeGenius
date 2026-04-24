@@ -1,7 +1,8 @@
 # v2 文档一致性修复设计
 
 日期：2026-04-24
-状态：已确认（待执行）
+状态：已执行
+审查补充：2026-04-24（新增 Section 9-11）
 
 ## 1. 背景与目标
 
@@ -202,3 +203,229 @@
 
 - 本文档仅定义修复设计，不包含代码提交。
 - 按用户要求，本次不执行 git commit。
+
+---
+
+## 9. 额外修复项（审查补充）
+
+以下问题在代码审查中发现，原 Section 4 未覆盖。
+
+### 9.1 C1 — prd_v1.md 废弃标头
+
+**问题**：`docs/prd_v1.md` 描述 LaTeX/Patch 架构，与整个 v2 文档矛盾，且无废弃标头。
+
+**修复**：在 `docs/prd_v1.md` 第 1 行之前插入废弃块，参照 `patch-schema.md` 的格式：
+
+```markdown
+> **此文档已废弃。** v2 架构采用"HTML 是唯一数据源"设计，不再使用 LaTeX 渲染、
+> PatchEnvelope、SourceDoc、ResumeSpec、ResolvedResumeSpec 等中间概念。
+>
+> 请参阅 [v2 PRD](./prd_v2.md) 和 [v2 架构设计](./superpowers/specs/2026-04-23-architecture-v2-design.md)。
+```
+
+**文件**：`docs/prd_v1.md`
+
+### 9.2 C2 — 版本自动创建触发机制
+
+**问题**：E 契约 Section 5 期望 B/C/D 触发版本创建，但 B/C/D 契约均未记录此要求。
+
+**已确认决策**：B/C/D 各自在完成操作后调用 E 的版本创建逻辑。
+
+#### 模块 B（解析初稿生成后）
+
+`POST /api/v1/parsing/generate` 成功后，服务端在事务内：
+1. 写入 `drafts.html_content`
+2. 调用 E 的版本创建逻辑，label = `"AI 初始生成"`
+3. 返回 `draft_id` + `html_content` + `version_id`
+
+响应增加 `version_id` 字段。
+
+#### 模块 D（手动保存 / AI 应用保存）
+
+前端调用 D 的 `PUT /api/v1/drafts/{draft_id}` 时：
+- 自动保存（debounce 2s）：**不触发**版本创建（避免版本爆炸）
+- 仅当请求显式携带 `create_version: true` 时创建版本
+- `version_label` 字段可选，默认 `"手动保存"`
+
+请求 body 扩展：
+
+```json
+{
+  "html_content": "<!DOCTYPE html>...",
+  "create_version": true,
+  "version_label": "AI 修改：精简项目经历"
+}
+```
+
+响应扩展（仅当创建了版本时）：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "id": 1,
+    "updated_at": "2026-04-23T20:05:00Z",
+    "version_id": 5
+  }
+}
+```
+
+#### 模块 C
+
+C 不负责 HTML 替换和版本创建。用户点击"应用到简历"后，前端调用 D 的 PUT（携带 `create_version: true` 和 `version_label`）。
+
+#### 模块 E
+
+`POST /api/v1/drafts/{draft_id}/versions` 保持不变。新增一个内部版本创建函数（供 B/D handler 调用），不暴露为独立 API。
+
+**文件**：
+- `docs/modules/b-parsing/contract.md` — 输出契约加 version_id，下游加"模块 E"
+- `docs/modules/b-parsing/work-breakdown.md` — 交付清单更新
+- `docs/modules/c-agent/contract.md` — Section 5.4 补充说明前端调用 D 时携带版本参数
+- `docs/modules/d-workbench/contract.md` — PUT 端点扩展请求/响应，下游加"模块 E"
+- `docs/modules/d-workbench/work-breakdown.md` — 交付清单更新
+
+### 9.3 I1 — api-conventions.md 错误码章节内部自相矛盾
+
+**问题**：同一文件 Section 4.1 描述 `SSCCC` 格式（示例 `01001`），Section 4.3 列表使用纯数字 `1001-1999`。
+
+**修复**：重写 Section 4.1，删除 `SSCCC` 和 `01001` 描述，改为与 Section 4.3 一致的纯数字分段。同时修复 Section 4.2 通用错误码中的 `0`（成功码）为显式说明。
+
+**文件**：`docs/01-product/api-conventions.md`
+
+### 9.4 I2 — work-breakdown 回滚测试描述
+
+**问题**：`e-render/work-breakdown.md` 第 86 行写"返回指定版本的 html_snapshot"（只读语义），与同文件第 55 行和 E 契约的写回语义矛盾。
+
+**修复**：将第 86 行测试描述改为"回退到指定版本，验证 drafts.html_content 被更新为新版本快照"。
+
+**文件**：`docs/modules/e-render/work-breakdown.md`
+
+### 9.5 I3 — 任务状态查询端点归入模块 E
+
+**问题**：`GET /api/v1/tasks/{task_id}` 在 api-conventions 和 E 契约中被引用，但不属于任何模块的正式 API 列表。
+
+**已确认决策**：归入模块 E。
+
+**修复**：
+- E 契约 API 端点表增加第 5 个端点：`GET /api/v1/tasks/{task_id}`
+- 补充完整的请求/响应契约（成功、失败、轮询状态）
+- E work-breakdown 交付清单更新为"5 个 API 端点"
+- api-conventions.md Section 8 注明此端点归属于模块 E
+
+**文件**：
+- `docs/modules/e-render/contract.md`
+- `docs/modules/e-render/work-breakdown.md`
+- `docs/01-product/api-conventions.md`
+
+### 9.6 I4 — 模块前缀规则更新
+
+**问题**：api-conventions 定义"每个模块一个前缀"，但 D（`/api/v1/drafts/`）和 E（`/api/v1/drafts/{draft_id}/`）共享前缀。
+
+**修复**：更新 api-conventions.md Section 2.1 模块前缀表，明确说明 E 的端点是 drafts 资源的子路径，由 D 和 E 共享 `/api/v1/drafts/` 前缀：
+
+```
+| D 可视化编辑 | `/api/v1/drafts/` | `GET /api/v1/drafts/{draft_id}` |
+| E 版本导出   | `/api/v1/drafts/{draft_id}/...` | （drafts 子资源） |
+```
+
+**文件**：`docs/01-product/api-conventions.md`
+
+### 9.7 I5 — 图片上传 v1 限制说明
+
+**问题**：A 模块接受 `resume_image` 上传，但 B 模块不处理图片解析。用户上传图片后系统静默忽略。
+
+**已确认决策**：v1 保留图片上传能力，标注为"仅作参考/头像提取，暂不支持 OCR 识别"。
+
+**修复**：
+- A 契约上传端点说明中增加 v1 限制：图片资产仅存储，B 模块解析时跳过
+- B 契约解析策略表中图片行增加说明："v1 跳过，不发送给 AI。图片存储在 assets 表供前端手动引用（如头像）。"
+
+**文件**：
+- `docs/modules/a-intake/contract.md`
+- `docs/modules/b-parsing/contract.md`
+
+### 9.8 I6 — 回滚响应格式对齐
+
+**问题**：E 契约回滚响应格式（`{draft_id, version_id, new_version_id, message}`）与 fix-design Section 3.1 定义的新格式不一致。
+
+**修复**：将 E 契约回滚响应替换为 Section 3.1 定义的格式。
+
+**文件**：`docs/modules/e-render/contract.md`
+
+### 9.9 M2 — README 目录列表补全
+
+**问题**：`docs/README.md` 目录列表遗漏 `prd_v1.md`（已废弃）和 `patch-schema.md`（已废弃）。
+
+**修复**：在目录列表中增加这两个文件，标注"已废弃"。
+
+**文件**：`docs/README.md`
+
+### 9.10 M3 — 模块标准显示名统一
+
+**问题**：模块显示名在不同文档中不一致（如 E 模块有 4 种叫法）。
+
+**已确认标准名**：
+
+| 模块 | 标准显示名 | 目录名 | Go 包名 |
+|------|-----------|--------|---------|
+| A | 资料接入 | `a-intake` | `a_intake` |
+| B | 解析初稿 | `b-parsing` | `b_parsing` |
+| C | AI 对话 | `c-agent` | `c_agent` |
+| D | 可视化编辑 | `d-workbench` | `d_workbench` |
+| E | 版本导出 | `e-render` | `e_render` |
+
+**修复**：在 README.md、api-conventions.md、functional-breakdown.md、dev-work-breakdown.md 中统一使用标准显示名。
+
+**文件**：
+- `docs/README.md`
+- `docs/01-product/api-conventions.md`
+- `docs/01-product/functional-breakdown.md`
+- `docs/01-product/dev-work-breakdown.md`
+
+### 9.11 prd_v2 / functional-breakdown 回滚描述对齐
+
+**问题**：`prd_v2.md` 和 `functional-breakdown.md` 中回滚描述为"加载历史快照到编辑器"（模棱两可），应明确为写回语义。
+
+**修复**：将两处描述改为"回退到指定版本（写回当前草稿并自动创建新快照）"。
+
+**文件**：
+- `docs/prd_v2.md`
+- `docs/01-product/functional-breakdown.md`
+
+## 10. 更新后的验收标准
+
+除原 Section 6 的 5 项标准外，新增：
+
+6. `docs/prd_v1.md` 顶部包含废弃标头，指向 v2 文档。
+7. `docs/README.md` 目录列表包含所有 `docs/` 根目录文件（含已废弃标注）。
+8. B/C/D 契约明确记录版本创建触发机制（输出契约或 API 端点中）。
+9. `GET /api/v1/tasks/{task_id}` 归属于模块 E 的正式 API 端点表。
+10. `api-conventions.md` 模块前缀表反映 D/E 共享前缀的现实。
+11. A 契约和 B 契约包含图片上传的 v1 限制说明。
+12. 全仓模块显示名与 Section 9.10 标准名一致。
+
+## 11. 更新后的文件修改清单
+
+| # | 文件 | 修复项 |
+|---|------|--------|
+| 1 | `docs/prd_v1.md` | 9.1 |
+| 2 | `docs/README.md` | 9.9, 9.10 |
+| 3 | `docs/prd_v2.md` | 9.11 |
+| 4 | `docs/01-product/api-conventions.md` | 4.1, 9.3, 9.5, 9.6, 9.10 |
+| 5 | `docs/01-product/functional-breakdown.md` | 4.3, 9.10, 9.11 |
+| 6 | `docs/01-product/dev-work-breakdown.md` | 4.2, 9.10 |
+| 7 | `docs/02-data-models/core-data-model.md` | 4.2 |
+| 8 | `docs/modules/a-intake/contract.md` | 4.2, 9.7 |
+| 9 | `docs/modules/a-intake/work-breakdown.md` | 4.2 |
+| 10 | `docs/modules/b-parsing/contract.md` | 4.2, 9.2, 9.7 |
+| 11 | `docs/modules/b-parsing/work-breakdown.md` | 4.2, 9.2 |
+| 12 | `docs/modules/c-agent/contract.md` | 4.2, 9.2 |
+| 13 | `docs/modules/c-agent/work-breakdown.md` | 4.2 |
+| 14 | `docs/modules/d-workbench/contract.md` | 4.2, 9.2 |
+| 15 | `docs/modules/d-workbench/work-breakdown.md` | 4.2, 9.2 |
+| 16 | `docs/modules/e-render/contract.md` | 4.1, 9.5, 9.8 |
+| 17 | `docs/modules/e-render/work-breakdown.md` | 4.1, 9.4, 9.5 |
+| 18 | `docs/superpowers/specs/2026-04-23-architecture-v2-design.md` | 4.1 |
+
+共 18 个文件。

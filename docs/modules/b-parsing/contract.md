@@ -45,6 +45,8 @@ AI 输入：
 AI 输出：
 - 完整的简历 HTML（可直接在浏览器中渲染）
 
+版本快照：AI 初稿生成成功后，服务端自动调用版本创建逻辑，写入 versions 表一条记录，label = `"AI 初始生成"`。
+
 ## 4. API 端点
 
 遵循 [api-conventions.md](../../01-product/api-conventions.md)。
@@ -102,6 +104,7 @@ Response (成功):
   "code": 0,
   "data": {
     "draft_id": 1,
+    "version_id": 1,
     "html_content": "<!DOCTYPE html><html>..."
   }
 }
@@ -120,7 +123,7 @@ Response (AI 调用失败):
 |---|---|
 | PDF | ledongthuc/pdf 原生解析（文本 + 图片提取） |
 | DOCX | nguyenthenguyen/docx 段落/表格/样式提取 |
-| 图片 | v1 不本地处理，后续通过云端 OCR API 兜底 |
+| 图片 | v1 跳过，不发送给 AI。图片存储在 assets 表供前端手动引用（如头像），后续通过云端 OCR API 兜底 |
 | Git | clone → 抽 README + 项目名 + 技术栈 + 目录结构 |
 | 补充文本 | 直接使用 content 字段 |
 
@@ -187,6 +190,7 @@ AI 不受固定 section 类型的约束，可以自由生成内容结构。
 
 - 模块 D（编辑器）消费 drafts.html_content
 - 模块 C（AI 对话）消费 drafts.html_content
+- 模块 E（版本快照：初稿生成后自动创建版本）
 
 ### 可 mock 的边界
 

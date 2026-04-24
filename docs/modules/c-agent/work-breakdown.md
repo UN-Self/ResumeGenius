@@ -29,7 +29,7 @@
 - AI 回复逐字流式显示
 - 通过 `<!--RESUME_HTML_START-->` / `<!--RESUME_HTML_END-->` 分隔符提取 HTML
 - 提取到 HTML 后渲染预览，显示"应用到简历"和"继续对话"按钮
-- 点击"应用到简历"调用 `PUT /api/v1/drafts/{draft_id}` 替换 HTML
+- 点击"应用到简历"调用 `PUT /api/v1/drafts/{draft_id}`，携带 `create_version: true` 和 `version_label` 参数
 - 对话面板可收起/展开
 - AI 正在回复时禁用输入框
 

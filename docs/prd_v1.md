@@ -1,3 +1,8 @@
+> **此文档已废弃。** v2 架构采用"HTML 是唯一数据源"设计，不再使用 LaTeX 渲染、
+> PatchEnvelope、SourceDoc、ResumeSpec、ResolvedResumeSpec 等中间概念。
+>
+> 请参阅 [v2 PRD](./prd_v2.md) 和 [v2 架构设计](./superpowers/specs/2026-04-23-architecture-v2-design.md)。
+
 # 简历重构与自由修改产品 PRD v0.1
 
 ## 1. 产品概述

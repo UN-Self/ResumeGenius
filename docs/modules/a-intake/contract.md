@@ -118,6 +118,8 @@ Response:
 }
 ```
 
+> v1 限制：`resume_image` 类型的资产仅存储，B 模块解析时跳过。图片可用于前端手动引用（如头像），暂不支持 OCR 识别。
+
 #### POST /api/v1/assets/notes
 
 ```

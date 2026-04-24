@@ -70,6 +70,8 @@
 
 - GET 返回完整 html_content
 - PUT 接收 html_content，更新 drafts 表的 html_content 和 updated_at
+- PUT 请求支持可选的 `create_version` 参数（默认 false）和 `version_label` 参数
+- 自动保存不触发版本创建，仅显式请求时创建版本快照
 - 前端自动保存频繁调用，PUT 需要轻量高效
 - 不需要复杂的校验逻辑（HTML 校验交给前端 TipTap）
 

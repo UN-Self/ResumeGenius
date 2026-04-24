@@ -33,7 +33,7 @@
 
 ## 3. 后端任务
 
-### 3.1 API 端点（4 个）
+### 3.1 API 端点（5 个）
 
 | # | 方法 | 路径 | 说明 |
 |---|---|---|---|
@@ -41,6 +41,7 @@
 | 2 | POST | `/api/v1/drafts/{draft_id}/versions` | 手动创建快照 |
 | 3 | POST | `/api/v1/drafts/{draft_id}/rollback` | 回退到指定版本（写回 + 自动快照） |
 | 4 | POST | `/api/v1/drafts/{draft_id}/export` | 创建 PDF 导出异步任务 |
+| 5 | GET | `/api/v1/tasks/{task_id}` | 查询异步任务状态 |
 
 ### 3.2 后端服务
 
@@ -83,7 +84,7 @@
 |---|---|---|
 | 1 | 版本创建 | 创建快照，验证 html_snapshot 正确 |
 | 2 | 版本列表 | 返回按时间倒序的版本列表 |
-| 3 | 回退 | 返回指定版本的 html_snapshot |
+| 3 | 回退 | 回退到指定版本，验证 drafts.html_content 被更新，并自动创建新快照 |
 | 4 | PDF 导出 | 创建任务 → 轮询状态 → 下载 PDF |
 | 5 | 并发控制 | 两个导出请求，第二个排队等待 |
 | 6 | 版本不存在 | 返回 5004 |
@@ -105,7 +106,7 @@
 ## 6. 交付 Checklist
 
 - [ ] 前端：5 个组件（集成在工作台）
-- [ ] 后端：4 个 API 端点 + 任务状态查询
+- [ ] 后端：5 个 API 端点
 - [ ] 后端服务：2 个核心服务（VersionService + ExportService）
 - [ ] 数据库：1 张表（versions）+ 任务状态管理
 - [ ] chromedp PDF 导出功能

@@ -166,7 +166,7 @@ HTML 提取由前端负责。
 
 ### 5.4 用户确认替换
 
-用户在 AI 面板点击"应用到简历"后，前端调用模块 D 的 `PUT /api/v1/drafts/{draft_id}` 替换 HTML。模块 C 不负责 HTML 替换。
+用户在 AI 面板点击"应用到简历"后，前端调用模块 D 的 `PUT /api/v1/drafts/{draft_id}` 替换 HTML，请求中携带 `create_version: true` 和 `version_label: "AI 修改：{用户需求摘要}"` 以触发版本快照创建。模块 C 不负责 HTML 替换和版本创建。
 
 ## 6. 依赖与边界
 

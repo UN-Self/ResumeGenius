@@ -66,7 +66,9 @@ Response:
 ```
 Request:
 {
-  "html_content": "<!DOCTYPE html>...编辑后的 HTML..."
+  "html_content": "<!DOCTYPE html>...编辑后的 HTML...",
+  "create_version": true,
+  "version_label": "AI 修改：精简项目经历"
 }
 
 Response:
@@ -74,10 +76,16 @@ Response:
   "code": 0,
   "data": {
     "id": 1,
-    "updated_at": "2026-04-23T20:05:00Z"
+    "updated_at": "2026-04-23T20:05:00Z",
+    "version_id": 5
   }
 }
 ```
+
+> `create_version`（可选，默认 false）：自动保存时不传，仅当需要创建版本快照时传 true。
+> `version_label`（可选，默认 "手动保存"）：版本标签，配合 `create_version` 使用。
+>
+> 自动保存（debounce 2s）不触发版本创建，避免版本爆炸。
 
 ## 5. TipTap 编辑器功能
 
@@ -143,6 +151,7 @@ Response:
 ### 下游
 
 - 模块 E 消费 drafts.html_content（创建版本快照、PDF 导出）
+- 模块 E（当 create_version=true 时，创建版本快照）
 
 ### 可 mock 的边界
 
