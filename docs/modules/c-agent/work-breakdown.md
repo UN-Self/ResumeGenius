@@ -29,7 +29,7 @@
 - AI 回复逐字流式显示
 - 通过 `<!--RESUME_HTML_START-->` / `<!--RESUME_HTML_END-->` 分隔符提取 HTML
 - 提取到 HTML 后渲染预览，显示"应用到简历"和"继续对话"按钮
-- 点击"应用到简历"调用 `PUT /api/v1/drafts/{id}` 替换 HTML
+- 点击"应用到简历"调用 `PUT /api/v1/drafts/{draft_id}` 替换 HTML
 - 对话面板可收起/展开
 - AI 正在回复时禁用输入框
 
@@ -40,8 +40,8 @@
 | # | 方法 | 路径 | 说明 |
 |---|---|---|---|
 | 1 | POST | `/api/v1/ai/sessions` | 创建对话会话 |
-| 2 | POST | `/api/v1/ai/sessions/{id}/chat` | 发送消息（SSE 流式） |
-| 3 | GET | `/api/v1/ai/sessions/{id}/history` | 获取对话历史 |
+| 2 | POST | `/api/v1/ai/sessions/{session_id}/chat` | 发送消息（SSE 流式） |
+| 3 | GET | `/api/v1/ai/sessions/{session_id}/history` | 获取对话历史 |
 
 ### 3.2 后端服务
 
@@ -111,4 +111,4 @@
 - [ ] 数据库：2 张表（ai_sessions, ai_messages）
 - [ ] 测试：5 个后端单元测试 + 4 个前端测试
 - [ ] SSE 流式响应正确实现
-- [ ] 错误码使用 03xxx 范围
+- [ ] 错误码使用 3001–3999 范围

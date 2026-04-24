@@ -59,8 +59,8 @@ assistant 消息的 content 字段格式：
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/api/v1/ai/sessions` | 创建对话会话 |
-| POST | `/api/v1/ai/sessions/{id}/chat` | 发送消息（SSE 流式） |
-| GET | `/api/v1/ai/sessions/{id}/history` | 获取对话历史 |
+| POST | `/api/v1/ai/sessions/{session_id}/chat` | 发送消息（SSE 流式） |
+| GET | `/api/v1/ai/sessions/{session_id}/history` | 获取对话历史 |
 
 ### 关键端点详情
 
@@ -83,7 +83,7 @@ Response:
 }
 ```
 
-#### POST /api/v1/ai/sessions/{id}/chat
+#### POST /api/v1/ai/sessions/{session_id}/chat
 
 SSE 流式响应。
 
@@ -115,7 +115,7 @@ SSE 事件类型：
 | `error` | 出错 |
 | `done` | 响应完成 |
 
-#### GET /api/v1/ai/sessions/{id}/history
+#### GET /api/v1/ai/sessions/{session_id}/history
 
 ```
 Response:
@@ -166,7 +166,7 @@ HTML 提取由前端负责。
 
 ### 5.4 用户确认替换
 
-用户在 AI 面板点击"应用到简历"后，前端调用模块 D 的 `PUT /api/v1/drafts/{id}` 替换 HTML。模块 C 不负责 HTML 替换。
+用户在 AI 面板点击"应用到简历"后，前端调用模块 D 的 `PUT /api/v1/drafts/{draft_id}` 替换 HTML。模块 C 不负责 HTML 替换。
 
 ## 6. 依赖与边界
 
@@ -188,10 +188,10 @@ HTML 提取由前端负责。
 
 | 错误码 | HTTP | 含义 |
 |---|---|---|
-| 03001 | 504 | 模型调用超时 |
-| 03002 | 500 | 模型返回格式异常 |
-| 03003 | 404 | 会话不存在 |
-| 03004 | 400 | 草稿不存在 |
+| 3001 | 504 | 模型调用超时 |
+| 3002 | 500 | 模型返回格式异常 |
+| 3003 | 404 | 会话不存在 |
+| 3004 | 400 | 草稿不存在 |
 
 ## 8. 测试策略
 

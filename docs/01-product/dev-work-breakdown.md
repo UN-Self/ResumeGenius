@@ -76,7 +76,7 @@ ResumeGenius/
 | Gin 项目脚手架 | 路由注册、中间件、CORS |
 | Go 共享模型 | Project、Asset、Draft、Version、AISession、AIMessage |
 | 统一响应格式 | `{code, data, message}` 封装 |
-| 错误码注册表 | `SSCCC` 格式 |
+| 错误码注册表 | 纯数字 5 位分段格式（如 `1001`、`2001`） |
 | 数据库连接 | GORM PostgreSQL |
 | SSE 工具 | 流式响应封装 |
 
@@ -122,7 +122,7 @@ ResumeGenius/
 - **Mock 优先**：开发阶段用 fixtures/ 下的 mock 数据，不依赖真实服务
 - **环境变量切 mock**：用 `USE_MOCK=true/false` 控制是否使用 mock 数据
 - **前端不直接操作数据库**：所有数据通过 API 获取
-- **错误码不冲突**：A=01xxx, B=02xxx, C=03xxx, D=04xxx, E=05xxx
+- **错误码不冲突**：A=1001–1999, B=2001–2999, C=3001–3999, D=4001–4999, E=5001–5999
 - **HTML 是唯一数据源**：所有编辑路径最终操作的都是 HTML，不允许引入中间 JSON 结构
 
 ## 6. 模块工作明细

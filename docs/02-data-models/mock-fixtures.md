@@ -261,7 +261,7 @@ func extractHTMLFromAssistant(content string) string {
 - 模拟 TipTap 编辑器内容（React 组件渲染）
 - 模拟用户操作（文本修改、格式调整、拖拽排序）
 
-**无独立产出 fixture**：编辑器直接操作 `drafts.html_content`，通过 `PUT /api/v1/drafts/{id}` 保存。
+**无独立产出 fixture**：编辑器直接操作 `drafts.html_content`，通过 `PUT /api/v1/drafts/{draft_id}` 保存。
 
 **TypeScript 代码示例**：
 

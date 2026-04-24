@@ -33,7 +33,7 @@ Mock：直接用 `fixtures/sample_draft.html` 加载到编辑器。
 
 编辑后的 HTML 写入 `drafts.html_content`。
 
-通过 `PUT /api/v1/drafts/{id}` 保存。
+通过 `PUT /api/v1/drafts/{draft_id}` 保存。
 
 ## 4. API 端点
 
@@ -41,12 +41,12 @@ Mock：直接用 `fixtures/sample_draft.html` 加载到编辑器。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/v1/drafts/{id}` | 获取草稿 HTML |
-| PUT | `/api/v1/drafts/{id}` | 保存草稿 HTML（自动保存） |
+| GET | `/api/v1/drafts/{draft_id}` | 获取草稿 HTML |
+| PUT | `/api/v1/drafts/{draft_id}` | 保存草稿 HTML（自动保存） |
 
 ### 关键端点详情
 
-#### GET /api/v1/drafts/{id}
+#### GET /api/v1/drafts/{draft_id}
 
 ```
 Response:
@@ -61,7 +61,7 @@ Response:
 }
 ```
 
-#### PUT /api/v1/drafts/{id}
+#### PUT /api/v1/drafts/{draft_id}
 
 ```
 Request:
@@ -109,7 +109,7 @@ Response:
 ### 5.4 自动保存
 
 - 监听 TipTap 的 `update` 事件
-- debounce 2 秒后调用 `PUT /api/v1/drafts/{id}`
+- debounce 2 秒后调用 `PUT /api/v1/drafts/{draft_id}`
 - 保存状态指示：保存中（旋转图标） / 已保存（勾号）
 
 ## 6. A4 画布样式
@@ -153,8 +153,8 @@ Response:
 
 | 错误码 | HTTP | 含义 |
 |---|---|---|
-| 04001 | 404 | 草稿不存在 |
-| 04002 | 400 | HTML 内容为空 |
+| 4001 | 404 | 草稿不存在 |
+| 4002 | 400 | HTML 内容为空 |
 
 ## 9. 测试策略
 

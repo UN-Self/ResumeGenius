@@ -57,8 +57,8 @@
 
 | # | 方法 | 路径 | 说明 |
 |---|---|---|---|
-| 1 | GET | `/api/v1/drafts/{id}` | 获取草稿 HTML |
-| 2 | PUT | `/api/v1/drafts/{id}` | 保存草稿 HTML |
+| 1 | GET | `/api/v1/drafts/{draft_id}` | 获取草稿 HTML |
+| 2 | PUT | `/api/v1/drafts/{draft_id}` | 保存草稿 HTML |
 
 ### 3.2 后端服务
 
@@ -89,7 +89,7 @@
 |---|---|---|
 | 1 | 获取草稿 | GET 返回正确 html_content |
 | 2 | 保存草稿 | PUT 更新 html_content 和 updated_at |
-| 3 | 草稿不存在 | 返回 04001 |
+| 3 | 草稿不存在 | 返回 4001 |
 
 ### 5.2 前端测试
 
@@ -116,4 +116,4 @@
 - [ ] 数据库：使用 drafts 表
 - [ ] TipTap 集成：10+ 扩展（bold, italic, underline, color, alignment, lists 等）
 - [ ] 测试：3 个后端单元测试 + 6 个前端测试
-- [ ] 错误码使用 04xxx 范围
+- [ ] 错误码使用 4001–4999 范围

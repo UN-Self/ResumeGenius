@@ -27,9 +27,9 @@
 - 版本历史以弹窗或侧边抽屉形式展示
 - 版本列表按时间倒序
 - 回退操作需要二次确认弹窗
-- 导出按钮点击后显示 loading 状态
-- 导出完成后自动触发浏览器下载
-- 导出响应是 PDF 二进制流，需要用 `blob` + `URL.createObjectURL` 处理
+- 导出按钮点击后显示 loading 状态，创建异步任务
+- 轮询任务状态（pending → processing → completed / failed）
+- 导出完成后从 `download_url` 下载 PDF
 
 ## 3. 后端任务
 
@@ -37,10 +37,10 @@
 
 | # | 方法 | 路径 | 说明 |
 |---|---|---|---|
-| 1 | GET | `/api/v1/drafts/{id}/versions` | 版本列表 |
-| 2 | POST | `/api/v1/drafts/{id}/versions` | 手动创建快照 |
-| 3 | POST | `/api/v1/drafts/{id}/rollback` | 回退到指定版本 |
-| 4 | POST | `/api/v1/drafts/{id}/export` | 导出 PDF |
+| 1 | GET | `/api/v1/drafts/{draft_id}/versions` | 版本列表 |
+| 2 | POST | `/api/v1/drafts/{draft_id}/versions` | 手动创建快照 |
+| 3 | POST | `/api/v1/drafts/{draft_id}/rollback` | 回退到指定版本（写回 + 自动快照） |
+| 4 | POST | `/api/v1/drafts/{draft_id}/export` | 创建 PDF 导出异步任务 |
 
 ### 3.2 后端服务
 
@@ -52,13 +52,16 @@
 ### 3.3 后端技术要点
 
 - 版本快照只存 HTML，不存 diff
-- 回退是将指定版本的 html_snapshot 加载回编辑器（返回给前端），不修改当前草稿
-- chromedp 导出：
+- 回退是将指定版本的 html_snapshot 写回 `drafts.html_content`，并自动创建一条新版本快照
+- chromedp 导出（异步任务模式）：
+  - 创建异步任务，立即返回 `task_id`
   - 启动 Chromium 实例
   - 设置页面为 A4 尺寸（210mm × 297mm）
   - 加载 HTML
   - 调用 `page.PrintToPDF()` 生成 PDF
-  - 返回 PDF 二进制流
+  - PDF 文件存储至本地文件系统
+  - 任务状态设为 completed，记录 `download_url`
+  - 客户端通过 `GET /api/v1/tasks/{task_id}` 轮询状态
   - 释放 Chromium
 - 并发控制：用互斥锁，同一时间只允许一个导出任务
 - v1 不做导出权限校验，后续商业化时添加
@@ -81,9 +84,9 @@
 | 1 | 版本创建 | 创建快照，验证 html_snapshot 正确 |
 | 2 | 版本列表 | 返回按时间倒序的版本列表 |
 | 3 | 回退 | 返回指定版本的 html_snapshot |
-| 4 | PDF 导出 | 用预设 PDF mock 测试流程 |
-| 5 | 并发控制 | 两个导出请求，第二个返回排队 |
-| 6 | 版本不存在 | 返回 05004 |
+| 4 | PDF 导出 | 创建任务 → 轮询状态 → 下载 PDF |
+| 5 | 并发控制 | 两个导出请求，第二个排队等待 |
+| 6 | 版本不存在 | 返回 5004 |
 
 ### 5.2 前端测试
 
@@ -91,7 +94,7 @@
 |---|---|---|
 | 1 | 版本列表 | 展示版本记录 |
 | 2 | 回退确认 | 点击回退 → 弹窗确认 → 回退成功 |
-| 3 | 导出下载 | 点击导出 → loading → 下载 PDF |
+| 3 | 导出下载 | 点击导出 → 创建任务 → 轮询状态 → 下载 PDF |
 
 ### 5.3 Mock 策略
 
@@ -102,9 +105,9 @@
 ## 6. 交付 Checklist
 
 - [ ] 前端：5 个组件（集成在工作台）
-- [ ] 后端：4 个 API 端点
+- [ ] 后端：4 个 API 端点 + 任务状态查询
 - [ ] 后端服务：2 个核心服务（VersionService + ExportService）
-- [ ] 数据库：1 张表（versions）
+- [ ] 数据库：1 张表（versions）+ 任务状态管理
 - [ ] chromedp PDF 导出功能
 - [ ] 测试：6 个后端单元测试 + 3 个前端测试
-- [ ] 错误码使用 05xxx 范围
+- [ ] 错误码使用 5001–5999 范围
