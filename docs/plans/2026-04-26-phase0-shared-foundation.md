@@ -22,7 +22,7 @@
 
 ```bash
 cd backend
-go mod init github.com/handy/resume-genius
+go mod init github.com/UN-Self/ResumeGenius/backend
 ```
 
 **Step 2: 安装核心依赖**
@@ -302,7 +302,7 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"github.com/handy/resume-genius/backend/internal/shared/models"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 )
 
 func buildDSN(host, port, user, password, dbname string) string {
@@ -568,13 +568,13 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
-	"github.com/handy/resume-genius/backend/internal/shared/database"
-	"github.com/handy/resume-genius/backend/internal/shared/middleware"
-	workbench "github.com/handy/resume-genius/backend/internal/modules/workbench"
-	render "github.com/handy/resume-genius/backend/internal/modules/render"
-	intake "github.com/handy/resume-genius/backend/internal/modules/intake"
-	parsing "github.com/handy/resume-genius/backend/internal/modules/parsing"
-	agent "github.com/handy/resume-genius/backend/internal/modules/agent"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/database"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/middleware"
+	workbench "github.com/UN-Self/ResumeGenius/backend/internal/modules/workbench"
+	render "github.com/UN-Self/ResumeGenius/backend/internal/modules/render"
+	intake "github.com/UN-Self/ResumeGenius/backend/internal/modules/intake"
+	parsing "github.com/UN-Self/ResumeGenius/backend/internal/modules/parsing"
+	agent "github.com/UN-Self/ResumeGenius/backend/internal/modules/agent"
 )
 
 func main() {

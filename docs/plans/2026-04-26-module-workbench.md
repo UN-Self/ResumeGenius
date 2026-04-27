@@ -37,7 +37,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"github.com/handy/resume-genius/backend/internal/shared/models"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 )
 
 func setupDB(t *testing.T) *gorm.DB {
@@ -155,7 +155,7 @@ cd backend && go test ./internal/modules/workbench/... -v
 package workbench
 
 import (
-	"github.com/handy/resume-genius/backend/internal/shared/models"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 	"gorm.io/gorm"
 )
 
@@ -209,7 +209,7 @@ package workbench
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/handy/resume-genius/backend/internal/shared/response"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/response"
 )
 
 type Handler struct {
