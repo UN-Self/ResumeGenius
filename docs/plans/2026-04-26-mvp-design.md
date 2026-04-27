@@ -93,18 +93,22 @@ docker-compose.yml                # postgres + gin
 
 ## 模块间接口
 
+> 以 `docs/modules/*/contract.md` 为唯一契约来源。
+
 ```
-intake: POST /api/v1/intake/projects              → 创建 project
-intake: POST /api/v1/intake/projects/:id/assets   → 上传文件，返回 asset_id
-parsing: POST /api/v1/parsing/parse                → 输入 asset_id，输出 draft_id
-workbench: GET  /api/v1/workbench/drafts/:id         → 返回 HTML
-workbench: PUT  /api/v1/workbench/drafts/:id         → 保存 HTML
-agent: POST /api/v1/agent/sessions               → 创建会话（绑定 draft_id）
-agent: POST /api/v1/agent/sessions/:id/chat      → SSE 流式对话
-render: GET  /api/v1/render/versions?draft_id=    → 版本列表
-render: POST /api/v1/render/versions              → 创建快照
-render: POST /api/v1/render/export                → 触发 PDF 导出
-render: GET  /api/v1/render/export/:task_id       → 查询导出状态
+intake:    POST   /api/v1/projects                          → 创建 project
+intake:    POST   /api/v1/assets/upload                      → 上传文件（multipart，返回 asset_id）
+parsing:   POST   /api/v1/parsing/parse                      → 输入 project_id，输出 parsed_contents
+parsing:   POST   /api/v1/parsing/generate                   → 输入 project_id，输出 draft_id + html_content
+workbench: GET    /api/v1/drafts/{draft_id}                  → 获取草稿 HTML
+workbench: PUT    /api/v1/drafts/{draft_id}                  → 保存草稿 HTML（自动保存）
+agent:     POST   /api/v1/ai/sessions                        → 创建会话（绑定 draft_id）
+agent:     POST   /api/v1/ai/sessions/{session_id}/chat      → SSE 流式对话
+agent:     GET    /api/v1/ai/sessions/{session_id}/history   → 获取对话历史
+render:    GET    /api/v1/drafts/{draft_id}/versions         → 版本列表
+render:    POST   /api/v1/drafts/{draft_id}/versions         → 创建快照
+render:    POST   /api/v1/drafts/{draft_id}/export           → 触发 PDF 导出
+render:    GET    /api/v1/tasks/{task_id}                    → 查询导出状态
 ```
 
 ## 前端路由
