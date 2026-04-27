@@ -3,6 +3,7 @@ ARG RUNTIME_IMAGE=docker.1ms.run/alpine:3.19
 
 FROM ${BUILDER_IMAGE} AS builder
 RUN apk add --no-cache git ca-certificates
+ENV GOPROXY=https://goproxy.cn,direct
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
