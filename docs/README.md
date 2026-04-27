@@ -26,11 +26,11 @@ docs/
     core-data-model.md             # 数据库表结构（v2 极简 6 表）
     mock-fixtures.md               # Mock 数据策略 + fixture 示例
   modules/                         # 5 个模块契约
-    a-intake/                      # A 资料接入
-    b-parsing/                     # B 解析初稿
-    c-agent/                       # C AI 对话
-    d-workbench/                   # D 可视化编辑
-    e-render/                      # E 版本导出
+    intake/                        # 资料接入
+    parsing/                       # 解析初稿
+    agent/                         # AI 对话
+    workbench/                     # 可视化编辑
+    render/                        # 版本导出
   superpowers/specs/               # 架构设计规格
     2026-04-23-architecture-v2-design.md   # v2 架构设计（已批准）
 ```
@@ -38,16 +38,16 @@ docs/
 ## 架构总览
 
 ```
-[A 资料接入] → 文件/资料 → [B 解析初稿] → HTML 初稿
+[资料接入] → 文件/资料 → [解析初稿] → HTML 初稿
                                        │
                               ┌─────────┴─────────┐
                               ▼                   ▼
-                        [C AI 对话]          [D 可视化编辑]
+                        [AI 对话]          [可视化编辑]
                         AI 返回 HTML          直接编辑 HTML
                               │                   │
                               └─────────┬─────────┘
                                         ▼
-                              [E 版本管理 + PDF 导出]
+                              [版本管理 + PDF 导出]
                                 HTML 快照 / chromedp
 ```
 
@@ -55,11 +55,11 @@ docs/
 
 | 模块 | 职责 | 契约文档 |
 |---|---|---|
-| A 资料接入 | 项目 CRUD、文件上传、Git 接入、补充文本 | [contract.md](./modules/a-intake/contract.md) |
-| B 解析初稿 | 解析文件提取文本 → AI 生成简历 HTML | [contract.md](./modules/b-parsing/contract.md) |
-| C AI 对话 | 多轮 SSE 对话，AI 返回修改后的 HTML | [contract.md](./modules/c-agent/contract.md) |
-| D 可视化编辑 | TipTap 所见即所得编辑，A4 画布 | [contract.md](./modules/d-workbench/contract.md) |
-| E 版本导出 | HTML 快照版本管理 + chromedp PDF 导出 | [contract.md](./modules/e-render/contract.md) |
+| 资料接入 | 项目 CRUD、文件上传、Git 接入、补充文本 | [contract.md](./modules/intake/contract.md) |
+| 解析初稿 | 解析文件提取文本 → AI 生成简历 HTML | [contract.md](./modules/parsing/contract.md) |
+| AI 对话 | 多轮 SSE 对话，AI 返回修改后的 HTML | [contract.md](./modules/agent/contract.md) |
+| 可视化编辑 | TipTap 所见即所得编辑，A4 画布 | [contract.md](./modules/workbench/contract.md) |
+| 版本导出 | HTML 快照版本管理 + chromedp PDF 导出 | [contract.md](./modules/render/contract.md) |
 
 ## 共享规范入口
 

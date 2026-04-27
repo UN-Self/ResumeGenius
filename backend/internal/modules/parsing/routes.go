@@ -1,4 +1,4 @@
-package b_parsing
+package parsing
 
 import (
 	"github.com/gin-gonic/gin"
@@ -7,6 +7,6 @@ import (
 
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 	rg.POST("/parsing/parse", func(c *gin.Context) {
-		c.JSON(200, gin.H{"module": "b_parsing", "status": "stub"})
+		c.JSON(200, gin.H{"module": "parsing", "status": "stub"})
 	})
 }

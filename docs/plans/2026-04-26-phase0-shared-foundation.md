@@ -534,25 +534,25 @@ git commit -m "feat: add unified API response and middleware (CORS, Logger)"
 ### Task 5: Backend — 模块路由注册框架
 
 **Files:**
-- Create: `backend/internal/modules/a_intake/routes.go`
-- Create: `backend/internal/modules/b_parsing/routes.go`
-- Create: `backend/internal/modules/c_agent/routes.go`
-- Create: `backend/internal/modules/d_workbench/routes.go`
-- Create: `backend/internal/modules/e_render/routes.go`
+- Create: `backend/internal/modules/intake/routes.go`
+- Create: `backend/internal/modules/parsing/routes.go`
+- Create: `backend/internal/modules/agent/routes.go`
+- Create: `backend/internal/modules/workbench/routes.go`
+- Create: `backend/internal/modules/render/routes.go`
 - Modify: `backend/cmd/server/main.go`
 
 **Step 1: 每个模块创建最小 routes.go**
 
-每个模块统一格式（以 d_workbench 为例）：
+每个模块统一格式（以 workbench 为例）：
 
 ```go
-package d_workbench
+package workbench
 
 import "github.com/gin-gonic/gin"
 
 func RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/drafts/:id", func(c *gin.Context) {
-		c.JSON(200, gin.H{"module": "d_workbench", "status": "stub"})
+		c.JSON(200, gin.H{"module": "workbench", "status": "stub"})
 	})
 }
 ```
@@ -570,11 +570,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/handy/resume-genius/backend/internal/shared/database"
 	"github.com/handy/resume-genius/backend/internal/shared/middleware"
-	d_workbench "github.com/handy/resume-genius/backend/internal/modules/d_workbench"
-	e_render "github.com/handy/resume-genius/backend/internal/modules/e_render"
-	a_intake "github.com/handy/resume-genius/backend/internal/modules/a_intake"
-	b_parsing "github.com/handy/resume-genius/backend/internal/modules/b_parsing"
-	c_agent "github.com/handy/resume-genius/backend/internal/modules/c_agent"
+	workbench "github.com/handy/resume-genius/backend/internal/modules/workbench"
+	render "github.com/handy/resume-genius/backend/internal/modules/render"
+	intake "github.com/handy/resume-genius/backend/internal/modules/intake"
+	parsing "github.com/handy/resume-genius/backend/internal/modules/parsing"
+	agent "github.com/handy/resume-genius/backend/internal/modules/agent"
 )
 
 func main() {
@@ -585,11 +585,11 @@ func main() {
 	r.Use(middleware.CORS(), middleware.Logger())
 
 	api := r.Group("/api/v1")
-	a_intake.RegisterRoutes(api.Group("/intake"), db)
-	b_parsing.RegisterRoutes(api.Group("/parsing"), db)
-	c_agent.RegisterRoutes(api.Group("/ai"), db)
-	d_workbench.RegisterRoutes(api.Group("/workbench"), db)
-	e_render.RegisterRoutes(api.Group("/render"), db)
+	intake.RegisterRoutes(api.Group("/intake"), db)
+	parsing.RegisterRoutes(api.Group("/parsing"), db)
+	agent.RegisterRoutes(api.Group("/ai"), db)
+	workbench.RegisterRoutes(api.Group("/workbench"), db)
+	render.RegisterRoutes(api.Group("/render"), db)
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok"})
@@ -606,7 +606,7 @@ func main() {
 ```bash
 go run cmd/server/main.go &
 curl http://localhost:8080/api/v1/workbench/drafts/1
-# Expected: {"module":"d_workbench","status":"stub"}
+# Expected: {"module":"workbench","status":"stub"}
 curl http://localhost:8080/health
 # Expected: {"status":"ok"}
 kill %1

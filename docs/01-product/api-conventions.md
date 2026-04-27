@@ -35,11 +35,11 @@
 
 | 模块 | 资源根路径 | 示例 |
 |---|---|---|
-| A 资料接入 | `/api/v1/projects/`、`/api/v1/assets/` | `POST /api/v1/assets/upload` |
-| B 解析初稿 | `/api/v1/parsing/` | `POST /api/v1/parsing/parse` |
-| C AI 对话 | `/api/v1/ai/` | `POST /api/v1/ai/sessions` |
-| D 可视化编辑 | `/api/v1/drafts/` | `PUT /api/v1/drafts/{draft_id}` |
-| E 版本导出 | `/api/v1/drafts/{draft_id}/`、`/api/v1/tasks/` | `POST /api/v1/drafts/{draft_id}/export` |
+| 资料接入 | `/api/v1/projects/`、`/api/v1/assets/` | `POST /api/v1/assets/upload` |
+| 解析初稿 | `/api/v1/parsing/` | `POST /api/v1/parsing/parse` |
+| AI 对话 | `/api/v1/ai/` | `POST /api/v1/ai/sessions` |
+| 可视化编辑 | `/api/v1/drafts/` | `PUT /api/v1/drafts/{draft_id}` |
+| 版本导出 | `/api/v1/drafts/{draft_id}/`、`/api/v1/tasks/` | `POST /api/v1/drafts/{draft_id}/export` |
 
 ### 2.2 命名规则
 
@@ -92,11 +92,11 @@
 纯数字分段编码：
 
 - 通用错误码：40000、40001、40100、40300、40400、40900、50000
-- 模块 A（资料接入）：1001–1999
-- 模块 B（解析初稿）：2001–2999
-- 模块 C（AI 对话）：3001–3999
-- 模块 D（可视化编辑）：4001–4999
-- 模块 E（版本导出）：5001–5999
+- 模块 intake（资料接入）：1001–1999
+- 模块 parsing（解析初稿）：2001–2999
+- 模块 agent（AI 对话）：3001–3999
+- 模块 workbench（可视化编辑）：4001–4999
+- 模块 render（版本导出）：5001–5999
 
 各模块在 contract.md 中定义自己的错误码明细。
 
@@ -117,11 +117,11 @@
 
 | 模块 | 编号范围 | 示例 |
 |---|---|---|
-| A 资料接入 | 1001–1999 | 1001 = 文件格式不支持 |
-| B 解析初稿 | 2001–2999 | 2001 = PDF 解析失败 |
-| C AI 对话 | 3001–3999 | 3001 = 模型调用超时 |
-| D 可视化编辑 | 4001–4999 | 4001 = 草稿不存在 |
-| E 版本导出 | 5001–5999 | 5001 = PDF 导出失败 |
+| 资料接入 | 1001–1999 | 1001 = 文件格式不支持 |
+| 解析初稿 | 2001–2999 | 2001 = PDF 解析失败 |
+| AI 对话 | 3001–3999 | 3001 = 模型调用超时 |
+| 可视化编辑 | 4001–4999 | 4001 = 草稿不存在 |
+| 版本导出 | 5001–5999 | 5001 = PDF 导出失败 |
 
 各模块在 contract.md 中定义自己的错误码明细。
 
@@ -206,7 +206,7 @@ data: {"type": "done"}
 
 任务状态枚举：`pending` → `processing` → `completed` / `failed`
 
-> `GET /api/v1/tasks/{task_id}` 归属于模块 E（详见 E 契约）。
+> `GET /api/v1/tasks/{task_id}` 归属于模块 render（详见 render 契约）。
 
 ## 9. 请求/字段命名
 

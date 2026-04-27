@@ -1,4 +1,4 @@
-# 模块 E 契约：版本管理与 PDF 导出
+# 模块 render 契约：版本管理与 PDF 导出
 
 更新时间：2026-04-23
 
@@ -14,15 +14,15 @@
 
 **不负责**：
 
-- HTML 编辑（D 的事）
-- AI 对话（C 的事）
-- 文件解析（B 的事）
+- HTML 编辑（workbench 的事）
+- AI 对话（agent 的事）
+- 文件解析（parsing 的事）
 
 ## 2. 输入契约
 
 | 数据 | 来源 | 说明 |
 |---|---|---|
-| `drafts.html_content` | 模块 D | 当前编辑器 HTML |
+| `drafts.html_content` | 模块 workbench | 当前编辑器 HTML |
 
 ## 3. 输出契约
 
@@ -196,9 +196,9 @@ Response (失败):
 
 | 触发 | 来源 | label |
 |---|---|---|
-| AI 初稿生成 | 模块 B | "AI 初始生成" |
-| AI 对话修改确认 | 模块 C | "AI 修改：{用户需求摘要}" |
-| 用户手动保存 | 模块 D | "手动保存" |
+| AI 初稿生成 | 模块 parsing | "AI 初始生成" |
+| AI 对话修改确认 | 模块 agent | "AI 修改：{用户需求摘要}" |
+| 用户手动保存 | 模块 workbench | "手动保存" |
 
 自动创建通过调用 `POST /api/v1/drafts/{draft_id}/versions` 实现。
 
@@ -251,7 +251,7 @@ PDF 文件存储至本地文件系统
 
 ### 上游
 
-- 模块 D 更新 drafts.html_content
+- 模块 workbench 更新 drafts.html_content
 
 ### 下游
 

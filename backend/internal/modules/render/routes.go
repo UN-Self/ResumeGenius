@@ -1,4 +1,4 @@
-package e_render
+package render
 
 import (
 	"github.com/gin-gonic/gin"
@@ -7,10 +7,10 @@ import (
 
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 	rg.POST("/drafts/:draft_id/export", func(c *gin.Context) {
-		c.JSON(200, gin.H{"module": "e_render", "status": "stub"})
+		c.JSON(200, gin.H{"module": "render", "status": "stub"})
 	})
 
 	rg.GET("/tasks/:task_id", func(c *gin.Context) {
-		c.JSON(200, gin.H{"module": "e_render", "status": "stub"})
+		c.JSON(200, gin.H{"module": "render", "status": "stub"})
 	})
 }

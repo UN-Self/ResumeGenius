@@ -1,4 +1,4 @@
-# 模块 C 契约：AI 对话助手
+# 模块 agent 契约：AI 对话助手
 
 更新时间：2026-04-23
 
@@ -14,15 +14,15 @@
 
 **不负责**：
 
-- 文件解析（B 的事）
-- 所见即所得编辑（D 的事）
-- 版本管理和 PDF 导出（E 的事）
+- 文件解析（parsing 的事）
+- 所见即所得编辑（workbench 的事）
+- 版本管理和 PDF 导出（render 的事）
 
 ## 2. 输入契约
 
 | 数据 | 来源 | 说明 |
 |---|---|---|
-| `drafts.html_content` | 模块 B/D | 当前简历 HTML |
+| `drafts.html_content` | 模块 parsing/workbench | 当前简历 HTML |
 | 用户自然语言消息 | 前端输入 | — |
 | 对话历史 | `ai_messages` 表 | 最近 N 轮 |
 
@@ -166,23 +166,23 @@ HTML 提取由前端负责。
 
 ### 5.4 用户确认替换
 
-用户在 AI 面板点击"应用到简历"后，前端调用模块 D 的 `PUT /api/v1/drafts/{draft_id}` 替换 HTML，请求中携带 `create_version: true` 和 `version_label: "AI 修改：{用户需求摘要}"` 以触发版本快照创建。模块 C 不负责 HTML 替换和版本创建。
+用户在 AI 面板点击"应用到简历"后，前端调用模块 workbench 的 `PUT /api/v1/drafts/{draft_id}` 替换 HTML，请求中携带 `create_version: true` 和 `version_label: "AI 修改：{用户需求摘要}"` 以触发版本快照创建。模块 agent 不负责 HTML 替换和版本创建。
 
 ## 6. 依赖与边界
 
 ### 上游
 
-- 模块 B 产出初始 drafts.html_content
-- 模块 D 更新 drafts.html_content
+- 模块 parsing 产出初始 drafts.html_content
+- 模块 workbench 更新 drafts.html_content
 
 ### 下游
 
-- 无。模块 C 只负责对话和 AI 调用。
+- 无。模块 agent 只负责对话和 AI 调用。
 
 ### 可 mock 的边界
 
 - AI 调用用 mock handler 替代
-- 不需要 B/D/E 的服务
+- 不需要 parsing/workbench/render 的服务
 
 ## 7. 错误码
 

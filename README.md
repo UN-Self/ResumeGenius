@@ -106,11 +106,11 @@ graph TB
     end
 
     subgraph Gin API 服务
-        MA[模块 A<br/>资料接入<br/>文件 / Git / 文本]
-        MB[模块 B<br/>解析与 AI 初稿生成]
-        MC[模块 C<br/>AI 对话助手]
-        MD[模块 D<br/>草稿编辑]
-        ME[模块 E<br/>版本管理与 PDF 导出]
+        MA[模块 intake<br/>资料接入<br/>文件 / Git / 文本]
+        MB[模块 parsing<br/>解析与 AI 初稿生成]
+        MC[模块 agent<br/>AI 对话助手]
+        MD[模块 workbench<br/>草稿编辑]
+        ME[模块 render<br/>版本管理与 PDF 导出]
     end
 
     subgraph 数据与存储
@@ -148,11 +148,11 @@ flowchart LR
         Note[补充文本]
     end
 
-    Upload --> A[模块 A<br/>存储与索引]
+    Upload --> A[模块 intake<br/>存储与索引]
     Git --> A
     Note --> A
 
-    A --> B[模块 B<br/>解析提取文本]
+    A --> B[模块 parsing<br/>解析提取文本]
     B -->|文本 + 最佳实践| AI[AI 模型]
     AI --> Draft[草稿表<br/>html_content]
 
@@ -163,7 +163,7 @@ flowchart LR
         D[TipTap 手动编辑] --> Draft
     end
 
-    Draft --> E[模块 E<br/>版本快照 + PDF 导出]
+    Draft --> E[模块 render<br/>版本快照 + PDF 导出]
     E --> PDF[PDF 文件]
 ```
 
@@ -175,11 +175,11 @@ flowchart LR
 
 | 模块 | 职责 | 核心输入 | 核心产出 |
 |------|------|---------|---------|
-| A 资料接入 | 项目管理、文件上传、Git 接入、Sub-Agent 搜集 | 用户操作 | 文件元信息、assets 记录 |
-| B 解析初稿 | 文件解析、AI 结合最佳实践生成 HTML 初稿 | 原始文件 + 最佳实践 | drafts.html_content |
-| C AI 对话 | 多轮 SSE 对话，AI 返回 HTML | 用户消息 + 当前 HTML | 修改后的 HTML |
-| D 可视化编辑 | TipTap 所见即所得编辑器 | HTML 内容 | 编辑后的 HTML |
-| E 版本导出 | HTML 快照 + chromedp PDF 导出 | 当前 HTML | 版本记录 + PDF 文件 |
+| intake 资料接入 | 项目管理、文件上传、Git 接入、Sub-Agent 搜集 | 用户操作 | 文件元信息、assets 记录 |
+| parsing 解析初稿 | 文件解析、AI 结合最佳实践生成 HTML 初稿 | 原始文件 + 最佳实践 | drafts.html_content |
+| agent AI 对话 | 多轮 SSE 对话，AI 返回 HTML | 用户消息 + 当前 HTML | 修改后的 HTML |
+| workbench 可视化编辑 | TipTap 所见即所得编辑器 | HTML 内容 | 编辑后的 HTML |
+| render 版本导出 | HTML 快照 + chromedp PDF 导出 | 当前 HTML | 版本记录 + PDF 文件 |
 
 ## 技术栈
 

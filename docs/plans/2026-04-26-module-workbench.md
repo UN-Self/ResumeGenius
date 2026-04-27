@@ -1,4 +1,4 @@
-# 模块 D — TipTap 可视化编辑器 Implementation Plan
+# 模块 workbench — TipTap 可视化编辑器 Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -10,23 +10,23 @@
 
 **Depends on:** Phase 0 共享基石完成
 
-**契约文档:** `docs/modules/d-workbench/contract.md`
+**契约文档:** `docs/modules/workbench/contract.md`
 
 ---
 
 ### Task 1: 后端 — DraftService GET/PUT
 
 **Files:**
-- Create: `backend/internal/modules/d_workbench/service.go`
-- Create: `backend/internal/modules/d_workbench/handler.go`
-- Create: `backend/internal/modules/d_workbench/handler_test.go`
-- Modify: `backend/internal/modules/d_workbench/routes.go`
+- Create: `backend/internal/modules/workbench/service.go`
+- Create: `backend/internal/modules/workbench/handler.go`
+- Create: `backend/internal/modules/workbench/handler_test.go`
+- Modify: `backend/internal/modules/workbench/routes.go`
 
 **Step 1: 写失败测试**
 
 ```go
 // handler_test.go
-package d_workbench
+package workbench
 
 import (
 	"bytes"
@@ -144,7 +144,7 @@ func TestPutDraftCreateVersion(t *testing.T) {
 **Step 2: 运行测试确认失败**
 
 ```bash
-cd backend && go test ./internal/modules/d_workbench/... -v
+cd backend && go test ./internal/modules/workbench/... -v
 # Expected: FAIL
 ```
 
@@ -152,7 +152,7 @@ cd backend && go test ./internal/modules/d_workbench/... -v
 
 ```go
 // service.go
-package d_workbench
+package workbench
 
 import (
 	"github.com/handy/resume-genius/backend/internal/shared/models"
@@ -205,7 +205,7 @@ func (s *DraftService) Update(id uint, htmlContent string, createVersion bool, v
 
 ```go
 // handler.go
-package d_workbench
+package workbench
 
 import (
 	"github.com/gin-gonic/gin"
@@ -259,7 +259,7 @@ func atoi(s string) int {
 **Step 4: 更新 routes.go**
 
 ```go
-package d_workbench
+package workbench
 
 import (
 	"github.com/gin-gonic/gin"
@@ -280,14 +280,14 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 **Step 5: 运行测试确认通过**
 
 ```bash
-cd backend && go test ./internal/modules/d_workbench/... -v
+cd backend && go test ./internal/modules/workbench/... -v
 # Expected: PASS
 ```
 
 **Step 6: Commit**
 
 ```bash
-git add backend/internal/modules/d_workbench/
+git add backend/internal/modules/workbench/
 git commit -m "feat(module-d): implement DraftService GET/PUT with version creation"
 ```
 
@@ -541,7 +541,7 @@ git commit -m "feat(module-d): implement TipTap editor with A4 canvas and auto-s
 
 ## 验证清单
 
-- [ ] `go test ./internal/modules/d_workbench/... -v` 全部通过
+- [ ] `go test ./internal/modules/workbench/... -v` 全部通过
 - [ ] `curl localhost:8080/api/v1/workbench/drafts/1` 返回 HTML 内容
 - [ ] `curl -X PUT localhost:8080/api/v1/workbench/drafts/1 -d '{"html_content":"<p>test</p>"}'` 保存成功
 - [ ] `curl -X PUT localhost:8080/api/v1/workbench/drafts/1 -d '{"html_content":"<p>v2</p>","create_version":true,"version_label":"snap"}'` 创建版本

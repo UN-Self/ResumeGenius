@@ -1,4 +1,4 @@
-# 模块 D 契约：可视化编辑器
+# 模块 workbench 契约：可视化编辑器
 
 更新时间：2026-04-23
 
@@ -17,15 +17,15 @@
 
 **不负责**：
 
-- AI 对话（C 的事）
-- 版本管理和 PDF 导出（E 的事）
-- 文件解析（B 的事）
+- AI 对话（agent 的事）
+- 版本管理和 PDF 导出（render 的事）
+- 文件解析（parsing 的事）
 
 ## 2. 输入契约
 
 | 数据 | 来源 | 说明 |
 |---|---|---|
-| `drafts.html_content` | 模块 B/C | 当前简历 HTML |
+| `drafts.html_content` | 模块 parsing/agent | 当前简历 HTML |
 
 Mock：直接用 `fixtures/sample_draft.html` 加载到编辑器。
 
@@ -145,17 +145,17 @@ Response:
 
 ### 上游
 
-- 模块 B 产出初始 drafts.html_content
-- 模块 C 通过 AI 对话修改后，前端替换 HTML
+- 模块 parsing 产出初始 drafts.html_content
+- 模块 agent 通过 AI 对话修改后，前端替换 HTML
 
 ### 下游
 
-- 模块 E 消费 drafts.html_content（创建版本快照、PDF 导出）
-- 模块 E（当 create_version=true 时，创建版本快照）
+- 模块 render 消费 drafts.html_content（创建版本快照、PDF 导出）
+- 模块 render（当 create_version=true 时，创建版本快照）
 
 ### 可 mock 的边界
 
-- 不需要 B/C/E 的服务
+- 不需要 parsing/agent/render 的服务
 - 前端可完全独立开发，用 mock HTML 加载编辑器
 
 ## 8. 错误码

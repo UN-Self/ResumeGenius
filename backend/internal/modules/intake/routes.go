@@ -1,4 +1,4 @@
-package a_intake
+package intake
 
 import (
 	"github.com/gin-gonic/gin"
@@ -7,6 +7,6 @@ import (
 
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 	rg.GET("/projects", func(c *gin.Context) {
-		c.JSON(200, gin.H{"module": "a_intake", "status": "stub"})
+		c.JSON(200, gin.H{"module": "intake", "status": "stub"})
 	})
 }
