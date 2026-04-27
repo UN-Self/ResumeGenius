@@ -6,13 +6,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"github.com/handy/resume-genius/internal/modules/agent"
-	"github.com/handy/resume-genius/internal/modules/intake"
-	"github.com/handy/resume-genius/internal/modules/parsing"
-	"github.com/handy/resume-genius/internal/modules/render"
-	"github.com/handy/resume-genius/internal/modules/workbench"
-	"github.com/handy/resume-genius/internal/shared/database"
-	"github.com/handy/resume-genius/internal/shared/middleware"
+	"github.com/UN-Self/ResumeGenius/backend/internal/modules/agent"
+	"github.com/UN-Self/ResumeGenius/backend/internal/modules/intake"
+	"github.com/UN-Self/ResumeGenius/backend/internal/modules/parsing"
+	"github.com/UN-Self/ResumeGenius/backend/internal/modules/render"
+	"github.com/UN-Self/ResumeGenius/backend/internal/modules/workbench"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/database"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/middleware"
 )
 
 var _ *gorm.DB // ensure gorm import is used
