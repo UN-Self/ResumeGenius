@@ -8,7 +8,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	"github.com/handy/resume-genius/internal/shared/models"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 )
 
 func buildDSN(host, port, user, password, dbname string) string {

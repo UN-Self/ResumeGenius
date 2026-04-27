@@ -153,20 +153,20 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 
 将第 9-13 行的 import：
 ```go
-"github.com/handy/resume-genius/internal/modules/a_intake"
-"github.com/handy/resume-genius/internal/modules/b_parsing"
-"github.com/handy/resume-genius/internal/modules/c_agent"
-"github.com/handy/resume-genius/internal/modules/d_workbench"
-"github.com/handy/resume-genius/internal/modules/e_render"
+"github.com/UN-Self/ResumeGenius/backend/internal/modules/a_intake"
+"github.com/UN-Self/ResumeGenius/backend/internal/modules/b_parsing"
+"github.com/UN-Self/ResumeGenius/backend/internal/modules/c_agent"
+"github.com/UN-Self/ResumeGenius/backend/internal/modules/d_workbench"
+"github.com/UN-Self/ResumeGenius/backend/internal/modules/e_render"
 ```
 
 改为：
 ```go
-"github.com/handy/resume-genius/internal/modules/agent"
-"github.com/handy/resume-genius/internal/modules/intake"
-"github.com/handy/resume-genius/internal/modules/parsing"
-"github.com/handy/resume-genius/internal/modules/render"
-"github.com/handy/resume-genius/internal/modules/workbench"
+"github.com/UN-Self/ResumeGenius/backend/internal/modules/agent"
+"github.com/UN-Self/ResumeGenius/backend/internal/modules/intake"
+"github.com/UN-Self/ResumeGenius/backend/internal/modules/parsing"
+"github.com/UN-Self/ResumeGenius/backend/internal/modules/render"
+"github.com/UN-Self/ResumeGenius/backend/internal/modules/workbench"
 ```
 
 将第 25-29 行的调用：

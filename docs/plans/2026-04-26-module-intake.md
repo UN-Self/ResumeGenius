@@ -38,7 +38,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"github.com/handy/resume-genius/backend/internal/shared/models"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 )
 
 func setupTestDB(t *testing.T) *gorm.DB {
@@ -134,7 +134,7 @@ cd backend && go test ./internal/modules/intake/... -v
 package intake
 
 import (
-	"github.com/handy/resume-genius/backend/internal/shared/models"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 	"gorm.io/gorm"
 )
 
@@ -176,7 +176,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/handy/resume-genius/backend/internal/shared/response"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/response"
 )
 
 type Handler struct {
@@ -284,7 +284,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"github.com/handy/resume-genius/backend/internal/shared/models"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 )
 
 func createUploadForm(t *testing.T, fieldName, fileName, content string) (*multipart.Writer, *httptest.ResponseRecorder, *gin.Context) {

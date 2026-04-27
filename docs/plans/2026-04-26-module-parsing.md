@@ -182,7 +182,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/handy/resume-genius/backend/internal/shared/models"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 	"gorm.io/gorm"
 )
 
@@ -331,7 +331,7 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"github.com/handy/resume-genius/backend/internal/shared/models"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 )
 
 func TestFullParsingFlow(t *testing.T) {
@@ -454,7 +454,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/handy/resume-genius/backend/internal/shared/response"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/response"
 )
 
 type Handler struct {
