@@ -17,19 +17,25 @@ import (
 
 var _ *gorm.DB // ensure gorm import is used
 
-func main() {
-	db := database.Connect()
-	database.Migrate(db)
-
+func setupRouter(db *gorm.DB) *gin.Engine {
 	r := gin.Default()
 	r.Use(middleware.CORS(), middleware.Logger())
 
 	v1 := r.Group("/api/v1")
-	a_intake.RegisterRoutes(v1.Group("/intake"), db)
-	b_parsing.RegisterRoutes(v1.Group("/parsing"), db)
-	c_agent.RegisterRoutes(v1.Group("/ai"), db)
-	d_workbench.RegisterRoutes(v1.Group("/workbench"), db)
-	e_render.RegisterRoutes(v1.Group("/render"), db)
+	a_intake.RegisterRoutes(v1, db)
+	b_parsing.RegisterRoutes(v1, db)
+	c_agent.RegisterRoutes(v1, db)
+	d_workbench.RegisterRoutes(v1, db)
+	e_render.RegisterRoutes(v1, db)
+
+	return r
+}
+
+func main() {
+	db := database.Connect()
+	database.Migrate(db)
+
+	r := setupRouter(db)
 
 	log.Println("server starting on :8080")
 	if err := r.Run(":8080"); err != nil {

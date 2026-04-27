@@ -89,12 +89,16 @@ bun run build                          # 构建纯静态 HTML 到 dist/
 Gin 路由分组注册，每个模块统一签名 `func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB)`：
 
 ```
-/api/v1/intake/     → a_intake    （项目管理、文件上传）
-/api/v1/parsing/    → b_parsing   （解析、AI 初稿生成）
-/api/v1/ai/         → c_agent     （SSE 流式 AI 对话）
-/api/v1/workbench/  → d_workbench （TipTap 编辑、草稿 CRUD）
-/api/v1/render/     → e_render    （版本快照、PDF 导出）
+/api/v1/projects       → a_intake    （项目管理）
+/api/v1/assets/*       → a_intake    （文件上传、Git 接入、补充文本）
+/api/v1/parsing/*      → b_parsing   （解析、AI 初稿生成）
+/api/v1/ai/*           → c_agent     （SSE 流式 AI 对话）
+/api/v1/drafts/*       → d_workbench （TipTap 编辑、草稿 CRUD）
+/api/v1/drafts/*       → e_render    （版本快照）
+/api/v1/tasks/*        → e_render    （PDF 导出任务）
 ```
+
+**路由与端点定义以 docs/modules/*/contract.md 为唯一契约来源。**
 
 共享层 `backend/internal/shared/`：models（6 表 GORM 结构体）、database（连接 + AutoMigrate）、response（统一响应）、middleware（CORS + Logger）。
 

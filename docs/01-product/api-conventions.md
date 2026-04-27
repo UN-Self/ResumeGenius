@@ -23,21 +23,23 @@
 
 ## 2. 路径规范
 
+> 对外 API 以资源路径为准，不以模块前缀为准；路由实现必须与 `docs/modules/*/contract.md` 保持一致。
+
 ### 2.1 格式
 
 ```
-/api/v1/{module}/{resource}
+/api/v1/{resource}
 ```
 
-各模块前缀：
+资源路径由各模块 `contract.md` 定义，模块名不作为对外路径前缀。单个模块可以暴露多个资源根路径。
 
-| 模块 | 前缀 | 示例 |
+| 模块 | 资源根路径 | 示例 |
 |---|---|---|
-| A 资料接入 | `/api/v1/projects/`、`/api/v1/assets/` | `GET /api/v1/projects/{project_id}` |
+| A 资料接入 | `/api/v1/projects/`、`/api/v1/assets/` | `POST /api/v1/assets/upload` |
 | B 解析初稿 | `/api/v1/parsing/` | `POST /api/v1/parsing/parse` |
-| C AI 对话 | `/api/v1/ai/` | `POST /api/v1/ai/sessions/{session_id}/chat` |
-| D 可视化编辑 | `/api/v1/drafts/` | `GET /api/v1/drafts/{draft_id}` |
-| E 版本导出 | `/api/v1/drafts/{draft_id}/`（drafts 子资源） | `POST /api/v1/drafts/{draft_id}/export` |
+| C AI 对话 | `/api/v1/ai/` | `POST /api/v1/ai/sessions` |
+| D 可视化编辑 | `/api/v1/drafts/` | `PUT /api/v1/drafts/{draft_id}` |
+| E 版本导出 | `/api/v1/drafts/{draft_id}/`、`/api/v1/tasks/` | `POST /api/v1/drafts/{draft_id}/export` |
 
 ### 2.2 命名规则
 
