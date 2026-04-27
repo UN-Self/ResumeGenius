@@ -1,4 +1,4 @@
-# 模块 B 契约：文件解析与 AI 初稿生成
+# 模块 parsing 契约：文件解析与 AI 初稿生成
 
 更新时间：2026-04-23
 
@@ -15,16 +15,16 @@
 
 **不负责**：
 
-- 文件上传和存储（A 的事）
-- AI 对话修改（C 的事）
-- 所见即所得编辑（D 的事）
-- 版本管理和 PDF 导出（E 的事）
+- 文件上传和存储（intake 的事）
+- AI 对话修改（agent 的事）
+- 所见即所得编辑（workbench 的事）
+- 版本管理和 PDF 导出（render 的事）
 
 ## 2. 输入契约
 
 | 数据 | 来源 | 说明 |
 |---|---|---|
-| assets 表记录 | 模块 A | 文件路径（uri 字段）或补充文本（content 字段） |
+| assets 表记录 | 模块 intake | 文件路径（uri 字段）或补充文本（content 字段） |
 
 Mock：直接用 `fixtures/sample_resume.pdf` 等测试文件。
 
@@ -184,17 +184,17 @@ AI 不受固定 section 类型的约束，可以自由生成内容结构。
 
 ### 上游
 
-- 模块 A（项目管理）提供 assets 表中的文件路径和文本
+- 模块 intake（项目管理）提供 assets 表中的文件路径和文本
 
 ### 下游
 
-- 模块 D（编辑器）消费 drafts.html_content
-- 模块 C（AI 对话）消费 drafts.html_content
-- 模块 E（版本快照：初稿生成后自动创建版本）
+- 模块 workbench（编辑器）消费 drafts.html_content
+- 模块 agent（AI 对话）消费 drafts.html_content
+- 模块 render（版本快照：初稿生成后自动创建版本）
 
 ### 可 mock 的边界
 
-- 不需要 A 的服务：直接读 fixtures/ 中的测试文件
+- 不需要 intake 的服务：直接读 fixtures/ 中的测试文件
 - AI 调用：用预设 HTML 替代真实模型调用
 
 ## 8. 错误码
@@ -213,7 +213,7 @@ AI 不受固定 section 类型的约束，可以自由生成内容结构。
 
 - 用本地测试文件（`fixtures/sample_resume.pdf` 等）测试各种格式的解析
 - AI 调用用 mock 替代
-- 不需要启动模块 A、C、D、E 的服务
+- 不需要启动模块 intake、agent、workbench、render 的服务
 
 ### Mock 产出
 

@@ -1,4 +1,4 @@
-# 模块 E — 版本管理与 PDF 导出 Implementation Plan
+# 模块 render — 版本管理与 PDF 导出 Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -8,25 +8,25 @@
 
 **Tech Stack:** Gin / GORM / chromedp / goroutine+channel
 
-**Depends on:** Phase 0 共享基石完成、模块 D 的 DraftService
+**Depends on:** Phase 0 共享基石完成、模块 workbench 的 DraftService
 
-**契约文档:** `docs/modules/e-render/contract.md`
+**契约文档:** `docs/modules/render/contract.md`
 
 ---
 
 ### Task 1: 后端 — VersionService 快照 CRUD
 
 **Files:**
-- Create: `backend/internal/modules/e_render/service.go`
-- Create: `backend/internal/modules/e_render/handler.go`
-- Create: `backend/internal/modules/e_render/handler_test.go`
-- Modify: `backend/internal/modules/e_render/routes.go`
+- Create: `backend/internal/modules/render/service.go`
+- Create: `backend/internal/modules/render/handler.go`
+- Create: `backend/internal/modules/render/handler_test.go`
+- Modify: `backend/internal/modules/render/routes.go`
 
 **Step 1: 写失败测试**
 
 ```go
 // handler_test.go
-package e_render
+package render
 
 import (
 	"bytes"
@@ -114,7 +114,7 @@ func strPtr(s string) *string { return &s }
 **Step 2: 运行测试确认失败**
 
 ```bash
-cd backend && go test ./internal/modules/e_render/... -v
+cd backend && go test ./internal/modules/render/... -v
 # Expected: FAIL
 ```
 
@@ -122,7 +122,7 @@ cd backend && go test ./internal/modules/e_render/... -v
 
 ```go
 // service.go
-package e_render
+package render
 
 import (
 	"github.com/handy/resume-genius/backend/internal/shared/models"
@@ -166,7 +166,7 @@ func (s *VersionService) ListByDraftID(draftID uint) ([]models.Version, error) {
 
 ```go
 // handler.go
-package e_render
+package render
 
 import (
 	"strconv"
@@ -213,7 +213,7 @@ func (h *Handler) ListVersions(c *gin.Context) {
 **Step 4: 更新 routes.go**
 
 ```go
-package e_render
+package render
 
 import (
 	"github.com/gin-gonic/gin"
@@ -232,14 +232,14 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 **Step 5: 运行测试确认通过**
 
 ```bash
-cd backend && go test ./internal/modules/e_render/... -v
+cd backend && go test ./internal/modules/render/... -v
 # Expected: PASS
 ```
 
 **Step 6: Commit**
 
 ```bash
-git add backend/internal/modules/e_render/
+git add backend/internal/modules/render/
 git commit -m "feat(module-e): implement version snapshot CRUD with tests"
 ```
 
@@ -248,10 +248,10 @@ git commit -m "feat(module-e): implement version snapshot CRUD with tests"
 ### Task 2: 后端 — PDF 导出（chromedp 异步任务）
 
 **Files:**
-- Create: `backend/internal/modules/e_render/export_service.go`
-- Create: `backend/internal/modules/e_render/export_handler_test.go`
-- Modify: `backend/internal/modules/e_render/handler.go`
-- Modify: `backend/internal/modules/e_render/routes.go`
+- Create: `backend/internal/modules/render/export_service.go`
+- Create: `backend/internal/modules/render/export_handler_test.go`
+- Modify: `backend/internal/modules/render/handler.go`
+- Modify: `backend/internal/modules/render/routes.go`
 
 **Step 1: 安装 chromedp 依赖**
 
@@ -263,7 +263,7 @@ cd backend && go get github.com/chromedp/chromedp
 
 ```go
 // export_handler_test.go
-package e_render
+package render
 
 import (
 	"bytes"
@@ -328,7 +328,7 @@ func TestGetExportStatus(t *testing.T) {
 
 ```go
 // export_service.go
-package e_render
+package render
 
 import (
 	"context"
@@ -487,7 +487,7 @@ rg.GET("/tasks/:task_id/file", h.DownloadExport)
 **Step 6: Commit**
 
 ```bash
-git add backend/internal/modules/e_render/
+git add backend/internal/modules/render/
 git commit -m "feat(module-e): implement async PDF export with chromedp"
 ```
 
@@ -616,7 +616,7 @@ git commit -m "feat(module-e): add version list and PDF export button"
 
 ## 验证清单
 
-- [ ] `go test ./internal/modules/e_render/... -v` 全部通过
+- [ ] `go test ./internal/modules/render/... -v` 全部通过
 - [ ] `curl -X POST localhost:8080/api/v1/render/drafts/1/versions -d '{"label":"snap"}'` 创建版本
 - [ ] `curl localhost:8080/api/v1/render/drafts/1/versions` 返回版本列表
 - [ ] `curl -X POST localhost:8080/api/v1/render/drafts/1/export -d '{"html_content":"<html>test</html>"}'` 返回 task_id

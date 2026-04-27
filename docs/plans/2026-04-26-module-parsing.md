@@ -1,4 +1,4 @@
-# 模块 B — 文件解析与 AI 初稿生成 Implementation Plan
+# 模块 parsing — 文件解析与 AI 初稿生成 Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -8,23 +8,23 @@
 
 **Tech Stack:** github.com/ledongthuc/pdf / net/http (OpenAI-compatible API) / GORM
 
-**Depends on:** Phase 0 共享基石完成、模块 A 的文件上传
+**Depends on:** Phase 0 共享基石完成、模块 intake 的文件上传
 
-**契约文档:** `docs/modules/b-parsing/contract.md`
+**契约文档:** `docs/modules/parsing/contract.md`
 
 ---
 
 ### Task 1: 后端 — PDF 解析
 
 **Files:**
-- Create: `backend/internal/modules/b_parsing/parser_test.go`
-- Create: `backend/internal/modules/b_parsing/parser.go`
+- Create: `backend/internal/modules/parsing/parser_test.go`
+- Create: `backend/internal/modules/parsing/parser.go`
 
 **Step 1: 写失败测试**
 
 ```go
 // parser_test.go
-package b_parsing
+package parsing
 
 import (
 	"os"
@@ -51,7 +51,7 @@ func TestExtractTextFromPDF(t *testing.T) {
 **Step 2: 运行测试确认失败**
 
 ```bash
-cd backend && go test ./internal/modules/b_parsing/... -v
+cd backend && go test ./internal/modules/parsing/... -v
 # Expected: FAIL
 ```
 
@@ -63,7 +63,7 @@ cd backend && go get github.com/ledongthuc/pdf
 
 ```go
 // parser.go
-package b_parsing
+package parsing
 
 import (
 	"fmt"
@@ -109,14 +109,14 @@ func ReadFileContent(filePath string) (string, error) {
 **Step 4: 运行测试确认通过**
 
 ```bash
-cd backend && go test ./internal/modules/b_parsing/... -v -run TestExtractTextFromPDF
+cd backend && go test ./internal/modules/parsing/... -v -run TestExtractTextFromPDF
 # Expected: PASS
 ```
 
 **Step 5: Commit**
 
 ```bash
-git add backend/internal/modules/b_parsing/
+git add backend/internal/modules/parsing/
 git commit -m "feat(module-b): implement PDF text extraction"
 ```
 
@@ -125,14 +125,14 @@ git commit -m "feat(module-b): implement PDF text extraction"
 ### Task 2: 后端 — AI 初稿生成（AI API + Mock 模式）
 
 **Files:**
-- Create: `backend/internal/modules/b_parsing/generator_test.go`
-- Create: `backend/internal/modules/b_parsing/generator.go`
+- Create: `backend/internal/modules/parsing/generator_test.go`
+- Create: `backend/internal/modules/parsing/generator.go`
 
 **Step 1: 写失败测试**
 
 ```go
 // generator_test.go
-package b_parsing
+package parsing
 
 import (
 	"encoding/json"
@@ -171,7 +171,7 @@ func TestMockParseResponse(t *testing.T) {
 
 ```go
 // generator.go
-package b_parsing
+package parsing
 
 import (
 	"bytes"
@@ -299,14 +299,14 @@ func GenerateDraftHTML(text string) (string, error) {
 **Step 3: 运行测试确认通过**
 
 ```bash
-cd backend && go test ./internal/modules/b_parsing/... -v
+cd backend && go test ./internal/modules/parsing/... -v
 # Expected: PASS
 ```
 
 **Step 4: Commit**
 
 ```bash
-git add backend/internal/modules/b_parsing/
+git add backend/internal/modules/parsing/
 git commit -m "feat(module-b): implement AI draft generation with AI API + mock mode"
 ```
 
@@ -315,15 +315,15 @@ git commit -m "feat(module-b): implement AI draft generation with AI API + mock 
 ### Task 3: 后端 — Parse + Generate API 端点
 
 **Files:**
-- Create: `backend/internal/modules/b_parsing/handler_test.go`
-- Create: `backend/internal/modules/b_parsing/handler.go`
-- Modify: `backend/internal/modules/b_parsing/routes.go`
+- Create: `backend/internal/modules/parsing/handler_test.go`
+- Create: `backend/internal/modules/parsing/handler.go`
+- Modify: `backend/internal/modules/parsing/routes.go`
 
 **Step 1: 写失败测试**
 
 ```go
 // handler_test.go
-package b_parsing
+package parsing
 
 import (
 	"os"
@@ -448,7 +448,7 @@ func (s *ParsingService) ParseAndGenerate(projectID uint) (*ParseResult, error) 
 
 ```go
 // handler.go
-package b_parsing
+package parsing
 
 import (
 	"strconv"
@@ -497,7 +497,7 @@ func (h *Handler) Generate(c *gin.Context) {
 **Step 3: 更新 routes.go**
 
 ```go
-package b_parsing
+package parsing
 
 import (
 	"os"
@@ -523,14 +523,14 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 **Step 4: 运行测试确认通过**
 
 ```bash
-USE_MOCK=true go test ./internal/modules/b_parsing/... -v
+USE_MOCK=true go test ./internal/modules/parsing/... -v
 # Expected: PASS
 ```
 
 **Step 5: Commit**
 
 ```bash
-git add backend/internal/modules/b_parsing/
+git add backend/internal/modules/parsing/
 git commit -m "feat(module-b): implement parse + generate API endpoints"
 ```
 
@@ -538,7 +538,7 @@ git commit -m "feat(module-b): implement parse + generate API endpoints"
 
 ## 验证清单
 
-- [ ] `go test ./internal/modules/b_parsing/... -v` 全部通过
+- [ ] `go test ./internal/modules/parsing/... -v` 全部通过
 - [ ] `USE_MOCK=true` 启动后端
 - [ ] `curl "localhost:8080/api/v1/parsing/parse?project_id=1"` 返回解析结果
 - [ ] `curl -X POST "localhost:8080/api/v1/parsing/generate?project_id=1"` 返回 draft_id + html_content

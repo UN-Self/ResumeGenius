@@ -88,7 +88,7 @@ v2 的核心改变：**HTML 是唯一的数据源**，砍掉所有中间层。
 
 ## 6. 各模块职责
 
-### 6.1 模块 A：项目管理与资料接入
+### 6.1 模块 intake：项目管理与资料接入
 
 职责：
 - 项目 CRUD（创建、列表、详情、删除）
@@ -100,9 +100,9 @@ v2 的核心改变：**HTML 是唯一的数据源**，砍掉所有中间层。
 - 磁盘上的原始文件
 - assets 表记录
 
-API 端点：与 v1 基本一致，详见 docs/modules/a-intake/contract.md
+API 端点：与 v1 基本一致，详见 docs/modules/intake/contract.md
 
-### 6.2 模块 B：文件解析与 AI 初稿生成
+### 6.2 模块 parsing：文件解析与 AI 初稿生成
 
 职责：
 - 用 ledongthuc/pdf 解析 PDF：提取文本块、布局信息、内嵌图片（头像）
@@ -124,7 +124,7 @@ AI 输出：
 - AI 直接生成 HTML，不再生成结构化数据
 - 初稿生成是同步等待还是异步任务，v1 先用同步（AI 调用通常 5-15 秒）
 
-### 6.3 模块 C：AI 对话助手
+### 6.3 模块 agent：AI 对话助手
 
 职责：
 - 多轮对话（SSE 流式响应）
@@ -142,7 +142,7 @@ AI 交互模式：
 - AI 直接返回修改后的 HTML，不返回 Patch 操作列表
 - 不需要 propose/apply 模式，只有"返回 HTML → 用户确认替换"
 
-### 6.4 模块 D：可视化编辑器
+### 6.4 模块 workbench：可视化编辑器
 
 技术选型：TipTap（基于 ProseMirror）
 
@@ -161,7 +161,7 @@ AI 交互模式：
 - 砍掉三栏编辑器布局（左侧 section 导航 + 中间编辑 + 右侧样式面板）
 - 编辑和预览是同一个东西，不需要单独的预览机制
 
-### 6.5 模块 E：版本管理与导出
+### 6.5 模块 render：版本管理与导出
 
 版本管理：
 - 每次用户手动保存或 AI 确认修改后，自动创建 HTML 快照
@@ -256,7 +256,7 @@ CREATE TABLE ai_messages (
 
 ## 8. API 端点总览
 
-### 模块 A（项目管理）
+### 模块 intake（项目管理）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -271,14 +271,14 @@ CREATE TABLE ai_messages (
 | POST | /api/v1/assets/notes | 添加补充文本 |
 | PUT | /api/v1/assets/notes/{note_id} | 编辑补充文本 |
 
-### 模块 B（解析与初稿）
+### 模块 parsing（解析与初稿）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | /api/v1/parsing/parse | 触发解析（同步） |
 | POST | /api/v1/parsing/generate | 触发 AI 初稿生成（同步） |
 
-### 模块 C（AI 对话）
+### 模块 agent（AI 对话）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
@@ -286,14 +286,14 @@ CREATE TABLE ai_messages (
 | POST | /api/v1/ai/sessions/{session_id}/chat | 发送消息（SSE 流式） |
 | GET | /api/v1/ai/sessions/{session_id}/history | 获取对话历史 |
 
-### 模块 D（草稿编辑）
+### 模块 workbench（草稿编辑）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | /api/v1/drafts/{draft_id} | 获取草稿 HTML |
 | PUT | /api/v1/drafts/{draft_id} | 保存草稿 HTML（自动保存） |
 
-### 模块 E（版本与导出）
+### 模块 render（版本与导出）
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
