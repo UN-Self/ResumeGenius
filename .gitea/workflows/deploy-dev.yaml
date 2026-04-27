@@ -1,0 +1,33 @@
+name: Deploy Dev
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - dev
+    paths:
+      - "backend/"
+      - "frontend/"
+      - "docker-compose.yml"
+      - ".gitea/workflows/deploy-dev.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-dev:
+    runs-on: ubuntu-local
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        timeout-minutes: 30
+        with:
+          host: ${{ secrets.DEPLOY_HOST_DEV }}
+          username: ${{ secrets.DEPLOY_USER_DEV }}
+          password: ${{ secrets.DEPLOY_PASSWORD_DEV }}
+          command_timeout: 30m
+          script: |
+            set -euo pipefail
+            cd ${{ vars.DEV_PATH }}
+            git pull
+            docker compose up -d --build
