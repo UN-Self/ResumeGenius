@@ -1,5 +1,5 @@
 FROM docker.1ms.run/node:20-alpine AS builder
-RUN corepack enable && corepack prepare bun@latest --activate
+RUN npm install -g bun --registry=https://registry.npmmirror.com
 WORKDIR /app
 COPY package.json bun.lockb* ./
 RUN bun install --frozen-lockfile 2>/dev/null || bun install
