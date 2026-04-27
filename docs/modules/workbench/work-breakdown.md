@@ -1,12 +1,12 @@
-# 模块 D 工作明细：可视化编辑器
+# 模块 workbench 工作明细：可视化编辑器
 
 更新时间：2026-04-23
 
-本文档列出模块 D 负责人的全部开发任务。契约定义见 [contract.md](./contract.md)。
+本文档列出模块 workbench 负责人的全部开发任务。契约定义见 [contract.md](./contract.md)。
 
 ## 1. 概述
 
-模块 D 是用户编辑简历的核心 UI，集成 TipTap 所见即所得编辑器，提供 A4 画布和丰富的格式工具栏。所有编辑直接修改 HTML，自动保存到后端。
+模块 workbench 是用户编辑简历的核心 UI，集成 TipTap 所见即所得编辑器，提供 A4 画布和丰富的格式工具栏。所有编辑直接修改 HTML，自动保存到后端。
 
 **核心交付**：用户能在工作台中像用 Word 一样直接编辑简历，实时预览，自动保存。
 
@@ -81,7 +81,7 @@
 |---|---|
 | `drafts` | 简历草稿（id, project_id, html_content, created_at, updated_at） |
 
-- 模块 B 创建，模块 D 更新 html_content，模块 E 读取
+- 模块 parsing 创建，模块 workbench 更新 html_content，模块 render 读取
 
 ## 5. 测试任务
 

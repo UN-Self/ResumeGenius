@@ -24,19 +24,19 @@ v2 的 mock 主要是：
 
 ```
 fixtures/
-  sample_resume.pdf           # A 消费（解析模块测试）
-  sample_resume.docx          # A 消费（解析模块测试）
-  sample_draft.html           # B 产出 / C/D/E 消费（模拟 AI 生成的简历 HTML）
-  sample_ai_response.json     # C 消费（模拟 AI 对话返回）
+  sample_resume.pdf           # intake 消费（解析模块测试）
+  sample_resume.docx          # intake 消费（解析模块测试）
+  sample_draft.html           # parsing 产出 / agent/workbench/render 消费（模拟 AI 生成的简历 HTML）
+  sample_ai_response.json     # agent 消费（模拟 AI 对话返回）
 ```
 
 每个模块的开发目录下可以有自己的测试 fixture 副本，但**契约 fixture**（上面的文件）由数据模型负责人维护，放在仓库根目录的 `fixtures/` 下。
 
 ## 4. 各模块 mock 策略
 
-### 模块 A：项目管理与资料接入
+### 模块 intake：项目管理与资料接入
 
-**上游**：无（A 是起点）
+**上游**：无（intake 是起点）
 
 **自己测试用的 mock**：
 - `fixtures/sample_resume.pdf` — 用于测试文件上传、存储、assets 记录创建
@@ -49,7 +49,7 @@ fixtures/
 **Go 代码示例**：
 
 ```go
-// 模拟模块 A 的产出：创建一个 asset 记录
+// 模拟模块 intake 的产出：创建一个 asset 记录
 func mockCreateAsset(projectID uint) *Asset {
     return &Asset{
         ProjectID: projectID,
@@ -77,15 +77,15 @@ func mockCreateNote(projectID uint) *Asset {
 }
 ```
 
-### 模块 B：文件解析与 AI 初稿生成
+### 模块 parsing：文件解析与 AI 初稿生成
 
-**输入 mock（替代 A 的产出）**：直接读 `fixtures/sample_resume.pdf` 和 `fixtures/sample_resume.docx`
+**输入 mock（替代 intake 的产出）**：直接读 `fixtures/sample_resume.pdf` 和 `fixtures/sample_resume.docx`
 
 **自己测试用的 mock**：
 - 模拟 PDF 解析结果（纯文本提取）
 - 模拟 AI 模型返回（不调真实 AI API，用预设 HTML 替代）
 
-**产出的 fixture（给 C/D/E 用）**：
+**产出的 fixture（给 agent/workbench/render 用）**：
 
 ```html
 <!-- fixtures/sample_draft.html -->
@@ -179,7 +179,7 @@ func mockCreateNote(projectID uint) *Asset {
 **Go 代码示例**：
 
 ```go
-// 模拟模块 B 的产出：读取 fixture HTML 作为初稿
+// 模拟模块 parsing 的产出：读取 fixture HTML 作为初稿
 func mockGenerateDraft(htmlPath string) *Draft {
     htmlContent, _ := os.ReadFile(htmlPath)
     return &Draft{
@@ -205,9 +205,9 @@ TypeScript, React, Go, Node.js, PostgreSQL, Docker`
 }
 ```
 
-### 模块 C：AI 对话助手
+### 模块 agent：AI 对话助手
 
-**输入 mock（替代 B 的产出）**：直接读 `fixtures/sample_draft.html`
+**输入 mock（替代 parsing 的产出）**：直接读 `fixtures/sample_draft.html`
 
 **自己测试用的 mock**：
 - 模拟 AI 模型返回（不调真实 AI API，用预设 JSON 替代）
@@ -253,9 +253,9 @@ func extractHTMLFromAssistant(content string) string {
 }
 ```
 
-### 模块 D：可视化编辑器
+### 模块 workbench：可视化编辑器
 
-**输入 mock（替代 B 的产出）**：直接读 `fixtures/sample_draft.html`
+**输入 mock（替代 parsing 的产出）**：直接读 `fixtures/sample_draft.html`
 
 **自己测试用的 mock**：
 - 模拟 TipTap 编辑器内容（React 组件渲染）
@@ -288,9 +288,9 @@ const autoSave = useDebounceFn(async (html: string) => {
 }, 2000);
 ```
 
-### 模块 E：版本管理与 PDF 导出
+### 模块 render：版本管理与 PDF 导出
 
-**输入 mock（替代 C/D 的产出）**：直接读 `fixtures/sample_draft.html`
+**输入 mock（替代 agent/workbench 的产出）**：直接读 `fixtures/sample_draft.html`
 
 **自己测试用的 mock**：
 - 模拟版本快照创建

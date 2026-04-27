@@ -1,4 +1,4 @@
-# 模块 A — 项目管理与文件上传 Implementation Plan
+# 模块 intake — 项目管理与文件上传 Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -10,24 +10,24 @@
 
 **Depends on:** Phase 0 共享基石完成
 
-**契约文档:** `docs/modules/a-intake/contract.md`
+**契约文档:** `docs/modules/intake/contract.md`
 
 ---
 
 ### Task 1: 后端 — ProjectService CRUD
 
 **Files:**
-- Create: `backend/internal/modules/a_intake/handler.go`
-- Create: `backend/internal/modules/a_intake/service.go`
-- Create: `backend/internal/modules/a_intake/routes.go`
-- Create: `backend/internal/modules/a_intake/handler_test.go`
-- Modify: `backend/internal/modules/a_intake/routes.go`
+- Create: `backend/internal/modules/intake/handler.go`
+- Create: `backend/internal/modules/intake/service.go`
+- Create: `backend/internal/modules/intake/routes.go`
+- Create: `backend/internal/modules/intake/handler_test.go`
+- Modify: `backend/internal/modules/intake/routes.go`
 
 **Step 1: 写失败测试**
 
 ```go
 // handler_test.go
-package a_intake
+package intake
 
 import (
 	"bytes"
@@ -123,7 +123,7 @@ func TestDeleteProject(t *testing.T) {
 **Step 2: 运行测试确认失败**
 
 ```bash
-cd backend && go test ./internal/modules/a_intake/... -v
+cd backend && go test ./internal/modules/intake/... -v
 # Expected: FAIL
 ```
 
@@ -131,7 +131,7 @@ cd backend && go test ./internal/modules/a_intake/... -v
 
 ```go
 // service.go
-package a_intake
+package intake
 
 import (
 	"github.com/handy/resume-genius/backend/internal/shared/models"
@@ -169,7 +169,7 @@ func (s *ProjectService) Delete(id uint) error {
 
 ```go
 // handler.go
-package a_intake
+package intake
 
 import (
 	"net/http"
@@ -228,7 +228,7 @@ func (h *Handler) DeleteProject(c *gin.Context) {
 
 ```go
 // routes.go
-package a_intake
+package intake
 
 import (
 	"github.com/gin-gonic/gin"
@@ -248,14 +248,14 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 **Step 5: 运行测试确认通过**
 
 ```bash
-cd backend && go test ./internal/modules/a_intake/... -v
+cd backend && go test ./internal/modules/intake/... -v
 # Expected: PASS
 ```
 
 **Step 6: Commit**
 
 ```bash
-git add backend/internal/modules/a_intake/
+git add backend/internal/modules/intake/
 git commit -m "feat(module-a): implement project CRUD with tests"
 ```
 
@@ -264,15 +264,15 @@ git commit -m "feat(module-a): implement project CRUD with tests"
 ### Task 2: 后端 — 文件上传
 
 **Files:**
-- Create: `backend/internal/modules/a_intake/upload_handler_test.go`
-- Modify: `backend/internal/modules/a_intake/handler.go`
-- Modify: `backend/internal/modules/a_intake/routes.go`
+- Create: `backend/internal/modules/intake/upload_handler_test.go`
+- Modify: `backend/internal/modules/intake/handler.go`
+- Modify: `backend/internal/modules/intake/routes.go`
 
 **Step 1: 写失败测试**
 
 ```go
 // upload_handler_test.go
-package a_intake
+package intake
 
 import (
 	"mime/multipart"
@@ -418,7 +418,7 @@ rg.POST("/assets/upload", h.UploadFile)
 **Step 4: Commit**
 
 ```bash
-git add backend/internal/modules/a_intake/
+git add backend/internal/modules/intake/
 git commit -m "feat(module-a): implement file upload to local storage"
 ```
 
@@ -544,7 +544,7 @@ git commit -m "feat(module-a): add project list page with create form"
 
 ## 验证清单
 
-- [ ] `go test ./internal/modules/a_intake/... -v` 全部通过
+- [ ] `go test ./internal/modules/intake/... -v` 全部通过
 - [ ] `curl -X POST localhost:8080/api/v1/intake/projects -d '{"title":"test"}'` 返回项目
 - [ ] `curl localhost:8080/api/v1/intake/projects` 返回项目列表
 - [ ] `curl -X DELETE localhost:8080/api/v1/intake/projects/1` 删除项目

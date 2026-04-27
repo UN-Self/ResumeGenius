@@ -1,4 +1,4 @@
-# 模块 C — AI 对话助手 Implementation Plan
+# 模块 agent — AI 对话助手 Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -8,23 +8,23 @@
 
 **Tech Stack:** Gin SSE / net/http streaming / OpenAI-compatible API / React EventSource
 
-**Depends on:** Phase 0 共享基石完成、模块 D 的 TipTap 编辑器
+**Depends on:** Phase 0 共享基石完成、模块 workbench 的 TipTap 编辑器
 
-**契约文档:** `docs/modules/c-agent/contract.md`
+**契约文档:** `docs/modules/agent/contract.md`
 
 ---
 
 ### Task 1: 后端 — SessionService 会话管理
 
 **Files:**
-- Create: `backend/internal/modules/c_agent/session_test.go`
-- Create: `backend/internal/modules/c_agent/session.go`
+- Create: `backend/internal/modules/agent/session_test.go`
+- Create: `backend/internal/modules/agent/session.go`
 
 **Step 1: 写失败测试**
 
 ```go
 // session_test.go
-package c_agent
+package agent
 
 import (
 	"testing"
@@ -102,7 +102,7 @@ func TestGetHistory(t *testing.T) {
 **Step 2: 运行测试确认失败**
 
 ```bash
-cd backend && go test ./internal/modules/c_agent/... -v
+cd backend && go test ./internal/modules/agent/... -v
 # Expected: FAIL
 ```
 
@@ -110,7 +110,7 @@ cd backend && go test ./internal/modules/c_agent/... -v
 
 ```go
 // session.go
-package c_agent
+package agent
 
 import (
 	"github.com/handy/resume-genius/backend/internal/shared/models"
@@ -152,16 +152,16 @@ func (s *SessionService) GetHistory(sessionID uint) ([]models.AIMessage, error) 
 **Step 4: 运行测试确认通过**
 
 ```bash
-cd backend && go test ./internal/modules/c_agent/... -v -run TestCreateSession
-cd backend && go test ./internal/modules/c_agent/... -v -run TestSaveMessage
-cd backend && go test ./internal/modules/c_agent/... -v -run TestGetHistory
+cd backend && go test ./internal/modules/agent/... -v -run TestCreateSession
+cd backend && go test ./internal/modules/agent/... -v -run TestSaveMessage
+cd backend && go test ./internal/modules/agent/... -v -run TestGetHistory
 # Expected: PASS all
 ```
 
 **Step 5: Commit**
 
 ```bash
-git add backend/internal/modules/c_agent/
+git add backend/internal/modules/agent/
 git commit -m "feat(module-c): implement session management with tests"
 ```
 
@@ -170,15 +170,15 @@ git commit -m "feat(module-c): implement session management with tests"
 ### Task 2: 后端 — SSE 流式对话
 
 **Files:**
-- Create: `backend/internal/modules/c_agent/chat.go`
-- Create: `backend/internal/modules/c_agent/handler.go`
-- Modify: `backend/internal/modules/c_agent/routes.go`
+- Create: `backend/internal/modules/agent/chat.go`
+- Create: `backend/internal/modules/agent/handler.go`
+- Modify: `backend/internal/modules/agent/routes.go`
 
 **Step 1: 实现 ChatService**
 
 ```go
 // chat.go
-package c_agent
+package agent
 
 import (
 	"bufio"
@@ -341,7 +341,7 @@ func (s *ChatService) mockStream(sendEvent func(string)) error {
 
 ```go
 // handler.go
-package c_agent
+package agent
 
 import (
 	"fmt"
@@ -431,7 +431,7 @@ func parseUint(s string) uint {
 **Step 3: 更新 routes.go**
 
 ```go
-package c_agent
+package agent
 
 import (
 	"github.com/gin-gonic/gin"
@@ -452,7 +452,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 **Step 4: Commit**
 
 ```bash
-git add backend/internal/modules/c_agent/
+git add backend/internal/modules/agent/
 git commit -m "feat(module-c): implement SSE streaming chat with session management"
 ```
 
@@ -668,7 +668,7 @@ git commit -m "feat(module-c): implement AI chat panel with SSE streaming"
 
 ## 验证清单
 
-- [ ] `go test ./internal/modules/c_agent/... -v` 全部通过
+- [ ] `go test ./internal/modules/agent/... -v` 全部通过
 - [ ] `curl -X POST localhost:8080/api/v1/ai/sessions -d '{"draft_id":1}'` 创建会话
 - [ ] `curl -X POST localhost:8080/api/v1/ai/sessions/1/chat -d '{"message":"优化简历"}' -H "Accept: text/event-stream"` 返回 SSE 流
 - [ ] SSE 流包含 `text`、`html_start`、`html_chunk`、`html_end`、`done` 事件

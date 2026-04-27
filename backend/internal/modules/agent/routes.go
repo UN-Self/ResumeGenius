@@ -1,4 +1,4 @@
-package c_agent
+package agent
 
 import (
 	"github.com/gin-gonic/gin"
@@ -7,6 +7,6 @@ import (
 
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 	rg.POST("/ai/sessions", func(c *gin.Context) {
-		c.JSON(200, gin.H{"module": "c_agent", "status": "stub"})
+		c.JSON(200, gin.H{"module": "agent", "status": "stub"})
 	})
 }

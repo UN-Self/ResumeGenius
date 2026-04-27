@@ -1,12 +1,12 @@
-# 模块 B 工作明细：文件解析与 AI 初稿生成
+# 模块 parsing 工作明细：文件解析与 AI 初稿生成
 
 更新时间：2026-04-23
 
-本文档列出模块 B 负责人的全部开发任务。契约定义见 [contract.md](./contract.md)。
+本文档列出模块 parsing 负责人的全部开发任务。契约定义见 [contract.md](./contract.md)。
 
 ## 1. 概述
 
-模块 B 接收 A 产出的资产记录，对各类资料进行解析提取文本，然后调用 AI 生成完整简历 HTML 存入 drafts 表。
+模块 parsing 接收 intake 产出的资产记录，对各类资料进行解析提取文本，然后调用 AI 生成完整简历 HTML 存入 drafts 表。
 
 **核心交付**：用户上传的简历文件能被正确解析，AI 自动生成可编辑的初始简历 HTML。
 
@@ -60,7 +60,7 @@
 - 解析结果不持久化到数据库，直接传给 AI
 - AI 调用通过 ProviderAdapter 封装，返回完整 HTML
 - 初稿生成失败时不创建 draft 记录，返回错误
-- AI 初稿生成成功后自动创建版本快照（调用模块 E 的版本创建逻辑），响应中返回 version_id
+- AI 初稿生成成功后自动创建版本快照（调用模块 render 的版本创建逻辑），响应中返回 version_id
 
 ## 4. 数据库表
 
@@ -68,9 +68,9 @@
 |---|---|
 | `drafts` | 简历草稿（id, project_id, html_content, created_at, updated_at） |
 
-- 模块 B 负责创建 drafts 记录
-- 模块 D 负责更新 html_content（自动保存）
-- 模块 E 负责创建 versions 快照
+- 模块 parsing 负责创建 drafts 记录
+- 模块 workbench 负责更新 html_content（自动保存）
+- 模块 render 负责创建 versions 快照
 
 ## 5. 测试任务
 
@@ -96,9 +96,9 @@
 
 ### 5.3 Mock 策略
 
-- 不依赖 A 的服务：直接读 fixtures/ 中的测试文件
+- 不依赖 intake 的服务：直接读 fixtures/ 中的测试文件
 - AI 调用用 mock 替代：返回预设的 HTML
-- 不需要 C/D/E 的服务
+- 不需要 agent/workbench/render 的服务
 - 本地测试文件放 fixtures/：sample_resume.pdf, sample_resume.docx
 
 ## 6. 交付 Checklist

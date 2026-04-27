@@ -1,12 +1,12 @@
-# 模块 C 工作明细：AI 对话助手
+# 模块 agent 工作明细：AI 对话助手
 
 更新时间：2026-04-23
 
-本文档列出模块 C 负责人的全部开发任务。契约定义见 [contract.md](./contract.md)。
+本文档列出模块 agent 负责人的全部开发任务。契约定义见 [contract.md](./contract.md)。
 
 ## 1. 概述
 
-模块 C 是 AI 编辑链路的核心，负责多轮对话、AI 流式响应，以及 HTML 替换确认。AI 读取当前简历 HTML 作为上下文，用户描述需求后 AI 返回修改后的完整 HTML。
+模块 agent 是 AI 编辑链路的核心，负责多轮对话、AI 流式响应，以及 HTML 替换确认。AI 读取当前简历 HTML 作为上下文，用户描述需求后 AI 返回修改后的完整 HTML。
 
 **核心交付**：用户能通过自然语言对话修改简历，AI 流式返回 HTML 预览，确认后替换编辑器内容。
 
@@ -99,7 +99,7 @@
 ### 5.3 Mock 策略
 
 - AI 调用用 mock handler 替代：返回预设的流式文本 + HTML
-- 不需要 B/D/E 的服务
+- 不需要 parsing/workbench/render 的服务
 - 当前 HTML 用 fixtures/sample_draft.html
 
 ## 6. 交付 Checklist

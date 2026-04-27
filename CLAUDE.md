@@ -69,16 +69,16 @@ bun run build                          # 构建纯静态 HTML 到 dist/
 ## 架构：v2（HTML 单一数据源）
 
 ```
-[A 项目管理] → 文件/资料 → [B 解析初稿] → HTML 初稿
+[项目管理] → 文件/资料 → [解析初稿] → HTML 初稿
                                        │
                               ┌─────────┴─────────┐
                               ▼                   ▼
-                        [C AI 对话]          [D TipTap 编辑]
+                        [AI 对话]          [TipTap 编辑]
                         AI 返回 HTML          直接编辑 HTML
                               │                   │
                               └─────────┬─────────┘
                                         ▼
-                              [E 版本管理 + PDF 导出]
+                              [版本管理 + PDF 导出]
                                 HTML 快照 / chromedp
 ```
 
@@ -89,13 +89,13 @@ bun run build                          # 构建纯静态 HTML 到 dist/
 Gin 路由分组注册，每个模块统一签名 `func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB)`：
 
 ```
-/api/v1/projects       → a_intake    （项目管理）
-/api/v1/assets/*       → a_intake    （文件上传、Git 接入、补充文本）
-/api/v1/parsing/*      → b_parsing   （解析、AI 初稿生成）
-/api/v1/ai/*           → c_agent     （SSE 流式 AI 对话）
-/api/v1/drafts/*       → d_workbench （TipTap 编辑、草稿 CRUD）
-/api/v1/drafts/*       → e_render    （版本快照）
-/api/v1/tasks/*        → e_render    （PDF 导出任务）
+/api/v1/projects       → intake      （项目管理）
+/api/v1/assets/*       → intake      （文件上传、Git 接入、补充文本）
+/api/v1/parsing/*      → parsing     （解析、AI 初稿生成）
+/api/v1/ai/*           → agent       （SSE 流式 AI 对话）
+/api/v1/drafts/*       → workbench   （TipTap 编辑、草稿 CRUD）
+/api/v1/drafts/*       → render      （版本快照）
+/api/v1/tasks/*        → render      （PDF 导出任务）
 ```
 
 **路由与端点定义以 docs/modules/*/contract.md 为唯一契约来源。**
@@ -146,7 +146,7 @@ Gin 路由分组注册，每个模块统一签名 `func RegisterRoutes(rg *gin.R
 
 - **共享规范层** `docs/01-product/`：tech-stack、api-conventions、ui-design-system
 - **数据模型** `docs/02-data-models/`：core-data-model、mock-fixtures
-- **模块契约** `docs/modules/{a-intake,...,e-render}/`：各模块 contract.md + work-breakdown.md
+- **模块契约** `docs/modules/{intake,...,render}/`：各模块 contract.md + work-breakdown.md
 - **实施计划** `docs/plans/`：phase0-shared-foundation + 5 个模块计划
 
 开发前必读顺序：tech-stack → api-conventions → ui-design-system → core-data-model → 对应模块 contract.md
@@ -154,6 +154,6 @@ Gin 路由分组注册，每个模块统一签名 `func RegisterRoutes(rg *gin.R
 ## 协作规则
 
 - 契约即文档：代码必须对齐 contract.md + core-data-model.md
-- 错误码段：A=01xxx, B=02xxx, C=03xxx, D=04xxx, E=05xxx
+- 错误码段：intake=01xxx, parsing=02xxx, agent=03xxx, workbench=04xxx, render=05xxx
 - 前端不直接操作数据库，所有数据通过 API 获取
 - Commit 消息前缀：`feat:` / `fix:` / `docs:` / `refactor:` / `test:`

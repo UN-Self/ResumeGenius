@@ -21,11 +21,11 @@ ResumeGenius/
     cmd/                     # 入口
     internal/
       modules/               # 5 个模块各自独立目录
-        a_intake/
-        b_parsing/
-        c_agent/
-        d_workbench/
-        e_render/
+        intake/
+        parsing/
+        agent/
+        workbench/
+        render/
       shared/                # 共享 Go 模型、工具
   fixtures/                  # 共享 mock 数据
   docs/                      # 本文档体系
@@ -84,11 +84,11 @@ ResumeGenius/
 
 | 模块 | 负责人 | 前端页面 | 后端 API 数 | 核心产出 |
 |---|---|---|---|---|
-| A 资料接入 | — | 3 页 | 10 个 | projects + assets 表操作 |
-| B 解析初稿 | — | 2 页 | 2 个 | 文本提取 → AI 生成 HTML |
-| C AI 对话 | — | 集成在工作台 | 3 个 | SSE 流式对话 |
-| D 可视化编辑 | — | 工作台主体 | 2 个 | TipTap 集成 + 自动保存 |
-| E 版本导出 | — | 弹窗/抽屉 | 5 个 | HTML 快照 + chromedp PDF |
+| 资料接入 | — | 3 页 | 10 个 | projects + assets 表操作 |
+| 解析初稿 | — | 2 页 | 2 个 | 文本提取 → AI 生成 HTML |
+| AI 对话 | — | 集成在工作台 | 3 个 | SSE 流式对话 |
+| 可视化编辑 | — | 工作台主体 | 2 个 | TipTap 集成 + 自动保存 |
+| 版本导出 | — | 弹窗/抽屉 | 5 个 | HTML 快照 + chromedp PDF |
 
 ## 4. 开发顺序建议
 
@@ -122,15 +122,15 @@ ResumeGenius/
 - **Mock 优先**：开发阶段用 fixtures/ 下的 mock 数据，不依赖真实服务
 - **环境变量切 mock**：用 `USE_MOCK=true/false` 控制是否使用 mock 数据
 - **前端不直接操作数据库**：所有数据通过 API 获取
-- **错误码不冲突**：A=1001–1999, B=2001–2999, C=3001–3999, D=4001–4999, E=5001–5999
+- **错误码不冲突**：intake=1001–1999, parsing=2001–2999, agent=3001–3999, workbench=4001–4999, render=5001–5999
 - **HTML 是唯一数据源**：所有编辑路径最终操作的都是 HTML，不允许引入中间 JSON 结构
 
 ## 6. 模块工作明细
 
 | 模块 | 工作明细文档 |
 |---|---|
-| A 资料接入 | [modules/a-intake/work-breakdown.md](../modules/a-intake/work-breakdown.md) |
-| B 解析初稿 | [modules/b-parsing/work-breakdown.md](../modules/b-parsing/work-breakdown.md) |
-| C AI 对话 | [modules/c-agent/work-breakdown.md](../modules/c-agent/work-breakdown.md) |
-| D 可视化编辑 | [modules/d-workbench/work-breakdown.md](../modules/d-workbench/work-breakdown.md) |
-| E 版本导出 | [modules/e-render/work-breakdown.md](../modules/e-render/work-breakdown.md) |
+| 资料接入 | [modules/intake/work-breakdown.md](../modules/intake/work-breakdown.md) |
+| 解析初稿 | [modules/parsing/work-breakdown.md](../modules/parsing/work-breakdown.md) |
+| AI 对话 | [modules/agent/work-breakdown.md](../modules/agent/work-breakdown.md) |
+| 可视化编辑 | [modules/workbench/work-breakdown.md](../modules/workbench/work-breakdown.md) |
+| 版本导出 | [modules/render/work-breakdown.md](../modules/render/work-breakdown.md) |

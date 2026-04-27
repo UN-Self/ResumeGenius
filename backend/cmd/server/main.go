@@ -6,11 +6,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"github.com/handy/resume-genius/internal/modules/a_intake"
-	"github.com/handy/resume-genius/internal/modules/b_parsing"
-	"github.com/handy/resume-genius/internal/modules/c_agent"
-	"github.com/handy/resume-genius/internal/modules/d_workbench"
-	"github.com/handy/resume-genius/internal/modules/e_render"
+	"github.com/handy/resume-genius/internal/modules/agent"
+	"github.com/handy/resume-genius/internal/modules/intake"
+	"github.com/handy/resume-genius/internal/modules/parsing"
+	"github.com/handy/resume-genius/internal/modules/render"
+	"github.com/handy/resume-genius/internal/modules/workbench"
 	"github.com/handy/resume-genius/internal/shared/database"
 	"github.com/handy/resume-genius/internal/shared/middleware"
 )
@@ -22,11 +22,11 @@ func setupRouter(db *gorm.DB) *gin.Engine {
 	r.Use(middleware.CORS(), middleware.Logger())
 
 	v1 := r.Group("/api/v1")
-	a_intake.RegisterRoutes(v1, db)
-	b_parsing.RegisterRoutes(v1, db)
-	c_agent.RegisterRoutes(v1, db)
-	d_workbench.RegisterRoutes(v1, db)
-	e_render.RegisterRoutes(v1, db)
+	intake.RegisterRoutes(v1, db)
+	parsing.RegisterRoutes(v1, db)
+	agent.RegisterRoutes(v1, db)
+	workbench.RegisterRoutes(v1, db)
+	render.RegisterRoutes(v1, db)
 
 	return r
 }

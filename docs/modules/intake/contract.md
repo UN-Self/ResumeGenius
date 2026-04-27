@@ -1,4 +1,4 @@
-# 模块 A 契约：项目管理与资料接入
+# 模块 intake 契约：项目管理与资料接入
 
 更新时间：2026-04-23
 
@@ -13,10 +13,10 @@
 
 **不负责**：
 
-- 文件内容解析（B 的事）
-- AI 初稿生成（B 的事）
-- 简历编辑（C / D 的事）
-- 版本管理和 PDF 导出（E 的事）
+- 文件内容解析（parsing 的事）
+- AI 初稿生成（parsing 的事）
+- 简历编辑（agent / workbench 的事）
+- 版本管理和 PDF 导出（render 的事）
 
 ## 2. 输入契约
 
@@ -118,7 +118,7 @@ Response:
 }
 ```
 
-> v1 限制：`resume_image` 类型的资产仅存储，B 模块解析时跳过。图片可用于前端手动引用（如头像），暂不支持 OCR 识别。
+> v1 限制：`resume_image` 类型的资产仅存储，parsing 模块解析时跳过。图片可用于前端手动引用（如头像），暂不支持 OCR 识别。
 
 #### POST /api/v1/assets/notes
 
@@ -152,12 +152,12 @@ Response:
 
 ### 下游
 
-- 模块 B（解析与初稿生成）消费 assets 中的文件路径和文本
+- 模块 parsing（解析与初稿生成）消费 assets 中的文件路径和文本
 
 ### 可 mock 的边界
 
-- B 不需要启动 A 的服务，直接读 fixtures/ 中的测试文件
-- A 不需要知道 B 如何消费
+- parsing 不需要启动 intake 的服务，直接读 fixtures/ 中的测试文件
+- intake 不需要知道 parsing 如何消费
 
 ## 6. 错误码
 
@@ -175,12 +175,12 @@ Response:
 ### 独立测试
 
 - 用本地测试文件（`fixtures/sample_resume.pdf` 等）测试上传和存储
-- 不需要启动模块 B 的服务
+- 不需要启动模块 parsing 的服务
 - 不需要数据库（可用 SQLite 内存库替代 PostgreSQL）
 
 ### Mock 产出
 
-确保文件上传和资产创建功能正确，模块 B 可直接使用 assets 表中的记录。
+确保文件上传和资产创建功能正确，模块 parsing 可直接使用 assets 表中的记录。
 
 ### 前端测试
 
