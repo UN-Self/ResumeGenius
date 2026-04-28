@@ -5,8 +5,25 @@ import (
 	"gorm.io/gorm"
 )
 
-func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
-	rg.GET("/projects", func(c *gin.Context) {
-		c.JSON(200, gin.H{"module": "intake", "status": "stub"})
-	})
+func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, uploadDir string) {
+	storage := NewLocalStorage(uploadDir)
+	projectSvc := NewProjectService(db)
+	assetSvc := NewAssetService(db, storage)
+	h := NewHandler(projectSvc, assetSvc)
+
+	// Project CRUD
+	rg.POST("/projects", h.CreateProject)
+	rg.GET("/projects", h.ListProjects)
+	rg.GET("/projects/:project_id", h.GetProject)
+	rg.DELETE("/projects/:project_id", h.DeleteProject)
+
+	// Asset management
+	rg.POST("/assets/upload", h.UploadFile)
+	rg.POST("/assets/git", h.CreateGitRepo)
+	rg.GET("/assets", h.ListAssets)
+	rg.DELETE("/assets/:asset_id", h.DeleteAsset)
+
+	// Notes
+	rg.POST("/assets/notes", h.CreateNote)
+	rg.PUT("/assets/notes/:note_id", h.UpdateNote)
 }

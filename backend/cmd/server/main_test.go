@@ -14,6 +14,15 @@ func TestResourceRoutes_AreMountedOnApiV1(t *testing.T) {
 		path   string
 	}{
 		{http.MethodGet, "/api/v1/projects"},
+		{http.MethodPost, "/api/v1/projects"},
+		{http.MethodGet, "/api/v1/projects/1"},
+		{http.MethodDelete, "/api/v1/projects/1"},
+		{http.MethodPost, "/api/v1/assets/upload"},
+		{http.MethodPost, "/api/v1/assets/git"},
+		{http.MethodGet, "/api/v1/assets"},
+		{http.MethodDelete, "/api/v1/assets/1"},
+		{http.MethodPost, "/api/v1/assets/notes"},
+		{http.MethodPut, "/api/v1/assets/notes/1"},
 		{http.MethodPost, "/api/v1/parsing/parse"},
 		{http.MethodPost, "/api/v1/ai/sessions"},
 		{http.MethodGet, "/api/v1/drafts/1"},

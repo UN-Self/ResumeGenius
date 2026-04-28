@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -21,8 +22,14 @@ func setupRouter(db *gorm.DB) *gin.Engine {
 	r := gin.Default()
 	r.Use(middleware.CORS(), middleware.UserIdentify(), middleware.Logger())
 
+	uploadDir := os.Getenv("UPLOAD_DIR")
+	if uploadDir == "" {
+		uploadDir = "./uploads"
+	}
+	os.MkdirAll(uploadDir, 0755)
+
 	v1 := r.Group("/api/v1")
-	intake.RegisterRoutes(v1, db)
+	intake.RegisterRoutes(v1, db, uploadDir)
 	parsing.RegisterRoutes(v1, db)
 	agent.RegisterRoutes(v1, db)
 	workbench.RegisterRoutes(v1, db)
