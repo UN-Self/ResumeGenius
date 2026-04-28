@@ -19,7 +19,7 @@ var _ *gorm.DB // ensure gorm import is used
 
 func setupRouter(db *gorm.DB) *gin.Engine {
 	r := gin.Default()
-	r.Use(middleware.CORS(), middleware.Logger())
+	r.Use(middleware.CORS(), middleware.UserIdentify(), middleware.Logger())
 
 	v1 := r.Group("/api/v1")
 	intake.RegisterRoutes(v1, db)

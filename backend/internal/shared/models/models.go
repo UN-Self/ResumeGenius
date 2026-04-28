@@ -30,6 +30,7 @@ func (j *JSONB) Scan(value interface{}) error {
 
 type Project struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`
+	UserID         string    `gorm:"size:36;not null;index" json:"user_id"`
 	Title          string    `gorm:"size:200;not null" json:"title"`
 	Status         string    `gorm:"size:20;not null;default:'active'" json:"status"`
 	CurrentDraftID *uint     `json:"current_draft_id"`
