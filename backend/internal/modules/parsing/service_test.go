@@ -57,6 +57,127 @@ func TestNewParsingServiceStoresDependencies(t *testing.T) {
 	if svc.gitExtractor != gitExtractor {
 		t.Error("expected git extractor to be stored")
 	}
+	if svc.projectExists == nil {
+		t.Error("expected projectExists loader to be initialized")
+	}
+	if svc.listProjectAssets == nil {
+		t.Error("expected listProjectAssets loader to be initialized")
+	}
+}
+
+func TestParseReturnsProjectNotFound(t *testing.T) {
+	svc := NewParsingService(nil, nil, nil, nil)
+	assetsListed := false
+	svc.projectExists = func(projectID uint) (bool, error) {
+		if projectID != 99 {
+			t.Fatalf("expected project id 99, got %d", projectID)
+		}
+		return false, nil
+	}
+	svc.listProjectAssets = func(projectID uint) ([]models.Asset, error) {
+		assetsListed = true
+		return nil, nil
+	}
+
+	_, err := svc.Parse(99)
+	if !errors.Is(err, ErrProjectNotFound) {
+		t.Fatalf("expected ErrProjectNotFound, got %v", err)
+	}
+	if assetsListed {
+		t.Fatal("expected assets not to be loaded when project does not exist")
+	}
+}
+
+func TestParseReturnsNoUsableAssets(t *testing.T) {
+	svc := NewParsingService(nil, nil, nil, nil)
+	gitURL := "https://github.com/example/project"
+	svc.projectExists = func(projectID uint) (bool, error) {
+		return true, nil
+	}
+	svc.listProjectAssets = func(projectID uint) ([]models.Asset, error) {
+		return []models.Asset{
+			{ID: 1, Type: AssetTypeResumeImage},
+			{ID: 2, Type: AssetTypeGitRepo, URI: &gitURL},
+		}, nil
+	}
+
+	_, err := svc.Parse(1)
+	if !errors.Is(err, ErrNoUsableAssets) {
+		t.Fatalf("expected ErrNoUsableAssets, got %v", err)
+	}
+}
+
+func TestParseAggregatesSupportedAssets(t *testing.T) {
+	pdfPath := "fixtures/sample_resume.pdf"
+	docxPath := "fixtures/sample_resume.docx"
+	gitURL := "https://github.com/example/project"
+	noteContent := "希望突出 React、TypeScript 和工程化经验"
+	noteLabel := "求职方向"
+
+	pdfParser := &stubPdfParser{
+		result: &ParsedContent{Text: "pdf text"},
+	}
+	docxParser := &stubDocxParser{
+		result: &ParsedContent{Text: "docx text"},
+	}
+	svc := NewParsingService(nil, pdfParser, docxParser, nil)
+	svc.projectExists = func(projectID uint) (bool, error) {
+		if projectID != 7 {
+			t.Fatalf("expected project id 7, got %d", projectID)
+		}
+		return true, nil
+	}
+	svc.listProjectAssets = func(projectID uint) ([]models.Asset, error) {
+		return []models.Asset{
+			{ID: 11, Type: AssetTypeResumePDF, URI: &pdfPath},
+			{ID: 12, Type: AssetTypeNote, Content: &noteContent, Label: &noteLabel},
+			{ID: 13, Type: AssetTypeResumeImage},
+			{ID: 14, Type: AssetTypeGitRepo, URI: &gitURL},
+			{ID: 15, Type: AssetTypeResumeDOCX, URI: &docxPath},
+		}, nil
+	}
+
+	parsedContents, err := svc.Parse(7)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(parsedContents) != 3 {
+		t.Fatalf("expected 3 parsed contents, got %d", len(parsedContents))
+	}
+	if pdfParser.calledWith != pdfPath {
+		t.Fatalf("expected pdf parser path %s, got %s", pdfPath, pdfParser.calledWith)
+	}
+	if docxParser.calledWith != docxPath {
+		t.Fatalf("expected docx parser path %s, got %s", docxPath, docxParser.calledWith)
+	}
+
+	if parsedContents[0].AssetID != 11 || parsedContents[0].Type != AssetTypeResumePDF || parsedContents[0].Text != "pdf text" {
+		t.Fatalf("unexpected pdf parsed content: %+v", parsedContents[0])
+	}
+	expectedNoteText := "求职方向\n希望突出 React、TypeScript 和工程化经验"
+	if parsedContents[1].AssetID != 12 || parsedContents[1].Type != AssetTypeNote || parsedContents[1].Text != expectedNoteText {
+		t.Fatalf("unexpected note parsed content: %+v", parsedContents[1])
+	}
+	if parsedContents[2].AssetID != 15 || parsedContents[2].Type != AssetTypeResumeDOCX || parsedContents[2].Text != "docx text" {
+		t.Fatalf("unexpected docx parsed content: %+v", parsedContents[2])
+	}
+}
+
+func TestParsePropagatesAssetParsingErrors(t *testing.T) {
+	svc := NewParsingService(nil, nil, nil, nil)
+	svc.projectExists = func(projectID uint) (bool, error) {
+		return true, nil
+	}
+	svc.listProjectAssets = func(projectID uint) ([]models.Asset, error) {
+		return []models.Asset{
+			{ID: 21, Type: AssetTypeNote},
+		}, nil
+	}
+
+	_, err := svc.Parse(21)
+	if !errors.Is(err, ErrAssetContentMissing) {
+		t.Fatalf("expected ErrAssetContentMissing, got %v", err)
+	}
 }
 
 func TestParseAssetDispatchesPDFParser(t *testing.T) {
