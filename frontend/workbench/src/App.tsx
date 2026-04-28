@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ProjectList from '@/pages/ProjectList'
 import ProjectDetail from '@/pages/ProjectDetail'
 import LoginPage from '@/pages/LoginPage'
+import EditorPage from '@/pages/EditorPage'
 import { authApi } from '@/lib/api-client'
 
 type AuthState = 'checking' | 'authed' | 'guest'
@@ -54,7 +55,7 @@ export default function App() {
         />
         <Route
           path="/editor/:projectId"
-          element={authState === 'authed' ? <div>Editor</div> : <Navigate to="/login" replace />}
+          element={authState === 'authed' ? <EditorPage /> : <Navigate to="/login" replace />}
         />
         <Route path="*" element={<Navigate to={authState === 'authed' ? '/' : '/login'} replace />} />
       </Routes>
