@@ -212,12 +212,69 @@ func TestParseAssetRequiresURIForFileBackedAssets(t *testing.T) {
 	}
 }
 
-func TestParseAssetReturnsNoteNotImplemented(t *testing.T) {
+func TestParseAssetBuildsParsedContentForNote(t *testing.T) {
 	svc := NewParsingService(nil, nil, nil, nil)
+	content := "希望突出 React、TypeScript 和工程化经验"
+	label := "求职方向"
 
-	_, err := svc.parseAsset(models.Asset{Type: AssetTypeNote})
-	if !errors.Is(err, ErrNoteParsingNotImplemented) {
-		t.Fatalf("expected ErrNoteParsingNotImplemented, got %v", err)
+	parsed, err := svc.parseAsset(models.Asset{
+		ID:      44,
+		Type:    AssetTypeNote,
+		Content: &content,
+		Label:   &label,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if parsed == nil {
+		t.Fatal("expected parsed note content")
+	}
+	if parsed.AssetID != 44 {
+		t.Fatalf("expected asset_id 44, got %d", parsed.AssetID)
+	}
+	if parsed.Type != AssetTypeNote {
+		t.Fatalf("expected type %s, got %s", AssetTypeNote, parsed.Type)
+	}
+	expectedText := "求职方向\n希望突出 React、TypeScript 和工程化经验"
+	if parsed.Text != expectedText {
+		t.Fatalf("expected text %q, got %q", expectedText, parsed.Text)
+	}
+	if len(parsed.Images) != 0 {
+		t.Fatalf("expected no images for note, got %d", len(parsed.Images))
+	}
+}
+
+func TestParseAssetBuildsParsedContentForNoteWithoutLabel(t *testing.T) {
+	svc := NewParsingService(nil, nil, nil, nil)
+	content := "熟悉 React 组件设计和前端工程化。"
+
+	parsed, err := svc.parseAsset(models.Asset{
+		ID:      45,
+		Type:    AssetTypeNote,
+		Content: &content,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if parsed.Text != content {
+		t.Fatalf("expected note content to be preserved, got %q", parsed.Text)
+	}
+}
+
+func TestParseAssetRequiresContentForNote(t *testing.T) {
+	svc := NewParsingService(nil, nil, nil, nil)
+	blank := "   "
+
+	tests := []models.Asset{
+		{Type: AssetTypeNote},
+		{Type: AssetTypeNote, Content: &blank},
+	}
+
+	for _, asset := range tests {
+		_, err := svc.parseAsset(asset)
+		if !errors.Is(err, ErrAssetContentMissing) {
+			t.Fatalf("expected ErrAssetContentMissing for note, got %v", err)
+		}
 	}
 }
 

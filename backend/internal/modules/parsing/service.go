@@ -2,6 +2,7 @@ package parsing
 
 import (
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -36,7 +37,7 @@ func (s *ParsingService) parseAsset(asset models.Asset) (*ParsedContent, error) 
 	case AssetTypeGitRepo:
 		return s.parseGitAsset(asset)
 	case AssetTypeNote:
-		return nil, ErrNoteParsingNotImplemented
+		return s.parseNoteAsset(asset)
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedAssetType, asset.Type)
 	}
@@ -90,11 +91,45 @@ func (s *ParsingService) parseGitAsset(asset models.Asset) (*ParsedContent, erro
 	return attachAssetMetadata(asset, parsed), nil
 }
 
+func (s *ParsingService) parseNoteAsset(asset models.Asset) (*ParsedContent, error) {
+	text, err := requireNoteContent(asset)
+	if err != nil {
+		return nil, err
+	}
+
+	return attachAssetMetadata(asset, &ParsedContent{
+		Text:   text,
+		Images: nil,
+	}), nil
+}
+
 func requireAssetURI(asset models.Asset) (string, error) {
 	if asset.URI == nil || *asset.URI == "" {
 		return "", ErrAssetURIMissing
 	}
 	return *asset.URI, nil
+}
+
+func requireNoteContent(asset models.Asset) (string, error) {
+	if asset.Content == nil {
+		return "", ErrAssetContentMissing
+	}
+
+	content := strings.TrimSpace(*asset.Content)
+	if content == "" {
+		return "", ErrAssetContentMissing
+	}
+
+	if asset.Label == nil {
+		return content, nil
+	}
+
+	label := strings.TrimSpace(*asset.Label)
+	if label == "" {
+		return content, nil
+	}
+
+	return label + "\n" + content, nil
 }
 
 func attachAssetMetadata(asset models.Asset, parsed *ParsedContent) *ParsedContent {

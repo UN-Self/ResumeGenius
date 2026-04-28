@@ -12,9 +12,9 @@ const (
 
 var (
 	ErrAssetURIMissing            = errors.New("asset uri is required")
+	ErrAssetContentMissing        = errors.New("asset content is required")
 	ErrAssetTypeSkipped           = errors.New("asset type is skipped in v1")
 	ErrUnsupportedAssetType       = errors.New("unsupported asset type")
-	ErrNoteParsingNotImplemented  = errors.New("note parsing is not implemented")
 	ErrPDFParserNotConfigured     = errors.New("pdf parser is not configured")
 	ErrDOCXParserNotConfigured    = errors.New("docx parser is not configured")
 	ErrGitExtractorNotConfigured  = errors.New("git extractor is not configured")
