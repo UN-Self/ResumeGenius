@@ -43,6 +43,9 @@ services:
       USE_MOCK: ${USE_MOCK:-false}
       AI_API_URL: ${AI_API_URL:-}
       AI_API_KEY: ${AI_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_TTL_HOURS: ${JWT_TTL_HOURS:-8760}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
       TZ: ${TZ:-Asia/Shanghai}
     ports:
       - "${HOST_BACKEND_PORT:-8080}:8080"

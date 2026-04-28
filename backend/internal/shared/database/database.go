@@ -42,6 +42,7 @@ func Connect() *gorm.DB {
 
 func Migrate(db *gorm.DB) {
 	err := db.AutoMigrate(
+		&models.User{},
 		&models.Project{},
 		&models.Asset{},
 		&models.Draft{},

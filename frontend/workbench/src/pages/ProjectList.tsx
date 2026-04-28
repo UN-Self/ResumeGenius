@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { intakeApi, ApiError, type Project } from '@/lib/api-client'
+import { intakeApi, ApiError, authApi, type Project } from '@/lib/api-client'
 import ProjectCard from '@/components/intake/ProjectCard'
 
 export default function ProjectList() {
@@ -46,9 +46,23 @@ export default function ProjectList() {
     <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto px-6 py-10">
         <div className="mb-8">
-          <h1 className="font-serif text-2xl font-semibold text-foreground">
-            ResumeGenius
-          </h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="font-serif text-2xl font-semibold text-foreground">
+              ResumeGenius
+            </h1>
+            <button
+              onClick={async () => {
+                try {
+                  await authApi.logout()
+                } finally {
+                  window.location.assign('/login')
+                }
+              }}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              退出登录
+            </button>
+          </div>
           <p className="text-sm text-muted-foreground mt-1">
             AI 辅助简历编辑，从项目开始
           </p>

@@ -7,12 +7,17 @@ import (
 )
 
 func TestResourceRoutes_AreMountedOnApiV1(t *testing.T) {
+	t.Setenv("JWT_SECRET", "test-secret")
+	t.Setenv("COOKIE_SECURE", "false")
 	r := setupRouter(nil)
 
 	cases := []struct {
 		method string
 		path   string
 	}{
+		{http.MethodPost, "/api/v1/auth/login"},
+		{http.MethodPost, "/api/v1/auth/logout"},
+		{http.MethodGet, "/api/v1/auth/me"},
 		{http.MethodGet, "/api/v1/projects"},
 		{http.MethodPost, "/api/v1/projects"},
 		{http.MethodGet, "/api/v1/projects/1"},
@@ -41,6 +46,8 @@ func TestResourceRoutes_AreMountedOnApiV1(t *testing.T) {
 }
 
 func TestLegacyRoutes_Return404(t *testing.T) {
+	t.Setenv("JWT_SECRET", "test-secret")
+	t.Setenv("COOKIE_SECURE", "false")
 	r := setupRouter(nil)
 
 	legacy := []struct {

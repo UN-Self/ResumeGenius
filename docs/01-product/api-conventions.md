@@ -133,9 +133,10 @@
 
 ## 6. 认证
 
-- v1 不实现认证，所有 API 无需 token
-- 所有请求头预留 `Authorization: Bearer <token>` 位
-- 认证上线后，未携带 token 的请求返回 40100
+- 认证接口：`/api/v1/auth/*`（详见 `docs/modules/auth/contract.md`）
+- 业务 API 默认要求认证；未认证请求返回 `40100`
+- v1 采用 JWT（`HttpOnly` cookie）识别用户身份
+- 请求头保留 `Authorization: Bearer <token>` 兼容位（当前实现主要使用 cookie）
 - PDF 导出端点预留付费权限校验位（40300）
 
 ## 7. 流式响应
