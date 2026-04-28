@@ -6,11 +6,9 @@ import (
 )
 
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
-	rg.GET("/drafts/:draft_id", func(c *gin.Context) {
-		c.JSON(200, gin.H{"module": "workbench", "status": "stub"})
-	})
+	service := NewDraftService(db)
+	handler := NewHandler(service)
 
-	rg.PUT("/drafts/:draft_id", func(c *gin.Context) {
-		c.JSON(200, gin.H{"module": "workbench", "status": "stub"})
-	})
+	rg.GET("/drafts/:draft_id", handler.GetDraft)
+	rg.PUT("/drafts/:draft_id", handler.UpdateDraft)
 }
