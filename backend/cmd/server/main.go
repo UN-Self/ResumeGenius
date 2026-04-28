@@ -1,14 +1,18 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/modules/agent"
+	"github.com/UN-Self/ResumeGenius/backend/internal/modules/auth"
 	"github.com/UN-Self/ResumeGenius/backend/internal/modules/intake"
 	"github.com/UN-Self/ResumeGenius/backend/internal/modules/parsing"
 	"github.com/UN-Self/ResumeGenius/backend/internal/modules/render"
@@ -19,9 +23,40 @@ import (
 
 var _ *gorm.DB // ensure gorm import is used
 
+func jwtSecret() (string, error) {
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		return "", fmt.Errorf("JWT_SECRET is required")
+	}
+	return secret, nil
+}
+
+func jwtTTL() time.Duration {
+	hours := 24 * 365
+	if v := os.Getenv("JWT_TTL_HOURS"); v != "" {
+		parsed, err := strconv.Atoi(v)
+		if err == nil && parsed > 0 {
+			hours = parsed
+		}
+	}
+	return time.Duration(hours) * time.Hour
+}
+
+func cookieSecure() bool {
+	v := os.Getenv("COOKIE_SECURE")
+	if v == "" {
+		return false
+	}
+	parsed, err := strconv.ParseBool(v)
+	if err != nil {
+		return false
+	}
+	return parsed
+}
+
 func setupRouter(db *gorm.DB) *gin.Engine {
 	r := gin.Default()
-	r.Use(middleware.CORS(), middleware.UserIdentify(), middleware.Logger())
+	r.Use(middleware.CORS(), middleware.Logger())
 
 	uploadDir := os.Getenv("UPLOAD_DIR")
 	if uploadDir == "" {
@@ -30,11 +65,21 @@ func setupRouter(db *gorm.DB) *gin.Engine {
 	os.MkdirAll(uploadDir, 0755)
 
 	v1 := r.Group("/api/v1")
-	intake.RegisterRoutes(v1, db, uploadDir)
-	parsing.RegisterRoutes(v1, db)
-	agent.RegisterRoutes(v1, db)
-	workbench.RegisterRoutes(v1, db)
-	render.RegisterRoutes(v1, db)
+	secret, err := jwtSecret()
+	if err != nil {
+		log.Fatalf("invalid auth config: %v", err)
+	}
+	ttl := jwtTTL()
+	secure := cookieSecure()
+
+	authed := v1.Group("")
+	authed.Use(middleware.AuthRequired(secret))
+	auth.RegisterRoutes(v1, authed, db, secret, ttl, secure)
+	intake.RegisterRoutes(authed, db, uploadDir)
+	parsing.RegisterRoutes(authed, db)
+	agent.RegisterRoutes(authed, db)
+	workbench.RegisterRoutes(authed, db)
+	render.RegisterRoutes(authed, db)
 
 	return r
 }

@@ -28,6 +28,14 @@ func (j *JSONB) Scan(value interface{}) error {
 	return json.Unmarshal(bytes, j)
 }
 
+type User struct {
+	ID           string    `gorm:"type:char(36);primaryKey" json:"id"`
+	Username     string    `gorm:"size:64;not null;uniqueIndex" json:"username"`
+	PasswordHash string    `gorm:"size:255;not null" json:"-"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 type Project struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`
 	UserID         string    `gorm:"size:36;not null;index" json:"user_id"`

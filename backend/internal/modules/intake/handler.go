@@ -4,20 +4,20 @@ import (
 	"errors"
 	"strconv"
 
-	"github.com/gin-gonic/gin"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/middleware"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/response"
+	"github.com/gin-gonic/gin"
 )
 
 // Error codes for intake module (01xxx)
 const (
-	CodeParamInvalid       = 10001 // request parameter invalid
-	CodeInternalError      = 50001 // internal server error
-	CodeUnsupportedFormat  = 1001  // unsupported file format
-	CodeFileTooLarge       = 1002  // file size exceeds limit
-	CodeInvalidGitURL      = 1003  // invalid git URL
-	CodeProjectNotFound    = 1004  // project not found
-	CodeAssetNotFound      = 1006  // asset not found
+	CodeParamInvalid      = 10001 // request parameter invalid
+	CodeInternalError     = 50001 // internal server error
+	CodeUnsupportedFormat = 1001  // unsupported file format
+	CodeFileTooLarge      = 1002  // file size exceeds limit
+	CodeInvalidGitURL     = 1003  // invalid git URL
+	CodeProjectNotFound   = 1004  // project not found
+	CodeAssetNotFound     = 1006  // asset not found
 )
 
 type Handler struct {
@@ -30,8 +30,7 @@ func NewHandler(projectSvc *ProjectService, assetSvc *AssetService) *Handler {
 }
 
 func userID(c *gin.Context) string {
-	v, _ := c.Get(middleware.ContextUserID)
-	return v.(string)
+	return middleware.UserIDFromContext(c)
 }
 
 // --- Request structs ---

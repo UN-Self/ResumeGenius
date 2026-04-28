@@ -1,15 +1,62 @@
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ProjectList from '@/pages/ProjectList'
 import ProjectDetail from '@/pages/ProjectDetail'
+import LoginPage from '@/pages/LoginPage'
+import { authApi } from '@/lib/api-client'
+
+type AuthState = 'checking' | 'authed' | 'guest'
 
 export default function App() {
+  const [authState, setAuthState] = useState<AuthState>('checking')
+
+  useEffect(() => {
+    let cancelled = false
+    authApi.me()
+      .then(() => {
+        if (cancelled) return
+        setAuthState('authed')
+      })
+      .catch(() => {
+        if (cancelled) return
+        setAuthState('guest')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (authState === 'checking') {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground text-sm">加载中...</p>
+      </div>
+    )
+  }
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<ProjectList />} />
-        <Route path="/projects/:projectId" element={<ProjectDetail />} />
-        <Route path="/editor/:projectId" element={<div>Editor</div>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route
+          path="/login"
+          element={authState === 'authed'
+            ? <Navigate to="/" replace />
+            : <LoginPage onSuccess={() => { setAuthState('authed') }} />}
+        />
+        <Route
+          path="/"
+          element={authState === 'authed' ? <ProjectList /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/projects/:projectId"
+          element={authState === 'authed' ? <ProjectDetail /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/editor/:projectId"
+          element={authState === 'authed' ? <div>Editor</div> : <Navigate to="/login" replace />}
+        />
+        <Route path="*" element={<Navigate to={authState === 'authed' ? '/' : '/login'} replace />} />
       </Routes>
     </BrowserRouter>
   )

@@ -1,13 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { intakeApi, ApiError } from '@/lib/api-client'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { intakeApi, authApi, ApiError } from '@/lib/api-client'
 
 describe('apiClient', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
-    localStorage.clear()
   })
 
-  it('sends X-User-ID header on every request', async () => {
+  it('sends credentials on all requests', async () => {
     const mock = vi.fn().mockResolvedValue({
       json: () => Promise.resolve({ code: 0, data: [] }),
     })
@@ -15,23 +14,46 @@ describe('apiClient', () => {
 
     await intakeApi.listProjects()
 
-    const callArgs = mock.mock.calls[0]
-    expect(callArgs[1].headers['X-User-ID']).toBeDefined()
+    expect(mock).toHaveBeenCalledWith('/api/v1/projects', expect.objectContaining({
+      credentials: 'include',
+    }))
   })
 
-  it('persists the same user ID across requests', async () => {
+  it('auth login calls POST /auth/login', async () => {
     const mock = vi.fn().mockResolvedValue({
-      json: () => Promise.resolve({ code: 0, data: [] }),
+      json: () => Promise.resolve({ code: 0, data: { id: 'u1', username: 'alice' } }),
     })
     vi.stubGlobal('fetch', mock)
 
-    await intakeApi.listProjects()
-    const firstId = mock.mock.calls[0][1].headers['X-User-ID']
+    const result = await authApi.login('alice', 'secret123')
+    expect(mock).toHaveBeenCalledWith('/api/v1/auth/login', expect.objectContaining({
+      method: 'POST',
+    }))
+    expect(result.username).toBe('alice')
+  })
 
-    await intakeApi.listProjects()
-    const secondId = mock.mock.calls[1][1].headers['X-User-ID']
+  it('auth me calls GET /auth/me', async () => {
+    const mock = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ code: 0, data: { id: 'u1', username: 'alice' } }),
+    })
+    vi.stubGlobal('fetch', mock)
 
-    expect(firstId).toBe(secondId)
+    await authApi.me()
+    expect(mock).toHaveBeenCalledWith('/api/v1/auth/me', expect.objectContaining({
+      credentials: 'include',
+    }))
+  })
+
+  it('auth logout calls POST /auth/logout', async () => {
+    const mock = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ code: 0, data: null }),
+    })
+    vi.stubGlobal('fetch', mock)
+
+    await authApi.logout()
+    expect(mock).toHaveBeenCalledWith('/api/v1/auth/logout', expect.objectContaining({
+      method: 'POST',
+    }))
   })
 
   it('listProjects calls GET /projects', async () => {
@@ -43,7 +65,7 @@ describe('apiClient', () => {
 
     const result = await intakeApi.listProjects()
     expect(mock).toHaveBeenCalledWith('/api/v1/projects', expect.objectContaining({
-      headers: expect.objectContaining({ 'X-User-ID': expect.any(String) }),
+      credentials: 'include',
     }))
     expect(result).toEqual(projects)
   })
@@ -69,7 +91,7 @@ describe('apiClient', () => {
 
     const result = await intakeApi.getProject(1)
     expect(mock).toHaveBeenCalledWith('/api/v1/projects/1', expect.objectContaining({
-      headers: expect.objectContaining({ 'X-User-ID': expect.any(String) }),
+      credentials: 'include',
     }))
     expect(result.id).toBe(1)
   })
@@ -95,6 +117,7 @@ describe('apiClient', () => {
 
     expect(mock).toHaveBeenCalledWith('/api/v1/assets/upload', expect.objectContaining({
       method: 'POST',
+      credentials: 'include',
     }))
     const body = mock.mock.calls[0][1].body
     expect(body).toBeInstanceOf(FormData)
@@ -123,7 +146,7 @@ describe('apiClient', () => {
 
     await intakeApi.listAssets(1)
     expect(mock).toHaveBeenCalledWith('/api/v1/assets?project_id=1', expect.objectContaining({
-      headers: expect.objectContaining({ 'X-User-ID': expect.any(String) }),
+      credentials: 'include',
     }))
   })
 
@@ -171,7 +194,7 @@ describe('apiClient', () => {
     })
   })
 
-  it('ApiError has code property', () => {
+  it('ApiError carries code property', () => {
     const err = new ApiError(1004, 'project not found')
     expect(err.code).toBe(1004)
     expect(err.message).toBe('project not found')

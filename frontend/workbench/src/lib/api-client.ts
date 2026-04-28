@@ -1,27 +1,15 @@
 const BASE = '/api/v1'
 
-const USER_ID_KEY = 'rg_user_id'
-
-function getUserId(): string {
-  let id = localStorage.getItem(USER_ID_KEY)
-  if (!id) {
-    id = crypto.randomUUID()
-    localStorage.setItem(USER_ID_KEY, id)
-  }
-  return id
-}
-
-function userHeaders(): Record<string, string> {
-  return { 'X-User-ID': getUserId() }
-}
-
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const mergedHeaders: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...((options?.headers as Record<string, string>) ?? {}),
+  }
+
   const res = await fetch(`${BASE}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...userHeaders(),
-    },
+    credentials: 'include',
     ...options,
+    headers: mergedHeaders,
   })
   const json = await res.json()
   if (json.code !== 0) {
@@ -33,7 +21,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 async function upload<T>(path: string, formData: FormData): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method: 'POST',
-    headers: userHeaders(),
+    credentials: 'include',
     body: formData,
   })
   const json = await res.json()
@@ -69,6 +57,21 @@ export interface Asset {
   content?: string
   label?: string
   created_at: string
+}
+
+export interface User {
+  id: string
+  username: string
+}
+
+export const authApi = {
+  login: (username: string, password: string) =>
+    request<User>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ username, password }),
+    }),
+  me: () => request<User>('/auth/me'),
+  logout: () => request<null>('/auth/logout', { method: 'POST' }),
 }
 
 // --- Intake API ---
