@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 	"gorm.io/gorm"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/modules/agent"
@@ -39,6 +40,9 @@ func setupRouter(db *gorm.DB) *gin.Engine {
 }
 
 func main() {
+	// Load .env file (ignore error if not found — env vars may be set externally)
+	_ = godotenv.Load()
+
 	db := database.Connect()
 	database.Migrate(db)
 

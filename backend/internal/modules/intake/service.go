@@ -41,7 +41,11 @@ func (s *ProjectService) List(userID string) ([]models.Project, error) {
 
 func (s *ProjectService) GetByID(userID string, id uint) (*models.Project, error) {
 	var proj models.Project
-	if err := s.db.Where("user_id = ? AND id = ?", userID, id).First(&proj).Error; err != nil {
+	err := s.db.Where("user_id = ? AND id = ?", userID, id).First(&proj).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
 		return nil, fmt.Errorf("get project: %w", err)
 	}
 	return &proj, nil
@@ -53,7 +57,7 @@ func (s *ProjectService) Delete(userID string, id uint) error {
 		return fmt.Errorf("delete project: %w", result.Error)
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("project not found")
+		return ErrProjectNotFound
 	}
 	return nil
 }
