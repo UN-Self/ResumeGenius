@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    @page { size: A4; margin: 0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Noto Sans SC', sans-serif; font-size: 10.5pt; line-height: 1.4; color: #333; }
+    .resume { width: 210mm; min-height: 297mm; padding: 18mm 20mm; }
+    .profile { display: flex; align-items: center; gap: 16px; margin-bottom: 12pt; }
+    .avatar { width: 48pt; height: 48pt; border-radius: 50%; object-fit: cover; }
+    .profile h1 { font-size: 18pt; font-weight: 700; }
+    .profile p { font-size: 10pt; color: #666; margin-top: 2pt; }
+    .section { margin-bottom: 10pt; }
+    .section h2 { font-size: 12pt; font-weight: 600; border-bottom: 1pt solid #ddd; padding-bottom: 3pt; margin-bottom: 6pt; }
+    .item { margin-bottom: 6pt; }
+    .item-header { display: flex; justify-content: space-between; }
+    .item h3 { font-size: 10.5pt; font-weight: 600; }
+    .item .date { font-size: 9pt; color: #888; }
+    .item .subtitle { font-size: 9.5pt; color: #555; }
+    .item ul { padding-left: 14pt; }
+    .item li { margin-bottom: 2pt; }
+    .tags { display: flex; flex-wrap: wrap; gap: 6pt; }
+    .tag { background: #f0f0f0; padding: 2pt 8pt; border-radius: 3pt; font-size: 9pt; }
+  </style>
+</head>
+<body>
+  <div class="resume">
+    <header class="profile">
+      <h1>张三</h1>
+      <p>前端工程师 | zhangsan@email.com | 138xxxx1234</p>
+    </header>
+    <section class="section">
+      <h2>工作经历</h2>
+      <div class="item">
+        <div class="item-header">
+          <h3>ABC 科技</h3>
+          <span class="date">2022.07 - 至今</span>
+        </div>
+        <div class="subtitle">高级前端工程师</div>
+        <ul>
+          <li>主导核心产品前端架构重构，将 jQuery 迁移至 React + TypeScript</li>
+          <li>设计并实现组件库，覆盖 30+ 业务组件，团队效率提升 40%</li>
+          <li>推动前端工程化建设，引入 CI/CD、单元测试、Code Review 机制</li>
+        </ul>
+      </div>
+    </section>
+    <section class="section">
+      <h2>项目经历</h2>
+      <div class="item">
+        <div class="item-header">
+          <h3>ResumeGenius</h3>
+          <span class="date">2025.10 - 2026.04</span>
+        </div>
+        <div class="subtitle">个人项目</div>
+        <ul>
+          <li>基于 Gin + React 构建简历编辑器，支持 AI 辅助编辑</li>
+          <li>使用 TipTap 实现所见即所得编辑，chromedp 实现 PDF 导出</li>
+        </ul>
+      </div>
+    </section>
+    <section class="section">
+      <h2>教育经历</h2>
+      <div class="item">
+        <div class="item-header">
+          <h3>某大学</h3>
+          <span class="date">2018.09 - 2022.06</span>
+        </div>
+        <div class="subtitle">计算机科学与技术 本科</div>
+      </div>
+    </section>
+    <section class="section">
+      <h2>专业技能</h2>
+      <div class="tags">
+        <span class="tag">TypeScript</span>
+        <span class="tag">React</span>
+        <span class="tag">Go</span>
+        <span class="tag">Node.js</span>
+        <span class="tag">PostgreSQL</span>
+        <span class="tag">Docker</span>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
