@@ -11,8 +11,8 @@
 
 ### 0.1 当前完成度
 
-- `B0-B9`：已完成。`fixtures/`、PDF/DOCX parser、note 支持、`ParsingService` 聚合解析、`/api/v1/parsing/parse`、mock `DraftGenerator`、`/api/v1/parsing/generate`、`drafts` 写入、`projects.current_draft_id` 更新，以及自动创建 `versions` 快照和返回 `version_id` 都已经落地。
-- `B10-B12`：当前代码库中仍未落地，真实 AI、`GitExtractor`、PDF 图片提取都还需要继续开发。
+- `B0-B10`：已完成。`fixtures/`、PDF/DOCX parser、note 支持、`ParsingService` 聚合解析、`/api/v1/parsing/parse`、`DraftGenerator` 的 mock/real 双模式、`/api/v1/parsing/generate`、`drafts` 写入、`projects.current_draft_id` 更新，以及自动创建 `versions` 快照和返回 `version_id` 都已经落地。
+- `B11-B12`：当前代码库中仍未落地，`GitExtractor`、PDF 图片提取都还需要继续开发。
 
 ### 0.2 已有代码里可直接复用的部分
 
@@ -29,17 +29,16 @@
 
 ### 0.4 按当前仓库状态的建议顺序
 
-如果从现在继续往下做，建议直接从 B10 开始推进主链路：
+如果从现在继续往下做，建议直接从 B11 开始推进主链路：
 
-1. 做 `B10`：把 mock 生成替换成真实 AI 调用。
-2. 做 `B11`：补 `GitExtractor`，把 `git_repo` 纳入主链路。
-3. 做 `B12`：补 PDF 图片提取和增强测试。
+1. 做 `B11`：补 `GitExtractor`，把 `git_repo` 纳入主链路。
+2. 做 `B12`：补 PDF 图片提取和增强测试。
 
 ### 0.5 当前最推荐的一批实际开发任务
 
 如果希望下一批提交尽量小、同时又能明显推进主链路，建议下一批只做一件事：
 
-1. `B10`：把 `USE_MOCK=false` 的真实 AI 调用接上，但这一批先不做 Git 解析，也先不补 PDF 图片提取。
+1. `B11`：补 `GitExtractor`，把 `git_repo` 纳入主链路，但这一批先不补 PDF 图片提取。
 
 ## 1. 使用原则
 
