@@ -36,6 +36,11 @@ type UpdateDraftRequest struct {
 	VersionLabel  string `json:"version_label"`
 }
 
+// CreateDraftRequest represents the request body for POST /drafts
+type CreateDraftRequest struct {
+	ProjectID uint `json:"project_id" binding:"required"`
+}
+
 // UpdateDraftResponse represents the response for PUT /drafts/:draft_id
 type UpdateDraftResponse struct {
 	ID        uint   `json:"id"`
@@ -56,6 +61,36 @@ func (h *Handler) GetDraft(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, ErrDraftNotFound) {
 			response.ErrorWithStatus(c, http.StatusNotFound, 4001, "draft not found")
+			return
+		}
+		response.Error(c, 50000, "internal server error")
+		return
+	}
+
+	response.Success(c, GetDraftResponse{
+		ID:          draft.ID,
+		ProjectID:   draft.ProjectID,
+		HTMLContent: draft.HTMLContent,
+		UpdatedAt:   draft.UpdatedAt.UTC().Format(time.RFC3339),
+	})
+}
+
+// CreateDraft handles POST /drafts
+func (h *Handler) CreateDraft(c *gin.Context) {
+	var req CreateDraftRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 40000, "invalid request body")
+		return
+	}
+
+	draft, err := h.service.Create(req.ProjectID)
+	if err != nil {
+		if errors.Is(err, ErrProjectNotFound) {
+			response.ErrorWithStatus(c, http.StatusNotFound, 4003, "project not found")
+			return
+		}
+		if errors.Is(err, ErrProjectHasDraft) {
+			response.ErrorWithStatus(c, http.StatusConflict, 4004, "project already has a current draft")
 			return
 		}
 		response.Error(c, 50000, "internal server error")
