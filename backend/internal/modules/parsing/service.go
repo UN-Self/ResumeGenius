@@ -8,7 +8,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
-	"github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
 )
 
 type ParsingService struct {
@@ -16,35 +15,32 @@ type ParsingService struct {
 	pdfParser    PdfParser
 	docxParser   DocxParser
 	gitExtractor GitExtractor
-	storage      storage.FileStorage
+	generator    DraftGeneratorInterface
 
 	projectExists     func(projectID uint) (bool, error)
 	listProjectAssets func(projectID uint) ([]models.Asset, error)
 }
 
-func NewParsingService(db *gorm.DB, pdfParser PdfParser, docxParser DocxParser, gitExtractor GitExtractor, store storage.FileStorage) *ParsingService {
+func NewParsingService(db *gorm.DB, pdfParser PdfParser, docxParser DocxParser, gitExtractor GitExtractor) *ParsingService {
+	return NewParsingServiceWithGenerator(db, pdfParser, docxParser, gitExtractor, nil)
+}
+
+func NewParsingServiceWithGenerator(db *gorm.DB, pdfParser PdfParser, docxParser DocxParser, gitExtractor GitExtractor, generator DraftGeneratorInterface) *ParsingService {
 	svc := &ParsingService{
 		db:           db,
 		pdfParser:    pdfParser,
 		docxParser:   docxParser,
 		gitExtractor: gitExtractor,
-		storage:      store,
+		generator:    generator,
 	}
 	svc.projectExists = svc.defaultProjectExists
 	svc.listProjectAssets = svc.defaultListProjectAssets
 	return svc
 }
 
-// ParseForUser checks project ownership then delegates to Parse.
+// ParseForUser verifies project ownership before loading parsing results.
 func (s *ParsingService) ParseForUser(userID string, projectID uint) ([]ParsedContent, error) {
-	if s.db == nil {
-		return nil, ErrDatabaseNotConfigured
-	}
-	var project models.Project
-	if err := s.db.Select("id").Where("user_id = ? AND id = ?", userID, projectID).Take(&project).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrProjectNotFound
-		}
+	if err := s.ensureOwnedProject(userID, projectID); err != nil {
 		return nil, err
 	}
 	return s.Parse(projectID)
@@ -66,6 +62,7 @@ func (s *ParsingService) Parse(projectID uint) ([]ParsedContent, error) {
 	}
 
 	parsedContents := make([]ParsedContent, 0, len(assets))
+	var firstRecoverableErr error
 	for _, asset := range assets {
 		if s.shouldSkipAssetInParseFlow(asset) {
 			continue
@@ -73,6 +70,12 @@ func (s *ParsingService) Parse(projectID uint) ([]ParsedContent, error) {
 
 		parsed, err := s.parseAsset(asset)
 		if err != nil {
+			if isRecoverableAssetError(err) {
+				if firstRecoverableErr == nil {
+					firstRecoverableErr = err
+				}
+				continue
+			}
 			return nil, err
 		}
 		if parsed != nil {
@@ -81,10 +84,113 @@ func (s *ParsingService) Parse(projectID uint) ([]ParsedContent, error) {
 	}
 
 	if len(parsedContents) == 0 {
+		if firstRecoverableErr != nil {
+			return nil, firstRecoverableErr
+		}
 		return nil, ErrNoUsableAssets
 	}
 
 	return parsedContents, nil
+}
+
+type GenerateResult struct {
+	DraftID     uint   `json:"draft_id"`
+	VersionID   uint   `json:"version_id"`
+	HTMLContent string `json:"html_content"`
+}
+
+// GenerateForUser verifies project ownership before generating a draft.
+func (s *ParsingService) GenerateForUser(userID string, projectID uint) (*GenerateResult, error) {
+	if err := s.ensureOwnedProject(userID, projectID); err != nil {
+		return nil, err
+	}
+	return s.Generate(projectID)
+}
+
+// Generate runs parse -> HTML generation -> drafts persistence.
+func (s *ParsingService) Generate(projectID uint) (*GenerateResult, error) {
+	if s.db == nil {
+		return nil, ErrDatabaseNotConfigured
+	}
+	if s.generator == nil {
+		return nil, ErrDraftGeneratorNotConfigured
+	}
+
+	parsedContents, err := s.Parse(projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	aggregatedText := aggregateParsedContents(parsedContents)
+	if aggregatedText == "" {
+		return nil, ErrNoGeneratableText
+	}
+	htmlContent, err := s.generator.GenerateHTML(aggregatedText)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrAIGenerateFailed, err)
+	}
+
+	const initialGeneratedVersionLabel = "AI 初始生成"
+
+	result := &GenerateResult{}
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		draft := models.Draft{
+			ProjectID:   projectID,
+			HTMLContent: htmlContent,
+		}
+		if err := tx.Create(&draft).Error; err != nil {
+			return err
+		}
+
+		versionLabel := initialGeneratedVersionLabel
+		version := models.Version{
+			DraftID:      draft.ID,
+			HTMLSnapshot: draft.HTMLContent,
+			Label:        &versionLabel,
+		}
+		if err := tx.Create(&version).Error; err != nil {
+			return err
+		}
+
+		update := tx.Model(&models.Project{}).
+			Where("id = ?", projectID).
+			Update("current_draft_id", draft.ID)
+		if update.Error != nil {
+			return update.Error
+		}
+		if update.RowsAffected == 0 {
+			return ErrProjectNotFound
+		}
+
+		result.DraftID = draft.ID
+		result.VersionID = version.ID
+		result.HTMLContent = draft.HTMLContent
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (s *ParsingService) ensureOwnedProject(userID string, projectID uint) error {
+	if s.db == nil {
+		return ErrDatabaseNotConfigured
+	}
+
+	var project models.Project
+	err := s.db.Select("id").
+		Where("user_id = ? AND id = ?", userID, projectID).
+		Take(&project).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrProjectNotFound
+		}
+		return err
+	}
+
+	return nil
 }
 
 func (s *ParsingService) defaultProjectExists(projectID uint) (bool, error) {
@@ -155,14 +261,14 @@ func (s *ParsingService) parsePDFAsset(asset models.Asset) (*ParsedContent, erro
 	if s.pdfParser == nil {
 		return nil, ErrPDFParserNotConfigured
 	}
-	path, err := s.resolveAssetPath(asset)
+	path, err := requireAssetURI(asset)
 	if err != nil {
 		return nil, err
 	}
 
 	parsed, err := s.pdfParser.Parse(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrPDFParseFailed, err)
 	}
 	return attachAssetMetadata(asset, parsed), nil
 }
@@ -171,14 +277,14 @@ func (s *ParsingService) parseDOCXAsset(asset models.Asset) (*ParsedContent, err
 	if s.docxParser == nil {
 		return nil, ErrDOCXParserNotConfigured
 	}
-	path, err := s.resolveAssetPath(asset)
+	path, err := requireAssetURI(asset)
 	if err != nil {
 		return nil, err
 	}
 
 	parsed, err := s.docxParser.Parse(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrDOCXParseFailed, err)
 	}
 	return attachAssetMetadata(asset, parsed), nil
 }
@@ -194,7 +300,7 @@ func (s *ParsingService) parseGitAsset(asset models.Asset) (*ParsedContent, erro
 
 	parsed, err := s.gitExtractor.Extract(repoURL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrGitExtractFailed, err)
 	}
 	return attachAssetMetadata(asset, parsed), nil
 }
@@ -209,17 +315,6 @@ func (s *ParsingService) parseNoteAsset(asset models.Asset) (*ParsedContent, err
 		Text:   text,
 		Images: nil,
 	}), nil
-}
-
-func (s *ParsingService) resolveAssetPath(asset models.Asset) (string, error) {
-	if s.storage == nil {
-		return requireAssetURI(asset)
-	}
-	key, err := requireAssetURI(asset)
-	if err != nil {
-		return "", err
-	}
-	return s.storage.Resolve(key)
 }
 
 func requireAssetURI(asset models.Asset) (string, error) {
@@ -261,4 +356,38 @@ func attachAssetMetadata(asset models.Asset, parsed *ParsedContent) *ParsedConte
 	decorated.Type = asset.Type
 	decorated.Label = AssetLabel(asset.Label, asset.URI)
 	return &decorated
+}
+
+func isRecoverableAssetError(err error) bool {
+	switch {
+	case errors.Is(err, ErrAssetURIMissing):
+		return true
+	case errors.Is(err, ErrAssetContentMissing):
+		return true
+	case errors.Is(err, ErrAssetTypeSkipped):
+		return true
+	case errors.Is(err, ErrUnsupportedAssetType):
+		return true
+	case errors.Is(err, ErrPDFParseFailed):
+		return true
+	case errors.Is(err, ErrDOCXParseFailed):
+		return true
+	case errors.Is(err, ErrGitExtractFailed):
+		return true
+	default:
+		return false
+	}
+}
+
+func aggregateParsedContents(parsedContents []ParsedContent) string {
+	parts := make([]string, 0, len(parsedContents))
+	for _, parsed := range parsedContents {
+		text := strings.TrimSpace(parsed.Text)
+		if text == "" {
+			continue
+		}
+		parts = append(parts, text)
+	}
+
+	return strings.Join(parts, "\n\n")
 }
