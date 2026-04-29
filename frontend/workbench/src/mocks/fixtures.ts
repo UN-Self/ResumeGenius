@@ -21,3 +21,11 @@ export const updatedDraft = {
   html_content: updatedDraftHtml.trim(),
   updated_at: '2026-04-28T12:05:00Z',
 }
+
+export const sampleProject = {
+  id: 1,
+  title: 'Test Project',
+  status: 'active',
+  current_draft_id: 1,
+  created_at: '2026-04-28T12:00:00Z',
+}

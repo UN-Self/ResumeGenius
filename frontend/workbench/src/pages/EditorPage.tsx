@@ -11,14 +11,13 @@ import { SaveIndicator } from '@/components/editor/SaveIndicator'
 import { EditorErrorState } from '@/components/editor/EditorErrorState'
 import { EditorEmptyState } from '@/components/editor/EditorEmptyState'
 import { EditorSkeleton } from '@/components/editor/EditorSkeleton'
-import { request } from '@/lib/api-client'
+import { request, intakeApi } from '@/lib/api-client'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import type { Draft, EditorState } from '@/types/editor'
 
-const DRAFT_ID = '1' // For now, use a fixed draft ID
-
 export default function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
+  const [draftId, setDraftId] = useState<string | null>(null)
   const [state, setState] = useState<EditorState>('loading')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -37,12 +36,46 @@ export default function EditorPage() {
     },
   })
 
-  // Auto-save hook
+  // Step 1: Load project to get current_draft_id
+  const loadProject = useCallback(() => {
+    if (!projectId) {
+      setErrorMessage('Missing project ID')
+      setState('error')
+      return
+    }
+
+    setDraftId(null)
+    setState('loading')
+    setErrorMessage(null)
+
+    intakeApi
+      .getProject(Number(projectId))
+      .then((project) => {
+        if (project.current_draft_id) {
+          setDraftId(String(project.current_draft_id))
+        } else {
+          setState('empty')
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load project:', err)
+        setErrorMessage(err instanceof Error ? err.message : 'Failed to load project')
+        setState('error')
+      })
+  }, [projectId])
+
+  useEffect(() => {
+    loadProject()
+  }, [loadProject])
+
+  // Auto-save hook (no-op when draftId is null)
   const { scheduleSave, flush, retry, status, lastSavedAt } = useAutoSave({
     save: async (html: string) => {
-      await request(`/drafts/${DRAFT_ID}`, { method: 'PUT', body: JSON.stringify({ html_content: html }) })
+      if (draftId) {
+        await request(`/drafts/${draftId}`, { method: 'PUT', body: JSON.stringify({ html_content: html }) })
+      }
     },
-    saveUrl: `/api/v1/drafts/${DRAFT_ID}`,
+    saveUrl: draftId ? `/api/v1/drafts/${draftId}` : undefined,
   })
 
   // Connect editor onUpdate to autosave
@@ -66,9 +99,12 @@ export default function EditorPage() {
     }
   }, [flush])
 
+  // Step 2: Load draft content when draftId is available
   const loadDraft = useCallback(() => {
+    if (!draftId) return
+
     setState('loading')
-    request<Draft>(`/drafts/${DRAFT_ID}`)
+    request<Draft>(`/drafts/${draftId}`)
       .then((data) => {
         if (editor && data.html_content) {
           editor.commands.setContent(data.html_content)
@@ -84,7 +120,7 @@ export default function EditorPage() {
         setErrorMessage(err instanceof Error ? err.message : 'Failed to load draft')
         setState('error')
       })
-  }, [editor])
+  }, [editor, draftId])
 
   useEffect(() => {
     loadDraft()
@@ -112,7 +148,7 @@ export default function EditorPage() {
             <EditorErrorState
               message="加载失败"
               detail={errorMessage || undefined}
-              onRetry={loadDraft}
+              onRetry={loadProject}
             />
           </A4Canvas>
         )
