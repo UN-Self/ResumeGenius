@@ -19,6 +19,7 @@ import (
 	"github.com/UN-Self/ResumeGenius/backend/internal/modules/workbench"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/database"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/middleware"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
 )
 
 var _ *gorm.DB // ensure gorm import is used
@@ -64,6 +65,8 @@ func setupRouter(db *gorm.DB) *gin.Engine {
 	}
 	os.MkdirAll(uploadDir, 0755)
 
+	store := storage.NewLocalStorage(uploadDir)
+
 	v1 := r.Group("/api/v1")
 	secret, err := jwtSecret()
 	if err != nil {
@@ -76,7 +79,7 @@ func setupRouter(db *gorm.DB) *gin.Engine {
 	authed.Use(middleware.AuthRequired(secret))
 	auth.RegisterRoutes(v1, authed, db, secret, ttl, secure)
 	intake.RegisterRoutes(authed, db, uploadDir)
-	parsing.RegisterRoutes(authed, db)
+	parsing.RegisterRoutes(authed, db, store)
 	agent.RegisterRoutes(authed, db)
 	workbench.RegisterRoutes(authed, db)
 	render.RegisterRoutes(authed, db)

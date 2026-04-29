@@ -2,13 +2,14 @@ package intake
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
 	"gorm.io/gorm"
 )
 
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, uploadDir string) {
-	storage := NewLocalStorage(uploadDir)
+	store := storage.NewLocalStorage(uploadDir)
 	projectSvc := NewProjectService(db)
-	assetSvc := NewAssetService(db, storage)
+	assetSvc := NewAssetService(db, store)
 	h := NewHandler(projectSvc, assetSvc)
 
 	// Project CRUD

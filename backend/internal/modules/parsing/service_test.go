@@ -46,7 +46,7 @@ func TestNewParsingServiceStoresDependencies(t *testing.T) {
 	docxParser := &stubDocxParser{}
 	gitExtractor := &stubGitExtractor{}
 
-	svc := NewParsingService(nil, pdfParser, docxParser, gitExtractor)
+	svc := NewParsingService(nil, pdfParser, docxParser, gitExtractor, nil)
 
 	if svc.pdfParser != pdfParser {
 		t.Error("expected pdf parser to be stored")
@@ -66,7 +66,7 @@ func TestNewParsingServiceStoresDependencies(t *testing.T) {
 }
 
 func TestParseReturnsProjectNotFound(t *testing.T) {
-	svc := NewParsingService(nil, nil, nil, nil)
+	svc := NewParsingService(nil, nil, nil, nil, nil)
 	assetsListed := false
 	svc.projectExists = func(projectID uint) (bool, error) {
 		if projectID != 99 {
@@ -89,7 +89,7 @@ func TestParseReturnsProjectNotFound(t *testing.T) {
 }
 
 func TestParseReturnsNoUsableAssets(t *testing.T) {
-	svc := NewParsingService(nil, nil, nil, nil)
+	svc := NewParsingService(nil, nil, nil, nil, nil)
 	gitURL := "https://github.com/example/project"
 	svc.projectExists = func(projectID uint) (bool, error) {
 		return true, nil
@@ -120,7 +120,7 @@ func TestParseAggregatesSupportedAssets(t *testing.T) {
 	docxParser := &stubDocxParser{
 		result: &ParsedContent{Text: "docx text"},
 	}
-	svc := NewParsingService(nil, pdfParser, docxParser, nil)
+	svc := NewParsingService(nil, pdfParser, docxParser, nil, nil)
 	svc.projectExists = func(projectID uint) (bool, error) {
 		if projectID != 7 {
 			t.Fatalf("expected project id 7, got %d", projectID)
@@ -164,7 +164,7 @@ func TestParseAggregatesSupportedAssets(t *testing.T) {
 }
 
 func TestParsePropagatesAssetParsingErrors(t *testing.T) {
-	svc := NewParsingService(nil, nil, nil, nil)
+	svc := NewParsingService(nil, nil, nil, nil, nil)
 	svc.projectExists = func(projectID uint) (bool, error) {
 		return true, nil
 	}
@@ -190,7 +190,7 @@ func TestParseAssetDispatchesPDFParser(t *testing.T) {
 			},
 		},
 	}
-	svc := NewParsingService(nil, pdfParser, nil, nil)
+	svc := NewParsingService(nil, pdfParser, nil, nil, nil)
 
 	parsed, err := svc.parseAsset(models.Asset{
 		ID:   11,
@@ -222,7 +222,7 @@ func TestParseAssetDispatchesDOCXParser(t *testing.T) {
 	docxParser := &stubDocxParser{
 		result: &ParsedContent{Text: "docx text"},
 	}
-	svc := NewParsingService(nil, nil, docxParser, nil)
+	svc := NewParsingService(nil, nil, docxParser, nil, nil)
 
 	parsed, err := svc.parseAsset(models.Asset{
 		ID:   22,
@@ -251,7 +251,7 @@ func TestParseAssetDispatchesGitExtractor(t *testing.T) {
 	gitExtractor := &stubGitExtractor{
 		result: &ParsedContent{Text: "git summary"},
 	}
-	svc := NewParsingService(nil, nil, nil, gitExtractor)
+	svc := NewParsingService(nil, nil, nil, gitExtractor, nil)
 
 	parsed, err := svc.parseAsset(models.Asset{
 		ID:   33,
@@ -286,19 +286,19 @@ func TestParseAssetReturnsParserConfigurationErrors(t *testing.T) {
 		{
 			name: "missing pdf parser",
 			asset: models.Asset{Type: AssetTypeResumePDF, URI: &path},
-			svc:  NewParsingService(nil, nil, nil, nil),
+			svc:  NewParsingService(nil, nil, nil, nil, nil),
 			want: ErrPDFParserNotConfigured,
 		},
 		{
 			name: "missing docx parser",
 			asset: models.Asset{Type: AssetTypeResumeDOCX, URI: &path},
-			svc:  NewParsingService(nil, nil, nil, nil),
+			svc:  NewParsingService(nil, nil, nil, nil, nil),
 			want: ErrDOCXParserNotConfigured,
 		},
 		{
 			name: "missing git extractor",
 			asset: models.Asset{Type: AssetTypeGitRepo, URI: &path},
-			svc:  NewParsingService(nil, nil, nil, nil),
+			svc:  NewParsingService(nil, nil, nil, nil, nil),
 			want: ErrGitExtractorNotConfigured,
 		},
 	}
@@ -317,7 +317,7 @@ func TestParseAssetRequiresURIForFileBackedAssets(t *testing.T) {
 	pdfParser := &stubPdfParser{}
 	docxParser := &stubDocxParser{}
 	gitExtractor := &stubGitExtractor{}
-	svc := NewParsingService(nil, pdfParser, docxParser, gitExtractor)
+	svc := NewParsingService(nil, pdfParser, docxParser, gitExtractor, nil)
 
 	tests := []models.Asset{
 		{Type: AssetTypeResumePDF},
@@ -334,7 +334,7 @@ func TestParseAssetRequiresURIForFileBackedAssets(t *testing.T) {
 }
 
 func TestParseAssetBuildsParsedContentForNote(t *testing.T) {
-	svc := NewParsingService(nil, nil, nil, nil)
+	svc := NewParsingService(nil, nil, nil, nil, nil)
 	content := "希望突出 React、TypeScript 和工程化经验"
 	label := "求职方向"
 
@@ -366,7 +366,7 @@ func TestParseAssetBuildsParsedContentForNote(t *testing.T) {
 }
 
 func TestParseAssetBuildsParsedContentForNoteWithoutLabel(t *testing.T) {
-	svc := NewParsingService(nil, nil, nil, nil)
+	svc := NewParsingService(nil, nil, nil, nil, nil)
 	content := "熟悉 React 组件设计和前端工程化。"
 
 	parsed, err := svc.parseAsset(models.Asset{
@@ -383,7 +383,7 @@ func TestParseAssetBuildsParsedContentForNoteWithoutLabel(t *testing.T) {
 }
 
 func TestParseAssetRequiresContentForNote(t *testing.T) {
-	svc := NewParsingService(nil, nil, nil, nil)
+	svc := NewParsingService(nil, nil, nil, nil, nil)
 	blank := "   "
 
 	tests := []models.Asset{
@@ -400,7 +400,7 @@ func TestParseAssetRequiresContentForNote(t *testing.T) {
 }
 
 func TestParseAssetReturnsUnsupportedType(t *testing.T) {
-	svc := NewParsingService(nil, nil, nil, nil)
+	svc := NewParsingService(nil, nil, nil, nil, nil)
 
 	_, err := svc.parseAsset(models.Asset{Type: "spreadsheet"})
 	if !errors.Is(err, ErrUnsupportedAssetType) {
@@ -412,7 +412,7 @@ func TestParseAssetReturnsUnsupportedType(t *testing.T) {
 }
 
 func TestParseAssetReturnsSkippedForResumeImage(t *testing.T) {
-	svc := NewParsingService(nil, nil, nil, nil)
+	svc := NewParsingService(nil, nil, nil, nil, nil)
 
 	_, err := svc.parseAsset(models.Asset{Type: AssetTypeResumeImage})
 	if !errors.Is(err, ErrAssetTypeSkipped) {

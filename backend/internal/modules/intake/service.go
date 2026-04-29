@@ -8,6 +8,7 @@ import (
 	"regexp"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
 	"gorm.io/gorm"
 )
 
@@ -88,11 +89,11 @@ var gitURLPattern = regexp.MustCompile(`^https?://[^\s/$.?#].[^\s]*$`)
 
 type AssetService struct {
 	db      *gorm.DB
-	storage FileStorage
+	storage storage.FileStorage
 }
 
-func NewAssetService(db *gorm.DB, storage FileStorage) *AssetService {
-	return &AssetService{db: db, storage: storage}
+func NewAssetService(db *gorm.DB, store storage.FileStorage) *AssetService {
+	return &AssetService{db: db, storage: store}
 }
 
 func (s *AssetService) validateProject(userID string, projectID uint) error {
