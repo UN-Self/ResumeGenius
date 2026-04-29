@@ -29,6 +29,7 @@ func TestResourceRoutes_AreMountedOnApiV1(t *testing.T) {
 		{http.MethodPost, "/api/v1/assets/notes"},
 		{http.MethodPut, "/api/v1/assets/notes/1"},
 		{http.MethodPost, "/api/v1/parsing/parse"},
+		{http.MethodPost, "/api/v1/parsing/generate"},
 		{http.MethodPost, "/api/v1/ai/sessions"},
 		{http.MethodGet, "/api/v1/drafts/1"},
 		{http.MethodPost, "/api/v1/drafts/1/export"},
