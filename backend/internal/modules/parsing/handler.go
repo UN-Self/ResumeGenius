@@ -2,67 +2,111 @@ package parsing
 
 import (
 	"errors"
-	"log"
+	"net/http"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/middleware"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/response"
-	"github.com/gin-gonic/gin"
 )
 
 const (
-	CodeParseFailed     = 2001
-	CodeProjectNotFound = 2003
-	CodeNoUsableAssets  = 2004
-	CodeParamInvalid    = 2000
-	CodeInternalError   = 50001
+	CodeParsePDFFailed   = 2001
+	CodeParseDOCXFailed  = 2002
+	CodeProjectNotFound  = 2003
+	CodeNoUsableAssets   = 2004
+	CodeAIGenerateFailed = 2005
+	CodeInvalidAssetData = 2006
 )
 
-type projectParser interface {
+type parseService interface {
 	ParseForUser(userID string, projectID uint) ([]ParsedContent, error)
+	GenerateForUser(userID string, projectID uint) (*GenerateResult, error)
 }
 
+// Handler handles parsing HTTP requests.
 type Handler struct {
-	service projectParser
+	service parseService
 }
 
-func NewHandler(service projectParser) *Handler {
+// NewHandler creates a parsing handler.
+func NewHandler(service parseService) *Handler {
 	return &Handler{service: service}
 }
 
-type parseRequest struct {
+type ParseRequest struct {
 	ProjectID uint `json:"project_id" binding:"required"`
 }
 
-func userID(c *gin.Context) string {
-	return middleware.UserIDFromContext(c)
+type ParseResponse struct {
+	ParsedContents []ParsedContent `json:"parsed_contents"`
 }
 
-func (h *Handler) ParseProject(c *gin.Context) {
-	uid := userID(c)
-	if uid == "" {
+// Parse handles POST /api/v1/parsing/parse.
+func (h *Handler) Parse(c *gin.Context) {
+	userID := middleware.UserIDFromContext(c)
+	if userID == "" {
 		response.Error(c, 40100, "unauthorized")
 		return
 	}
 
-	var req parseRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, CodeParamInvalid, "project_id is required")
+	var req ParseRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.ProjectID == 0 {
+		response.Error(c, 40000, "invalid request body")
 		return
 	}
 
-	parsedContents, err := h.service.ParseForUser(uid, req.ProjectID)
+	parsedContents, err := h.service.ParseForUser(userID, req.ProjectID)
 	if err != nil {
-		switch {
-		case errors.Is(err, ErrProjectNotFound):
-			response.Error(c, CodeProjectNotFound, "project not found")
-		case errors.Is(err, ErrNoUsableAssets):
-			response.Error(c, CodeNoUsableAssets, "project has no usable assets")
-		default:
-			log.Printf("[parsing] ParseForUser failed: %v", err)
-			response.Error(c, CodeParseFailed, "failed to parse project assets")
-		}
+		h.respondParseError(c, err)
 		return
 	}
 
-	response.Success(c, gin.H{"parsed_contents": parsedContents})
+	response.Success(c, ParseResponse{
+		ParsedContents: parsedContents,
+	})
+}
+
+// Generate handles POST /api/v1/parsing/generate.
+func (h *Handler) Generate(c *gin.Context) {
+	userID := middleware.UserIDFromContext(c)
+	if userID == "" {
+		response.Error(c, 40100, "unauthorized")
+		return
+	}
+
+	var req ParseRequest
+	if err := c.ShouldBindJSON(&req); err != nil || req.ProjectID == 0 {
+		response.Error(c, 40000, "invalid request body")
+		return
+	}
+
+	result, err := h.service.GenerateForUser(userID, req.ProjectID)
+	if err != nil {
+		h.respondParseError(c, err)
+		return
+	}
+
+	response.Success(c, result)
+}
+
+func (h *Handler) respondParseError(c *gin.Context, err error) {
+	switch {
+	case errors.Is(err, ErrProjectNotFound):
+		response.ErrorWithStatus(c, http.StatusNotFound, CodeProjectNotFound, "project not found")
+	case errors.Is(err, ErrNoUsableAssets):
+		response.Error(c, CodeNoUsableAssets, "project has no usable assets")
+	case errors.Is(err, ErrAssetURIMissing), errors.Is(err, ErrAssetContentMissing):
+		response.Error(c, CodeInvalidAssetData, "project contains invalid asset data")
+	case errors.Is(err, ErrNoGeneratableText):
+		response.Error(c, CodeInvalidAssetData, "project has no usable text content")
+	case errors.Is(err, ErrPDFParseFailed):
+		response.Error(c, CodeParsePDFFailed, "pdf parse failed")
+	case errors.Is(err, ErrDOCXParseFailed):
+		response.Error(c, CodeParseDOCXFailed, "docx parse failed")
+	case errors.Is(err, ErrAIGenerateFailed):
+		response.ErrorWithStatus(c, http.StatusInternalServerError, CodeAIGenerateFailed, "ai draft generation failed")
+	default:
+		response.Error(c, 50000, "internal server error")
+	}
 }
