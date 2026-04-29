@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
 )
 
 type ParsingService struct {
@@ -16,6 +17,7 @@ type ParsingService struct {
 	docxParser   DocxParser
 	gitExtractor GitExtractor
 	generator    DraftGeneratorInterface
+	storage      storage.FileStorage
 
 	projectExists     func(projectID uint) (bool, error)
 	listProjectAssets func(projectID uint) ([]models.Asset, error)
@@ -261,7 +263,7 @@ func (s *ParsingService) parsePDFAsset(asset models.Asset) (*ParsedContent, erro
 	if s.pdfParser == nil {
 		return nil, ErrPDFParserNotConfigured
 	}
-	path, err := requireAssetURI(asset)
+	path, err := s.resolveAssetPath(asset)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +279,7 @@ func (s *ParsingService) parseDOCXAsset(asset models.Asset) (*ParsedContent, err
 	if s.docxParser == nil {
 		return nil, ErrDOCXParserNotConfigured
 	}
-	path, err := requireAssetURI(asset)
+	path, err := s.resolveAssetPath(asset)
 	if err != nil {
 		return nil, err
 	}
@@ -315,6 +317,18 @@ func (s *ParsingService) parseNoteAsset(asset models.Asset) (*ParsedContent, err
 		Text:   text,
 		Images: nil,
 	}), nil
+}
+
+func (s *ParsingService) resolveAssetPath(asset models.Asset) (string, error) {
+	if s.storage == nil {
+		return requireAssetURI(asset)
+	}
+
+	key, err := requireAssetURI(asset)
+	if err != nil {
+		return "", err
+	}
+	return s.storage.Resolve(key)
 }
 
 func requireAssetURI(asset models.Asset) (string, error) {

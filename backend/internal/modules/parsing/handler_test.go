@@ -358,7 +358,7 @@ func TestRoutePaths_CorrectlyMounted(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	v1 := router.Group("/api/v1")
-	RegisterRoutes(v1, nil)
+	RegisterRoutes(v1, nil, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/parsing/parse", strings.NewReader(`{"project_id": 1}`))
 	req.Header.Set("Content-Type", "application/json")
