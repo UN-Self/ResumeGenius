@@ -54,7 +54,7 @@ export default function App() {
           element={authState === 'authed' ? <ProjectDetail /> : <Navigate to="/login" replace />}
         />
         <Route
-          path="/editor/:projectId"
+          path="/projects/:projectId/edit"
           element={authState === 'authed' ? <EditorPage /> : <Navigate to="/login" replace />}
         />
         <Route path="*" element={<Navigate to={authState === 'authed' ? '/' : '/login'} replace />} />

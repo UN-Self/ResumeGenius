@@ -1,6 +1,6 @@
 const BASE = '/api/v1'
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+export async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const mergedHeaders: HeadersInit = {
     'Content-Type': 'application/json',
     ...((options?.headers as Record<string, string>) ?? {}),

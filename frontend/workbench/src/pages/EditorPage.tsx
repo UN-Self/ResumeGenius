@@ -11,7 +11,7 @@ import { SaveIndicator } from '@/components/editor/SaveIndicator'
 import { EditorErrorState } from '@/components/editor/EditorErrorState'
 import { EditorEmptyState } from '@/components/editor/EditorEmptyState'
 import { EditorSkeleton } from '@/components/editor/EditorSkeleton'
-import { apiClient } from '@/lib/api-client'
+import { request } from '@/lib/api-client'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import type { Draft, EditorState } from '@/types/editor'
 
@@ -40,7 +40,7 @@ export default function EditorPage() {
   // Auto-save hook
   const { scheduleSave, flush, retry, status, lastSavedAt } = useAutoSave({
     save: async (html: string) => {
-      await apiClient.put(`/drafts/${DRAFT_ID}`, { html_content: html })
+      await request(`/drafts/${DRAFT_ID}`, { method: 'PUT', body: JSON.stringify({ html_content: html }) })
     },
     saveUrl: `/api/v1/drafts/${DRAFT_ID}`,
   })
@@ -68,8 +68,7 @@ export default function EditorPage() {
 
   const loadDraft = useCallback(() => {
     setState('loading')
-    apiClient
-      .get<Draft>(`/drafts/${DRAFT_ID}`)
+    request<Draft>(`/drafts/${DRAFT_ID}`)
       .then((data) => {
         if (editor && data.html_content) {
           editor.commands.setContent(data.html_content)
