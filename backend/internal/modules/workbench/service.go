@@ -14,6 +14,10 @@ var (
 	ErrDraftNotFound = errors.New("draft not found")
 	// ErrHTMLContentEmpty is returned when HTML content is empty.
 	ErrHTMLContentEmpty = errors.New("html content empty")
+	// ErrProjectNotFound is returned when a project doesn't exist.
+	ErrProjectNotFound = errors.New("project not found")
+	// ErrProjectHasDraft is returned when a project already has a current draft.
+	ErrProjectHasDraft = errors.New("project already has a draft")
 )
 
 // DraftService handles business logic for draft operations.
@@ -37,6 +41,44 @@ func (s *DraftService) GetByID(id uint) (*models.Draft, error) {
 		}
 		return nil, err
 	}
+	return &draft, nil
+}
+
+// Create creates a new draft for a project with empty HTML content.
+// Returns ErrProjectNotFound if the project doesn't exist.
+// Returns ErrProjectHasDraft if the project already has a current draft.
+func (s *DraftService) Create(projectID uint) (*models.Draft, error) {
+	// Check if the project exists
+	var project models.Project
+	err := s.db.First(&project, projectID).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrProjectNotFound
+		}
+		return nil, err
+	}
+
+	// Check if the project already has a current draft
+	if project.CurrentDraftID != nil {
+		return nil, ErrProjectHasDraft
+	}
+
+	// Create the draft and link it to the project atomically
+	var draft models.Draft
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		draft = models.Draft{
+			ProjectID:   projectID,
+			HTMLContent: "",
+		}
+		if err := tx.Create(&draft).Error; err != nil {
+			return err
+		}
+		return tx.Model(&project).Update("current_draft_id", draft.ID).Error
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return &draft, nil
 }
 
