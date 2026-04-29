@@ -114,3 +114,18 @@ export const intakeApi = {
       body: JSON.stringify({ content, label }),
     }),
 }
+
+// --- Workbench API ---
+
+import type { Draft } from '@/types/editor'
+
+export type { Draft }
+
+export const workbenchApi = {
+  getDraft: (id: number) => request<Draft>(`/drafts/${id}`),
+  createDraft: (projectId: number) =>
+    request<Draft>('/drafts', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId }),
+    }),
+}

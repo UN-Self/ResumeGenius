@@ -40,7 +40,7 @@ describe('EditorPage', () => {
       })
     })
 
-    it('shows empty state when draft html is empty', async () => {
+    it('shows ready editor when draft html is empty', async () => {
       server.use(
         http.get('/api/v1/drafts/:draftId', () => {
           return HttpResponse.json({
@@ -58,7 +58,7 @@ describe('EditorPage', () => {
 
       renderWithRouter()
       await waitFor(() => {
-        expect(screen.getByText('暂无简历内容')).toBeInTheDocument()
+        expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
       })
     })
   })
