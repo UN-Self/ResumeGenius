@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { intakeApi, authApi, ApiError } from '@/lib/api-client'
+import { intakeApi, authApi, workbenchApi, ApiError } from '@/lib/api-client'
 
 describe('apiClient', () => {
   beforeEach(() => {
@@ -198,5 +198,39 @@ describe('apiClient', () => {
     const err = new ApiError(1004, 'project not found')
     expect(err.code).toBe(1004)
     expect(err.message).toBe('project not found')
+  })
+
+  it('workbenchApi.createDraft calls POST /drafts', async () => {
+    const mock = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({
+        code: 0,
+        data: { id: 2, project_id: 1, html_content: '', updated_at: '2026-04-29T12:00:00Z' },
+      }),
+    })
+    vi.stubGlobal('fetch', mock)
+
+    const result = await workbenchApi.createDraft(1)
+    expect(mock).toHaveBeenCalledWith('/api/v1/drafts', expect.objectContaining({
+      method: 'POST',
+    }))
+    expect(result.id).toBe(2)
+    expect(result.project_id).toBe(1)
+    expect(result.html_content).toBe('')
+  })
+
+  it('workbenchApi.getDraft calls GET /drafts/:id', async () => {
+    const mock = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({
+        code: 0,
+        data: { id: 1, project_id: 1, html_content: '<p>hello</p>', updated_at: '2026-04-29T12:00:00Z' },
+      }),
+    })
+    vi.stubGlobal('fetch', mock)
+
+    const result = await workbenchApi.getDraft(1)
+    expect(mock).toHaveBeenCalledWith('/api/v1/drafts/1', expect.objectContaining({
+      credentials: 'include',
+    }))
+    expect(result.html_content).toBe('<p>hello</p>')
   })
 })

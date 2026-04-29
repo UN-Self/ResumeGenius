@@ -39,4 +39,23 @@ export const draftHandlers = [
       message: 'ok',
     })
   }),
+
+  // POST /api/v1/drafts
+  http.post('/api/v1/drafts', async ({ request }) => {
+    const body = (await request.json()) as { project_id?: number }
+
+    // Simulate 200ms delay
+    await new Promise((resolve) => setTimeout(resolve, 200))
+
+    return Response.json({
+      code: 0,
+      data: {
+        id: 2,
+        project_id: body.project_id ?? 1,
+        html_content: '',
+        updated_at: new Date().toISOString(),
+      },
+      message: 'ok',
+    })
+  }),
 ]

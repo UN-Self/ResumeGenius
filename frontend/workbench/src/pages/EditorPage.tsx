@@ -11,7 +11,7 @@ import { SaveIndicator } from '@/components/editor/SaveIndicator'
 import { EditorErrorState } from '@/components/editor/EditorErrorState'
 import { EditorEmptyState } from '@/components/editor/EditorEmptyState'
 import { EditorSkeleton } from '@/components/editor/EditorSkeleton'
-import { request, intakeApi } from '@/lib/api-client'
+import { request, intakeApi, workbenchApi } from '@/lib/api-client'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import type { Draft, EditorState } from '@/types/editor'
 
@@ -20,6 +20,7 @@ export default function EditorPage() {
   const [draftId, setDraftId] = useState<string | null>(null)
   const [state, setState] = useState<EditorState>('loading')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
 
   const editor = useEditor({
     extensions: [
@@ -63,6 +64,26 @@ export default function EditorPage() {
         setState('error')
       })
   }, [projectId])
+
+  const createAndLoadDraft = useCallback(() => {
+    if (!projectId || draftId) return
+
+    setCreating(true)
+    setState('loading')
+    workbenchApi
+      .createDraft(Number(projectId))
+      .then((draft) => {
+        setDraftId(String(draft.id))
+      })
+      .catch((err) => {
+        console.error('Failed to create draft:', err)
+        setErrorMessage(err instanceof Error ? err.message : 'Failed to create draft')
+        setState('error')
+      })
+      .finally(() => {
+        setCreating(false)
+      })
+  }, [projectId, draftId])
 
   useEffect(() => {
     loadProject()
@@ -109,11 +130,8 @@ export default function EditorPage() {
         if (editor && data.html_content) {
           editor.commands.setContent(data.html_content)
         }
-        if (!data.html_content || data.html_content.trim() === '') {
-          setState('empty')
-        } else {
-          setState('ready')
-        }
+        // Empty drafts also enter ready state so user can edit
+        setState('ready')
       })
       .catch((err) => {
         console.error('Failed to load draft:', err)
@@ -137,7 +155,7 @@ export default function EditorPage() {
       case 'empty':
         return (
           <A4Canvas>
-            <EditorEmptyState />
+            <EditorEmptyState onCreateDraft={createAndLoadDraft} loading={creating} />
           </A4Canvas>
         )
       case 'ready':

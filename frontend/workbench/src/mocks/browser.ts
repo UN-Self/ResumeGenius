@@ -1,8 +1,9 @@
 import { setupWorker } from 'msw/browser'
+import { projectHandlers } from './handlers/projects'
 import { draftHandlers } from './handlers/drafts'
 
 // Export the worker instance for the main app to start
-export const worker = setupWorker(...draftHandlers)
+export const worker = setupWorker(...projectHandlers, ...draftHandlers)
 
 // Start the worker in development mode when needed
 export async function startMockWorker() {
