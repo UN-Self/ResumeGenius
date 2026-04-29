@@ -43,8 +43,46 @@ Mock：直接用 `fixtures/sample_draft.html` 加载到编辑器。
 |---|---|---|
 | GET | `/api/v1/drafts/{draft_id}` | 获取草稿 HTML |
 | PUT | `/api/v1/drafts/{draft_id}` | 保存草稿 HTML（自动保存） |
+| POST | `/api/v1/drafts` | 为项目创建空白草稿 |
 
 ### 关键端点详情
+
+#### POST /api/v1/drafts
+
+```
+Request:
+{
+  "project_id": 1
+}
+
+Response (200):
+{
+  "code": 0,
+  "data": {
+    "id": 2,
+    "project_id": 1,
+    "html_content": "",
+    "updated_at": "2026-04-29T12:00:00Z"
+  }
+}
+
+Response (404, project not found):
+{
+  "code": 4003,
+  "data": null,
+  "message": "project not found"
+}
+
+Response (409, project already has draft):
+{
+  "code": 4004,
+  "data": null,
+  "message": "project already has a current draft"
+}
+```
+
+> 为指定项目创建空白草稿并自动设置 `project.current_draft_id`。
+> 仅当项目无当前草稿时允许创建（`current_draft_id` 为 null）。
 
 #### GET /api/v1/drafts/{draft_id}
 
@@ -164,6 +202,8 @@ Response:
 |---|---|---|
 | 4001 | 404 | 草稿不存在 |
 | 4002 | 400 | HTML 内容为空 |
+| 4003 | 404 | 项目不存在（创建草稿时） |
+| 4004 | 409 | 项目已有当前草稿 |
 
 ## 9. 测试策略
 
