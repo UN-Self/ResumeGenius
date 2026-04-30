@@ -34,6 +34,10 @@ func TestResourceRoutes_AreMountedOnApiV1(t *testing.T) {
 		{http.MethodGet, "/api/v1/drafts/1"},
 		{http.MethodPost, "/api/v1/drafts/1/export"},
 		{http.MethodGet, "/api/v1/tasks/task_1"},
+		{http.MethodGet, "/api/v1/drafts/1/versions"},
+		{http.MethodPost, "/api/v1/drafts/1/versions"},
+		{http.MethodPost, "/api/v1/drafts/1/rollback"},
+		{http.MethodGet, "/api/v1/tasks/task_1/file"},
 	}
 
 	for _, tc := range cases {

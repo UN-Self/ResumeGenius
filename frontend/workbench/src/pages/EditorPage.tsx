@@ -2,8 +2,8 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
 import TextAlign from '@tiptap/extension-text-align'
+import { TextStyleKit } from '@tiptap/extension-text-style'
 import { A4Canvas } from '@/components/editor/A4Canvas'
 import { ActionBar } from '@/components/editor/ActionBar'
 import { FormatToolbar } from '@/components/editor/FormatToolbar'
@@ -12,6 +12,7 @@ import { AiPanelPlaceholder } from '@/components/editor/AiPanelPlaceholder'
 import ParsedSidebar from '@/components/intake/ParsedSidebar'
 import { request, intakeApi, parsingApi, ApiError, type ParsedContent } from '@/lib/api-client'
 import { useAutoSave } from '@/hooks/useAutoSave'
+import { useExport } from '@/hooks/useExport'
 import type { Draft } from '@/types/editor'
 
 
@@ -35,8 +36,8 @@ export default function EditorPage() {
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Underline,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      TextStyleKit,
     ],
     content: '',
     editorProps: {
@@ -59,6 +60,15 @@ export default function EditorPage() {
     },
     saveUrl: draftId ? `/api/v1/drafts/${draftId}` : undefined,
   })
+
+  // Export
+  const { exportPdf, status: exportStatus } = useExport()
+
+  const handleExport = () => {
+    if (draftId && editor) {
+      exportPdf(Number(draftId), editor.getHTML())
+    }
+  }
 
   // Effect 1: Load project (route guard) + draft + parsed contents
   useEffect(() => {
@@ -173,7 +183,11 @@ export default function EditorPage() {
           </button>
         </div>
         <div className="panel-body">
-          <ParsedSidebar contents={parsedContents} />
+          <ParsedSidebar
+            projectId={pid}
+            contents={parsedContents}
+            onParsed={setParsedContents}
+          />
         </div>
       </div>
 
@@ -201,6 +215,9 @@ export default function EditorPage() {
           <ActionBar
             projectName={projectTitle}
             saveIndicator={<SaveIndicator status={status} lastSavedAt={lastSavedAt} onRetry={retry} />}
+            draftId={draftId}
+            exportStatus={exportStatus}
+            onExport={handleExport}
           />
           <div className="flex-1 overflow-auto">
             <A4Canvas editor={editor} />

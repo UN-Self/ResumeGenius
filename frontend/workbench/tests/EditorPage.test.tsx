@@ -87,6 +87,54 @@ describe('EditorPage', () => {
     })
   })
 
+  describe('Export button', () => {
+    it('renders export button that is not disabled when editor is loaded', async () => {
+      server.use(
+        http.get('/api/v1/projects/:projectId', () => {
+          return HttpResponse.json({
+            code: 0,
+            data: {
+              id: 1,
+              title: 'Test Project',
+              status: 'active',
+              current_draft_id: 1,
+              created_at: '2026-04-28T12:00:00Z',
+            },
+            message: 'ok',
+          })
+        }),
+        http.get('/api/v1/drafts/1', () => {
+          return HttpResponse.json({
+            code: 0,
+            data: {
+              id: 1,
+              project_id: 1,
+              html_content: '<p>Hello</p>',
+              updated_at: '2026-04-28T12:00:00Z',
+            },
+            message: 'ok',
+          })
+        }),
+        http.post('/api/v1/parsing/parse', () => {
+          return HttpResponse.json({
+            code: 0,
+            data: { parsed_contents: [] },
+            message: 'ok',
+          })
+        })
+      )
+
+      renderWithRouter()
+      await waitFor(() => {
+        expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
+      })
+
+      const exportBtn = screen.getByText('导出 PDF')
+      expect(exportBtn).toBeInTheDocument()
+      expect(exportBtn).not.toBeDisabled()
+    })
+  })
+
   describe('Panel collapse', () => {
     it('renders collapse buttons for left and right panels', async () => {
       server.use(
@@ -183,6 +231,52 @@ describe('EditorPage', () => {
       // Expand left panel
       await user.click(screen.getByLabelText('展开左面板'))
       expect(screen.getByLabelText('收起左面板')).toBeInTheDocument()
+    })
+  })
+
+  describe('Upload button in sidebar', () => {
+    it('renders upload button in left panel', async () => {
+      server.use(
+        http.get('/api/v1/projects/:projectId', () => {
+          return HttpResponse.json({
+            code: 0,
+            data: {
+              id: 1,
+              title: 'Test Project',
+              status: 'active',
+              current_draft_id: 1,
+              created_at: '2026-04-28T12:00:00Z',
+            },
+            message: 'ok',
+          })
+        }),
+        http.get('/api/v1/drafts/1', () => {
+          return HttpResponse.json({
+            code: 0,
+            data: {
+              id: 1,
+              project_id: 1,
+              html_content: '',
+              updated_at: '2026-04-28T12:00:00Z',
+            },
+            message: 'ok',
+          })
+        }),
+        http.post('/api/v1/parsing/parse', () => {
+          return HttpResponse.json({
+            code: 0,
+            data: { parsed_contents: [] },
+            message: 'ok',
+          })
+        })
+      )
+
+      renderWithRouter()
+      await waitFor(() => {
+        expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText('上传文件')).toBeInTheDocument()
     })
   })
 })

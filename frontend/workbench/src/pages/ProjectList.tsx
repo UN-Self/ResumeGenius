@@ -109,7 +109,9 @@ export default function ProjectList() {
               <ProjectCard
                 key={project.id}
                 project={project}
-                onClick={(id) => navigate(`/projects/${id}`)}
+                onClick={(id) => navigate(
+                  project.current_draft_id ? `/projects/${id}/edit` : `/projects/${id}`
+                )}
               />
             ))}
           </div>

@@ -82,7 +82,7 @@ func setupRouter(db *gorm.DB) *gin.Engine {
 	parsing.RegisterRoutes(authed, db, store)
 	agent.RegisterRoutes(authed, db)
 	workbench.RegisterRoutes(authed, db)
-	render.RegisterRoutes(authed, db)
+	render.RegisterRoutes(authed, db, store)
 
 	return r
 }
