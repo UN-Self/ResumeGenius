@@ -1,6 +1,6 @@
 # 模块 parsing 契约：文件解析与 AI 初稿生成
 
-更新时间：2026-04-23
+更新时间：2026-04-30
 
 ## 1. 角色定义
 
@@ -76,6 +76,7 @@ Response (成功):
       {
         "asset_id": 1,
         "type": "resume_pdf",
+        "label": "sample_resume.pdf",
         "text": "张三 | 前端工程师\n\n工作经历\nABC科技 高级前端工程师 2022.07-至今\n· 主导核心产品前端架构重构...",
         "images": [
           {
@@ -88,6 +89,10 @@ Response (成功):
   }
 }
 ```
+
+Notes:
+- `parsed_contents[].label` uses `assets.label` when present; otherwise it falls back to the asset file name.
+- `/parse` only previews extracted results and does not create a draft. If the next step needs `projects.current_draft_id` or editor entry, call `/api/v1/parsing/generate`.
 
 #### POST /api/v1/parsing/generate
 
