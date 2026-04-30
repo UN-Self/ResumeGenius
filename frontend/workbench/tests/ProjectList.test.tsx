@@ -1,9 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { BrowserRouter } from 'react-router-dom'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { intakeApi } from '@/lib/api-client'
 import ProjectList from '@/pages/ProjectList'
+
+const mockNavigate = vi.fn()
 
 vi.mock('@/lib/api-client', () => ({
   intakeApi: {
@@ -19,13 +20,23 @@ vi.mock('@/lib/api-client', () => ({
   },
 }))
 
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom')
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+    useLocation: () => ({ key: 'default', pathname: '/', search: '', hash: '', state: null }),
+  }
+})
+
 function renderWithRouter(ui: React.ReactNode) {
-  return render(<BrowserRouter>{ui}</BrowserRouter>)
+  return render(ui)
 }
 
 describe('ProjectList', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockNavigate.mockClear()
   })
 
   it('renders loading state', () => {
@@ -113,5 +124,37 @@ describe('ProjectList', () => {
     await waitFor(() => {
       expect(screen.getByText('创建失败')).toBeInTheDocument()
     })
+  })
+
+  it('navigates to editor when project has current_draft_id', async () => {
+    const user = userEvent.setup()
+    mockNavigate.mockClear()
+    vi.mocked(intakeApi.listProjects).mockResolvedValue([
+      { id: 1, title: '已有草稿的项目', status: 'active', current_draft_id: 5, created_at: '2026-04-28T00:00:00Z' },
+    ])
+
+    renderWithRouter(<ProjectList />)
+    await waitFor(() => {
+      expect(screen.getByText('已有草稿的项目')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('已有草稿的项目'))
+    expect(mockNavigate).toHaveBeenCalledWith('/projects/1/edit')
+  })
+
+  it('navigates to project detail when project has no draft', async () => {
+    const user = userEvent.setup()
+    mockNavigate.mockClear()
+    vi.mocked(intakeApi.listProjects).mockResolvedValue([
+      { id: 2, title: '新项目', status: 'active', current_draft_id: null, created_at: '2026-04-28T00:00:00Z' },
+    ])
+
+    renderWithRouter(<ProjectList />)
+    await waitFor(() => {
+      expect(screen.getByText('新项目')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('新项目'))
+    expect(mockNavigate).toHaveBeenCalledWith('/projects/2')
   })
 })
