@@ -2,29 +2,14 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { LineHeightSelector } from '@/components/editor/LineHeightSelector'
-
-const createMockEditor = () => {
-  const runMock = vi.fn()
-  const focusMock = () => ({
-    setLineHeight: () => ({ run: runMock }),
-    unsetLineHeight: () => ({ run: runMock }),
-  })
-  const listeners = new Map<string, Set<() => void>>()
-  return {
-    chain: () => ({ focus: focusMock }),
-    getAttributes: vi.fn(() => ({ lineHeight: null })),
-    on: vi.fn((event: string, cb: () => void) => {
-      if (!listeners.has(event)) listeners.set(event, new Set())
-      listeners.get(event)!.add(cb)
-    }),
-    off: vi.fn(),
-    runMock,
-  } as any
-}
+import { createMockEditor } from './helpers/mock-editor'
 
 describe('LineHeightSelector', () => {
   it('renders trigger button', () => {
-    const mockEditor = createMockEditor()
+    const mockEditor = createMockEditor({
+      chainCommands: ['setLineHeight', 'unsetLineHeight'],
+      getAttributes: () => ({ lineHeight: null }),
+    })
     render(<LineHeightSelector editor={mockEditor} />)
 
     const trigger = screen.getByRole('button', { name: /行距/i })
@@ -34,7 +19,10 @@ describe('LineHeightSelector', () => {
 
   it('shows line height options when clicked', async () => {
     const user = userEvent.setup()
-    const mockEditor = createMockEditor()
+    const mockEditor = createMockEditor({
+      chainCommands: ['setLineHeight', 'unsetLineHeight'],
+      getAttributes: () => ({ lineHeight: null }),
+    })
     render(<LineHeightSelector editor={mockEditor} />)
 
     const trigger = screen.getByRole('button', { name: /行距/i })
@@ -51,7 +39,10 @@ describe('LineHeightSelector', () => {
 
   it('calls editor command when an option is selected', async () => {
     const user = userEvent.setup()
-    const mockEditor = createMockEditor()
+    const mockEditor = createMockEditor({
+      chainCommands: ['setLineHeight', 'unsetLineHeight'],
+      getAttributes: () => ({ lineHeight: null }),
+    })
     render(<LineHeightSelector editor={mockEditor} />)
 
     const trigger = screen.getByRole('button', { name: /行距/i })
@@ -64,7 +55,10 @@ describe('LineHeightSelector', () => {
   })
 
   it('displays current line height when set', async () => {
-    const mockEditor = createMockEditor()
+    const mockEditor = createMockEditor({
+      chainCommands: ['setLineHeight', 'unsetLineHeight'],
+      getAttributes: () => ({ lineHeight: null }),
+    })
     mockEditor.getAttributes = vi.fn(() => ({ lineHeight: '1.5' }))
 
     render(<LineHeightSelector editor={mockEditor} />)
@@ -77,7 +71,10 @@ describe('LineHeightSelector', () => {
 
   it('highlights active line height option', async () => {
     const user = userEvent.setup()
-    const mockEditor = createMockEditor()
+    const mockEditor = createMockEditor({
+      chainCommands: ['setLineHeight', 'unsetLineHeight'],
+      getAttributes: () => ({ lineHeight: null }),
+    })
     mockEditor.getAttributes = vi.fn(() => ({ lineHeight: '2.0' }))
 
     render(<LineHeightSelector editor={mockEditor} />)
@@ -94,7 +91,10 @@ describe('LineHeightSelector', () => {
 
   it('updates display when line height changes via transaction', async () => {
     let mockAttrs = { lineHeight: null }
-    const mockEditor = createMockEditor()
+    const mockEditor = createMockEditor({
+      chainCommands: ['setLineHeight', 'unsetLineHeight'],
+      getAttributes: () => ({ lineHeight: null }),
+    })
     mockEditor.getAttributes = vi.fn(() => mockAttrs)
 
     render(<LineHeightSelector editor={mockEditor} />)
