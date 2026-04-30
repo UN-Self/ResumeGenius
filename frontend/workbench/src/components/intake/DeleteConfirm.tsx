@@ -33,7 +33,7 @@ export default function DeleteConfirm({ title, message, open, onConfirm, onCance
           <div className="flex justify-end gap-2 mt-5">
             <button
               onClick={onCancel}
-              className="px-4 py-2 text-sm rounded-lg border border-border text-foreground hover:bg-accent transition-colors"
+              className="px-4 py-2 text-sm rounded-lg border border-border text-foreground hover:bg-primary-50 transition-colors"
             >
               取消
             </button>
@@ -52,7 +52,7 @@ export default function DeleteConfirm({ title, message, open, onConfirm, onCance
             <div className="flex justify-end gap-2 mt-3">
               <button
                 onClick={() => { setConfirming(false); onCancel() }}
-                className="px-4 py-2 text-sm rounded-lg border border-border text-foreground hover:bg-accent transition-colors"
+                className="px-4 py-2 text-sm rounded-lg border border-border text-foreground hover:bg-primary-50 transition-colors"
               >
                 取消
               </button>

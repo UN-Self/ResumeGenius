@@ -27,7 +27,7 @@ describe('LineHeightSelector', () => {
     const mockEditor = createMockEditor()
     render(<LineHeightSelector editor={mockEditor} />)
 
-    const trigger = screen.getByRole('button', { name: /行高/i })
+    const trigger = screen.getByRole('button', { name: /行距/i })
     expect(trigger).toBeInTheDocument()
     expect(trigger).toHaveTextContent('—')
   })
@@ -37,7 +37,7 @@ describe('LineHeightSelector', () => {
     const mockEditor = createMockEditor()
     render(<LineHeightSelector editor={mockEditor} />)
 
-    const trigger = screen.getByRole('button', { name: /行高/i })
+    const trigger = screen.getByRole('button', { name: /行距/i })
     await user.click(trigger)
 
     // Check that line height options are present
@@ -54,7 +54,7 @@ describe('LineHeightSelector', () => {
     const mockEditor = createMockEditor()
     render(<LineHeightSelector editor={mockEditor} />)
 
-    const trigger = screen.getByRole('button', { name: /行高/i })
+    const trigger = screen.getByRole('button', { name: /行距/i })
     await user.click(trigger)
 
     const option1_5 = screen.getByText('1.5')
@@ -70,7 +70,7 @@ describe('LineHeightSelector', () => {
     render(<LineHeightSelector editor={mockEditor} />)
 
     await waitFor(() => {
-      const trigger = screen.getByRole('button', { name: /行高/i })
+      const trigger = screen.getByRole('button', { name: /行距/i })
       expect(trigger).toHaveTextContent('1.5')
     })
   })
@@ -82,7 +82,7 @@ describe('LineHeightSelector', () => {
 
     render(<LineHeightSelector editor={mockEditor} />)
 
-    const trigger = screen.getByRole('button', { name: /行高/i })
+    const trigger = screen.getByRole('button', { name: /行距/i })
     await user.click(trigger)
 
     // Use getAllByText and check the button (not the trigger span)
@@ -100,7 +100,7 @@ describe('LineHeightSelector', () => {
     render(<LineHeightSelector editor={mockEditor} />)
 
     // Initially should show "—"
-    expect(screen.getByRole('button', { name: /行高/i })).toHaveTextContent('—')
+    expect(screen.getByRole('button', { name: /行距/i })).toHaveTextContent('—')
 
     // Simulate transaction updating line height
     mockAttrs = { lineHeight: '1.75' }
@@ -112,7 +112,7 @@ describe('LineHeightSelector', () => {
     }
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /行高/i })).toHaveTextContent('1.75')
+      expect(screen.getByRole('button', { name: /行距/i })).toHaveTextContent('1.75')
     })
   })
 })

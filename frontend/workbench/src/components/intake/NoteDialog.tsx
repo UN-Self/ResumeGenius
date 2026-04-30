@@ -74,7 +74,7 @@ export default function NoteDialog({ open, onClose, onSubmit, initialNote }: Not
         <div className="flex justify-end gap-2 mt-5">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg border border-border text-foreground hover:bg-accent transition-colors"
+            className="px-4 py-2 text-sm rounded-lg border border-border text-foreground hover:bg-primary-50 transition-colors"
           >
             取消
           </button>

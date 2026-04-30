@@ -39,7 +39,7 @@ export function LineHeightSelector({ editor }: LineHeightSelectorProps) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label="行高"
+          aria-label="行距"
           className="flex items-center gap-1 px-2 min-h-[44px] rounded-md text-sm text-muted-foreground hover:bg-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
         >
         <span>{currentLineHeight || '—'}</span>
@@ -51,8 +51,9 @@ export function LineHeightSelector({ editor }: LineHeightSelectorProps) {
           {LINE_HEIGHTS.map((height) => (
             <button
               key={height}
+              type="button"
               onClick={() => handleLineHeightChange(height)}
-              className={`px-2 py-1 text-sm rounded hover:bg-surface-hover transition-colors ${
+              className={`px-2 py-1 text-sm rounded-md hover:bg-surface-hover transition-colors ${
                 currentLineHeight === height
                   ? 'bg-primary-50 text-primary'
                   : 'text-muted-foreground'
