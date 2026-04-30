@@ -46,7 +46,7 @@ export function ActionBar({
       {/* Version History Button */}
       <button
         type="button"
-        className="px-3 py-1.5 text-sm font-medium text-foreground hover:bg-primary-50 rounded-md transition-colors cursor-pointer"
+        className="px-3 py-1.5 text-sm font-medium rounded-lg border border-border bg-white text-foreground hover:bg-gray-50 transition-colors cursor-pointer"
       >
         版本历史
       </button>
@@ -56,7 +56,7 @@ export function ActionBar({
         type="button"
         disabled={!draftId || exportStatus === 'exporting'}
         onClick={onExport}
-        className="px-3 py-1.5 text-sm font-medium text-foreground bg-background border border-border rounded-md disabled:cursor-not-allowed disabled:text-muted-foreground/50 hover:bg-primary-50 transition-colors cursor-pointer"
+        className="px-3 py-1.5 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-500 disabled:pointer-events-none disabled:opacity-50 transition-colors cursor-pointer"
       >
         {EXPORT_LABEL[exportStatus]}
       </button>

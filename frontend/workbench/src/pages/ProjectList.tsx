@@ -80,7 +80,7 @@ export default function ProjectList() {
           <button
             onClick={handleCreate}
             disabled={!title.trim()}
-            className="h-10 px-5 text-sm font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            className="h-10 px-5 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-500 disabled:pointer-events-none disabled:opacity-50 transition-colors"
           >
             创建
           </button>

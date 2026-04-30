@@ -191,7 +191,7 @@ export default function ProjectDetail() {
         <button
           onClick={handleParse}
           disabled={parseLoading}
-          className="mt-6 w-full h-11 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-500 transition-colors disabled:opacity-50"
+          className="mt-6 w-full h-11 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-500 transition-colors disabled:pointer-events-none disabled:opacity-50"
         >
           {parseLoading ? '解析中...' : '下一步：开始解析'}
         </button>
