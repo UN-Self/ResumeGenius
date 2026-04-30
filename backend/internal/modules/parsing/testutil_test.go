@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
+	sharedstorage "github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
 )
 
 func setupParsingTestDB(t *testing.T) *gorm.DB {
@@ -42,4 +43,9 @@ func setupParsingTestDB(t *testing.T) *gorm.DB {
 	}
 
 	return tx
+}
+
+func newTestStorage(t *testing.T) sharedstorage.FileStorage {
+	t.Helper()
+	return sharedstorage.NewLocalStorage(t.TempDir())
 }

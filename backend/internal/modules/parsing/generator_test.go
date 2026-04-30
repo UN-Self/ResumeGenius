@@ -36,16 +36,18 @@ func TestDraftGeneratorGenerateHTML_UsesFixtureInMockMode(t *testing.T) {
 	}
 }
 
-func TestDraftGeneratorGenerateHTML_DefaultsToMockMode(t *testing.T) {
+func TestDraftGeneratorGenerateHTML_DefaultsToRealModeWhenEnvUnset(t *testing.T) {
 	t.Setenv("USE_MOCK", "")
+	t.Setenv("AI_API_URL", "")
+	t.Setenv("AI_API_KEY", "")
 
 	generator := NewDraftGenerator()
-	html, err := generator.GenerateHTML("anything")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := generator.GenerateHTML("anything")
+	if err == nil {
+		t.Fatal("expected error when defaulting to real mode without AI config")
 	}
-	if !strings.Contains(strings.ToLower(html), "<html") {
-		t.Fatalf("expected html content, got %q", html)
+	if !strings.Contains(err.Error(), "AI_API_URL") {
+		t.Fatalf("expected missing AI_API_URL error, got %v", err)
 	}
 }
 
@@ -186,6 +188,29 @@ func TestDraftGeneratorGenerateHTML_ReturnsErrorWhenAIServerFails(t *testing.T) 
 	}
 	if !strings.Contains(err.Error(), "status 502") {
 		t.Fatalf("expected status code in error, got %v", err)
+	}
+}
+
+func TestDraftGeneratorGenerateHTML_ReturnsErrorWhenAIResponseTooLarge(t *testing.T) {
+	t.Setenv("USE_MOCK", "false")
+	t.Setenv("AI_API_KEY", "test-key")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(strings.Repeat("a", maxAIResponseBodyBytes+16)))
+	}))
+	defer server.Close()
+
+	t.Setenv("AI_API_URL", server.URL)
+	generator := NewDraftGenerator()
+	generator.httpClient = server.Client()
+
+	_, err := generator.GenerateHTML("anything")
+	if err == nil {
+		t.Fatal("expected error when AI response body is too large")
+	}
+	if !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("expected response size limit error, got %v", err)
 	}
 }
 

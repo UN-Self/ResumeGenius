@@ -88,6 +88,16 @@ func TestNewParsingServiceWithGeneratorStoresGenerator(t *testing.T) {
 	}
 }
 
+func TestNewParsingServiceWithGeneratorAndStorageStoresStorage(t *testing.T) {
+	store := newTestStorage(t)
+
+	svc := NewParsingServiceWithGeneratorAndStorage(nil, nil, nil, nil, nil, store)
+
+	if svc.storage != store {
+		t.Error("expected storage to be stored")
+	}
+}
+
 func TestParseReturnsProjectNotFound(t *testing.T) {
 	svc := NewParsingService(nil, nil, nil, nil)
 	assetsListed := false

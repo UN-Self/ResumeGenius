@@ -15,6 +15,7 @@ import (
 const (
 	defaultAIModel                 = "default"
 	defaultAIGenerationTemperature = 0.7
+	maxAIResponseBodyBytes         = 1 << 20
 )
 
 const resumeHTMLTemplate = `<!DOCTYPE html>
@@ -102,7 +103,7 @@ func (g *DraftGenerator) GenerateHTML(parsedText string) (string, error) {
 		return "", fmt.Errorf("parsed text is empty")
 	}
 
-	if os.Getenv("USE_MOCK") != "false" {
+	if shouldUseMockGeneration() {
 		return g.generateMockHTML()
 	}
 
@@ -178,9 +179,12 @@ func (g *DraftGenerator) generateWithRealAI(parsedText string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxAIResponseBodyBytes+1))
 	if err != nil {
 		return "", fmt.Errorf("read ai response: %w", err)
+	}
+	if len(body) > maxAIResponseBodyBytes {
+		return "", fmt.Errorf("ai response body exceeds %d bytes", maxAIResponseBodyBytes)
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return "", fmt.Errorf("ai api returned status %d: %s", resp.StatusCode, truncateResponseBody(body))
@@ -275,6 +279,10 @@ func aiModelFromEnv() string {
 		return model
 	}
 	return defaultAIModel
+}
+
+func shouldUseMockGeneration() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("USE_MOCK")), "true")
 }
 
 func resolveFixturePath(name string) (string, error) {

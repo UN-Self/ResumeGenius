@@ -8,8 +8,7 @@ import (
 
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, store storage.FileStorage) {
 	generator := NewDraftGenerator()
-	service := NewParsingServiceWithGenerator(db, NewPDFParser(), NewDocxParser(), NewGitExtractor(), generator)
-	service.storage = store
+	service := NewParsingServiceWithGeneratorAndStorage(db, NewPDFParser(), NewDocxParser(), NewGitExtractor(), generator, store)
 	handler := NewHandler(service)
 
 	rg.POST("/parsing/parse", handler.Parse)

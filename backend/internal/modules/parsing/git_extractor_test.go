@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestGitExtractorExtract_SummarizesLocalRepository(t *testing.T) {
@@ -112,6 +113,16 @@ func TestGitExtractorExtract_ReturnsErrorForBlankRepositoryURL(t *testing.T) {
 	_, err := extractor.Extract("   ")
 	if err == nil {
 		t.Fatal("expected blank repository url error")
+	}
+}
+
+func TestTruncateAndNormalizeText_PreservesUTF8Boundaries(t *testing.T) {
+	got := truncateAndNormalizeText("你好世界Go", 3)
+	if !utf8.ValidString(got) {
+		t.Fatalf("expected valid UTF-8 string, got %q", got)
+	}
+	if got != "你好世..." {
+		t.Fatalf("expected rune-safe truncation, got %q", got)
 	}
 }
 

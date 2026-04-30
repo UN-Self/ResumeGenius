@@ -24,16 +24,28 @@ type ParsingService struct {
 }
 
 func NewParsingService(db *gorm.DB, pdfParser PdfParser, docxParser DocxParser, gitExtractor GitExtractor) *ParsingService {
-	return NewParsingServiceWithGenerator(db, pdfParser, docxParser, gitExtractor, nil)
+	return NewParsingServiceWithGeneratorAndStorage(db, pdfParser, docxParser, gitExtractor, nil, nil)
 }
 
 func NewParsingServiceWithGenerator(db *gorm.DB, pdfParser PdfParser, docxParser DocxParser, gitExtractor GitExtractor, generator DraftGeneratorInterface) *ParsingService {
+	return NewParsingServiceWithGeneratorAndStorage(db, pdfParser, docxParser, gitExtractor, generator, nil)
+}
+
+func NewParsingServiceWithGeneratorAndStorage(
+	db *gorm.DB,
+	pdfParser PdfParser,
+	docxParser DocxParser,
+	gitExtractor GitExtractor,
+	generator DraftGeneratorInterface,
+	store storage.FileStorage,
+) *ParsingService {
 	svc := &ParsingService{
 		db:           db,
 		pdfParser:    pdfParser,
 		docxParser:   docxParser,
 		gitExtractor: gitExtractor,
 		generator:    generator,
+		storage:      store,
 	}
 	svc.projectExists = svc.defaultProjectExists
 	svc.listProjectAssets = svc.defaultListProjectAssets

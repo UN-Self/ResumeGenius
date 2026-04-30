@@ -2,7 +2,9 @@ package parsing
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -10,11 +12,13 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 const (
 	maxReadmePreviewLength = 1800
 	maxTopLevelEntries     = 10
+	defaultGitCommandTimeout = 30 * time.Second
 )
 
 type gitCommandRunner func(dir string, args ...string) ([]byte, error)
@@ -340,14 +344,18 @@ func truncateAndNormalizeText(input string, limit int) string {
 		return ""
 	}
 
-	if len(normalized) <= limit {
+	runes := []rune(normalized)
+	if len(runes) <= limit {
 		return normalized
 	}
-	return strings.TrimSpace(normalized[:limit]) + "..."
+	return strings.TrimSpace(string(runes[:limit])) + "..."
 }
 
 func defaultRunGitCommand(dir string, args ...string) ([]byte, error) {
-	cmd := exec.Command("git", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGitCommandTimeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "git", args...)
 	if dir != "" {
 		cmd.Dir = dir
 	}
@@ -358,6 +366,9 @@ func defaultRunGitCommand(dir string, args ...string) ([]byte, error) {
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return nil, fmt.Errorf("git command timed out after %s", defaultGitCommandTimeout)
+		}
 		message := strings.TrimSpace(stderr.String())
 		if message == "" {
 			message = strings.TrimSpace(stdout.String())
