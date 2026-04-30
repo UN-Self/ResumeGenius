@@ -1,8 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { intakeApi } from '@/lib/api-client'
+import { intakeApi, parsingApi, workbenchApi } from '@/lib/api-client'
 import ProjectDetail from '@/pages/ProjectDetail'
 
 vi.mock('@/lib/api-client', () => ({
@@ -11,7 +11,18 @@ vi.mock('@/lib/api-client', () => ({
     listAssets: vi.fn(),
     deleteAsset: vi.fn(),
     deleteProject: vi.fn(),
+    uploadFile: vi.fn(),
+    createGitRepo: vi.fn(),
+    createNote: vi.fn(),
+    updateNote: vi.fn(),
   },
+  parsingApi: {
+    parseProject: vi.fn(),
+  },
+  workbenchApi: {
+    createDraft: vi.fn(),
+  },
+  request: vi.fn(),
   ApiError: class extends Error {
     code: number
     constructor(c: number, m: string) {
@@ -45,7 +56,9 @@ describe('ProjectDetail', () => {
 
     render(
       <MemoryRouter initialEntries={['/projects/1']}>
-        <ProjectDetail />
+        <Routes>
+          <Route path="/projects/:projectId" element={<ProjectDetail />} />
+        </Routes>
       </MemoryRouter>,
     )
 
@@ -61,7 +74,9 @@ describe('ProjectDetail', () => {
 
     render(
       <MemoryRouter initialEntries={['/projects/1']}>
-        <ProjectDetail />
+        <Routes>
+          <Route path="/projects/:projectId" element={<ProjectDetail />} />
+        </Routes>
       </MemoryRouter>,
     )
 
@@ -77,7 +92,9 @@ describe('ProjectDetail', () => {
 
     render(
       <MemoryRouter initialEntries={['/projects/1']}>
-        <ProjectDetail />
+        <Routes>
+          <Route path="/projects/:projectId" element={<ProjectDetail />} />
+        </Routes>
       </MemoryRouter>,
     )
 
@@ -94,6 +111,38 @@ describe('ProjectDetail', () => {
 
     await waitFor(() => {
       expect(screen.getAllByText(/确认删除/).length).toBeGreaterThan(0)
+    })
+  })
+
+  it('calls parseProject and createDraft on parse click', async () => {
+    const user = userEvent.setup()
+    vi.mocked(intakeApi.getProject)
+      .mockResolvedValueOnce(mockProject)           // initial load
+      .mockResolvedValueOnce({ ...mockProject })     // parse checks for draft
+    vi.mocked(intakeApi.listAssets).mockResolvedValue(mockAssets)
+    vi.mocked(parsingApi.parseProject).mockResolvedValue({ parsed_contents: [] })
+    vi.mocked(workbenchApi.createDraft).mockResolvedValue({
+      id: 99, project_id: 1, html_content: '', updated_at: '2026-04-28T00:00:00Z',
+    })
+
+    render(
+      <MemoryRouter initialEntries={['/projects/1']}>
+        <Routes>
+          <Route path="/projects/:projectId" element={<ProjectDetail />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('前端工程师简历')).toBeInTheDocument()
+    })
+
+    const parseBtn = screen.getByText('下一步：开始解析')
+    await user.click(parseBtn)
+
+    await waitFor(() => {
+      expect(parsingApi.parseProject).toHaveBeenCalledWith(1)
+      expect(workbenchApi.createDraft).toHaveBeenCalledWith(1)
     })
   })
 })

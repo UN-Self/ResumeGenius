@@ -1,27 +1,37 @@
-import { useEffect, useState, useCallback } from 'react'
-import { useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 import TextAlign from '@tiptap/extension-text-align'
-import { WorkbenchLayout } from '@/components/editor/WorkbenchLayout'
 import { A4Canvas } from '@/components/editor/A4Canvas'
+import { ActionBar } from '@/components/editor/ActionBar'
 import { FormatToolbar } from '@/components/editor/FormatToolbar'
 import { SaveIndicator } from '@/components/editor/SaveIndicator'
-import { EditorErrorState } from '@/components/editor/EditorErrorState'
-import { EditorEmptyState } from '@/components/editor/EditorEmptyState'
-import { EditorSkeleton } from '@/components/editor/EditorSkeleton'
-import { request, intakeApi, workbenchApi } from '@/lib/api-client'
+import { AiPanelPlaceholder } from '@/components/editor/AiPanelPlaceholder'
+import ParsedSidebar from '@/components/intake/ParsedSidebar'
+import { request, intakeApi, parsingApi, ApiError, type ParsedContent } from '@/lib/api-client'
 import { useAutoSave } from '@/hooks/useAutoSave'
-import type { Draft, EditorState } from '@/types/editor'
+import type { Draft } from '@/types/editor'
+
 
 export default function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
-  const [draftId, setDraftId] = useState<string | null>(null)
-  const [state, setState] = useState<EditorState>('loading')
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [creating, setCreating] = useState(false)
+  const navigate = useNavigate()
+  const pid = Number(projectId)
 
+  // Route guard + data loading
+  const [draftId, setDraftId] = useState<string | null>(null)
+  const [projectTitle, setProjectTitle] = useState('')
+  const [parsedContents, setParsedContents] = useState<ParsedContent[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Panel collapse state — both open by default, user can collapse manually
+  const [leftOpen, setLeftOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(true)
+
+  // TipTap editor
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -37,59 +47,7 @@ export default function EditorPage() {
     },
   })
 
-  // Step 1: Load project to get current_draft_id
-  const loadProject = useCallback(() => {
-    if (!projectId) {
-      setErrorMessage('Missing project ID')
-      setState('error')
-      return
-    }
-
-    setDraftId(null)
-    setState('loading')
-    setErrorMessage(null)
-
-    intakeApi
-      .getProject(Number(projectId))
-      .then((project) => {
-        if (project.current_draft_id) {
-          setDraftId(String(project.current_draft_id))
-        } else {
-          setState('empty')
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to load project:', err)
-        setErrorMessage(err instanceof Error ? err.message : 'Failed to load project')
-        setState('error')
-      })
-  }, [projectId])
-
-  const createAndLoadDraft = useCallback(() => {
-    if (!projectId || draftId) return
-
-    setCreating(true)
-    setState('loading')
-    workbenchApi
-      .createDraft(Number(projectId))
-      .then((draft) => {
-        setDraftId(String(draft.id))
-      })
-      .catch((err) => {
-        console.error('Failed to create draft:', err)
-        setErrorMessage(err instanceof Error ? err.message : 'Failed to create draft')
-        setState('error')
-      })
-      .finally(() => {
-        setCreating(false)
-      })
-  }, [projectId, draftId])
-
-  useEffect(() => {
-    loadProject()
-  }, [loadProject])
-
-  // Auto-save hook (no-op when draftId is null)
+  // Auto-save
   const { scheduleSave, flush, retry, status, lastSavedAt } = useAutoSave({
     save: async (html: string) => {
       if (draftId) {
@@ -99,89 +57,160 @@ export default function EditorPage() {
     saveUrl: draftId ? `/api/v1/drafts/${draftId}` : undefined,
   })
 
-  // Connect editor onUpdate to autosave
+  // Load project (route guard) + draft + parsed contents
   useEffect(() => {
-    if (!editor) return
+    if (!projectId) return
 
-    const handleUpdate = () => {
-      scheduleSave(editor.getHTML())
-    }
+    let cancelled = false
 
-    editor.on('update', handleUpdate)
-    return () => {
-      editor.off('update', handleUpdate)
-    }
-  }, [editor, scheduleSave])
+    intakeApi.getProject(pid)
+      .then((project) => {
+        if (cancelled) return
 
-  // Cleanup: flush pending saves on unmount
-  useEffect(() => {
-    return () => {
-      flush()
-    }
-  }, [flush])
-
-  // Step 2: Load draft content when draftId is available
-  const loadDraft = useCallback(() => {
-    if (!draftId) return
-
-    setState('loading')
-    request<Draft>(`/drafts/${draftId}`)
-      .then((data) => {
-        if (editor && data.html_content) {
-          editor.commands.setContent(data.html_content)
+        // Route guard: redirect if no draft
+        if (!project.current_draft_id) {
+          navigate(`/projects/${pid}`, { replace: true })
+          return
         }
-        // Empty drafts also enter ready state so user can edit
-        setState('ready')
+
+        setProjectTitle(project.title)
+        setDraftId(String(project.current_draft_id))
+
+        // Load draft content
+        return request<Draft>(`/drafts/${project.current_draft_id}`)
+      })
+      .then((draft) => {
+        if (cancelled || !draft) return
+        if (editor) {
+          editor.commands.setContent(draft.html_content || '')
+        }
+
+        // Load parsed contents for left panel
+        return parsingApi.parseProject(pid).catch(() => {
+          // Non-blocking: empty sidebar if parsing fails
+        })
+      })
+      .then((result) => {
+        if (cancelled || !result) return
+        setParsedContents(result.parsed_contents)
       })
       .catch((err) => {
-        console.error('Failed to load draft:', err)
-        setErrorMessage(err instanceof Error ? err.message : 'Failed to load draft')
-        setState('error')
+        if (cancelled) return
+        setError(err instanceof ApiError ? err.message : '加载失败')
       })
-  }, [editor, draftId])
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
 
+    return () => { cancelled = true }
+  }, [projectId])
+
+  // Connect editor to autosave
   useEffect(() => {
-    loadDraft()
-  }, [loadDraft])
+    if (!editor) return
+    const handleUpdate = () => scheduleSave(editor.getHTML())
+    editor.on('update', handleUpdate)
+    return () => { editor.off('update', handleUpdate) }
+  }, [editor, scheduleSave])
 
-  const renderContent = () => {
-    switch (state) {
-      case 'loading':
-        return (
-          <A4Canvas>
-            <EditorSkeleton />
-          </A4Canvas>
-        )
-      case 'empty':
-        return (
-          <A4Canvas>
-            <EditorEmptyState onCreateDraft={createAndLoadDraft} loading={creating} />
-          </A4Canvas>
-        )
-      case 'ready':
-        return <A4Canvas editor={editor} />
-      case 'error':
-        return (
-          <A4Canvas>
-            <EditorErrorState
-              message="加载失败"
-              detail={errorMessage || undefined}
-              onRetry={loadProject}
-            />
-          </A4Canvas>
-        )
-      default:
-        return null
-    }
+  // Flush on unmount
+  useEffect(() => { return () => { flush() } }, [flush])
+
+  if (loading) {
+    return (
+      <div className="h-screen bg-[var(--color-page-bg)] flex items-center justify-center">
+        <p className="text-[var(--color-text-secondary)] text-sm">加载中...</p>
+      </div>
+    )
   }
 
+  if (error) {
+    return (
+      <div className="h-screen bg-[var(--color-page-bg)] flex items-center justify-center">
+        <p className="text-red-500 text-sm">{error}</p>
+      </div>
+    )
+  }
+
+  const gridClass = [
+    'editor-workspace',
+    leftOpen ? 'left-open' : 'left-collapsed',
+    rightOpen ? 'right-open' : 'right-collapsed',
+  ].join(' ')
+
   return (
-    <WorkbenchLayout
-      projectName={`Project ${projectId}`}
-      toolbar={editor ? <FormatToolbar editor={editor} /> : null}
-      saveIndicator={<SaveIndicator status={status} lastSavedAt={lastSavedAt} onRetry={retry} />}
-    >
-      {renderContent()}
-    </WorkbenchLayout>
+    <div className={gridClass}>
+      {/* Left Panel — Parsed Sidebar */}
+      <div className="editor-panel-left">
+        <div className="panel-header">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
+            素材
+          </h2>
+          <button
+            onClick={() => setLeftOpen(false)}
+            className="panel-collapse-btn"
+            aria-label="收起左面板"
+          >
+            ‹
+          </button>
+        </div>
+        <div className="panel-body">
+          <ParsedSidebar contents={parsedContents} />
+        </div>
+      </div>
+
+      {/* Center — A4 Canvas */}
+      <div className="editor-panel-center">
+        {!leftOpen && (
+          <button
+            onClick={() => setLeftOpen(true)}
+            className="panel-expand-btn panel-expand-left"
+            aria-label="展开左面板"
+          >
+            ›
+          </button>
+        )}
+        {!rightOpen && (
+          <button
+            onClick={() => setRightOpen(true)}
+            className="panel-expand-btn panel-expand-right"
+            aria-label="展开右面板"
+          >
+            ‹
+          </button>
+        )}
+        <div className="flex flex-col h-full">
+          <ActionBar
+            projectName={projectTitle}
+            saveIndicator={<SaveIndicator status={status} lastSavedAt={lastSavedAt} onRetry={retry} />}
+          />
+          <div className="flex-1 overflow-auto">
+            <A4Canvas editor={editor} />
+          </div>
+          <div className="format-toolbar">
+            <FormatToolbar editor={editor} />
+          </div>
+        </div>
+      </div>
+
+      {/* Right Panel — AI */}
+      <div className="editor-panel-right">
+        <div className="panel-header">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
+            AI 助手
+          </h2>
+          <button
+            onClick={() => setRightOpen(false)}
+            className="panel-collapse-btn"
+            aria-label="收起右面板"
+          >
+            ›
+          </button>
+        </div>
+        <div className="panel-body">
+          <AiPanelPlaceholder />
+        </div>
+      </div>
+    </div>
   )
 }

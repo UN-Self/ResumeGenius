@@ -1,20 +1,5 @@
-/* Workbench Editor Layout Styles */
-
-.workbench-layout {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  grid-template-columns: 1fr 360px;
-  grid-template-areas:
-    "action-bar  action-bar"
-    "canvas      ai-panel"
-    "toolbar     toolbar";
-  height: 100vh;
-  background: #f8f9fa;
-}
-
 /* Action Bar (顶部栏) */
 .action-bar {
-  grid-area: action-bar;
   height: 56px;
   background: #ffffff;
   border-bottom: 1px solid #dadce0;
@@ -26,32 +11,17 @@
 
 /* Canvas Area */
 .canvas-area {
-  grid-area: canvas;
   overflow: auto;
   padding: 24px;
   display: flex;
   justify-content: center;
-  align-items: flex-start;
-}
-
-/* A4 Canvas */
-.a4-canvas {
-  width: 210mm;
-  min-height: 297mm;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  padding: 18mm 20mm;
-  margin: 0 auto;
-  transform: scale(var(--canvas-zoom, 0.75));
-  transform-origin: top center;
+  align-items: safe center;
 }
 
 /* AI Panel */
 .ai-panel {
-  grid-area: ai-panel;
-  width: 360px;
+  width: 100%;
   background: #ffffff;
-  border-left: 1px solid #dadce0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -62,7 +32,6 @@
 
 /* Format Toolbar */
 .format-toolbar {
-  grid-area: toolbar;
   background: #ffffff;
   border-top: 1px solid #dadce0;
   padding: 8px 16px;
@@ -102,64 +71,6 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-/* === Project Workspace — Three-phase grid layout === */
-.workspace {
-  display: grid;
-  height: 100vh;
-  transition: grid-template-columns 300ms ease-in-out;
-}
-
-.workspace.phase-intake {
-  grid-template-columns: 1fr 0 0;
-}
-
-.workspace.phase-parsing,
-.workspace.phase-editing {
-  grid-template-columns: 320px 1fr 360px;
-}
-
-.workspace .panel-left {
-  background: var(--color-card);
-  overflow-y: auto;
-}
-
-.workspace .panel-center {
-  background: var(--color-page-bg);
-  overflow: auto;
-  padding: 24px;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  opacity: 0;
-  transition: opacity 400ms ease-in-out 150ms;
-}
-
-.workspace .panel-right {
-  background: var(--color-card);
-  border-left: 1px solid var(--color-divider);
-  overflow-y: auto;
-  opacity: 0;
-  transition: opacity 400ms ease-in-out 200ms;
-}
-
-.workspace.phase-parsing .panel-center,
-.workspace.phase-parsing .panel-right,
-.workspace.phase-editing .panel-center,
-.workspace.phase-editing .panel-right {
-  opacity: 1;
-}
-
-.workspace.phase-editing .panel-center {
-  padding: 0;
-  justify-content: stretch;
-  align-items: stretch;
-}
-
-.workspace .panel-right .ai-panel {
-  border-left: none;
-  width: 100%;
 }
 
 /* Shimmer skeleton */
@@ -252,3 +163,143 @@
   --color-text-secondary: #5f6368;
   --color-text-disabled: #9aa0a6;
 }
+
+/* === Editor Workspace — Three-Column Collapsible Layout === */
+.editor-workspace {
+  display: grid;
+  height: 100vh;
+  background: var(--color-page-bg);
+  transition: grid-template-columns 300ms ease-in-out;
+}
+
+/* Panel States — proportional with minimum widths */
+.editor-workspace.left-open.right-open {
+  grid-template-columns: minmax(200px, 2.5fr) minmax(300px, 5fr) minmax(220px, 2.5fr);
+}
+
+.editor-workspace.left-collapsed.right-open {
+  grid-template-columns: 0 minmax(300px, 5fr) minmax(220px, 2fr);
+}
+
+.editor-workspace.left-open.right-collapsed {
+  grid-template-columns: minmax(200px, 2fr) minmax(300px, 5fr) 0;
+}
+
+.editor-workspace.left-collapsed.right-collapsed {
+  grid-template-columns: 0 1fr 0;
+}
+
+/* Left Panel */
+.editor-panel-left {
+  background: var(--color-card);
+  border-right: 1px solid var(--color-divider);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width 300ms ease-in-out;
+}
+
+.editor-workspace.left-collapsed .editor-panel-left {
+  width: 0;
+  border-right: none;
+}
+
+/* Center Panel */
+.editor-panel-center {
+  position: relative;
+  background: var(--color-page-bg);
+  overflow: hidden;
+}
+
+/* Right Panel */
+.editor-panel-right {
+  background: var(--color-card);
+  border-left: 1px solid var(--color-divider);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width 300ms ease-in-out;
+}
+
+.editor-workspace.right-collapsed .editor-panel-right {
+  width: 0;
+  border-left: none;
+}
+
+/* Panel Header */
+.panel-header {
+  height: 48px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-divider);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-card);
+}
+
+.panel-collapse-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: background 150ms, color 150ms;
+}
+
+.panel-collapse-btn:hover {
+  background: var(--color-page-bg);
+  color: var(--color-text-main);
+}
+
+.panel-collapse-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Panel Body */
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Expand Buttons (shown when panels are collapsed) */
+.panel-expand-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  background: var(--color-card);
+  border: 1px solid var(--color-divider);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  padding: 8px 6px;
+  font-size: 18px;
+  line-height: 1;
+  border-radius: 0 4px 4px 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: background 150ms, color 150ms, box-shadow 150ms;
+}
+
+.panel-expand-btn:hover {
+  background: var(--color-page-bg);
+  color: var(--color-text-main);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.panel-expand-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.panel-expand-left {
+  left: 0;
+}
+
+.panel-expand-right {
+  right: 0;
+  border-radius: 4px 0 0 4px;
+}
+
