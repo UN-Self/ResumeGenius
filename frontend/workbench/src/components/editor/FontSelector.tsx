@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { type Editor } from '@tiptap/react'
 import { ChevronDown } from 'lucide-react'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { DropdownTrigger, DropdownItem } from '@/components/ui/dropdown'
 
 const FONTS = [
   { label: '默认字体', value: '' },
@@ -53,32 +54,24 @@ export function FontSelector({ editor }: FontSelectorProps) {
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="flex items-center gap-1 px-2 min-h-[44px] rounded-md text-sm text-muted-foreground hover:bg-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
-        >
+        <DropdownTrigger>
           <span>{currentFontLabel}</span>
           <ChevronDown className="w-4 h-4" />
-        </button>
+        </DropdownTrigger>
       </PopoverTrigger>
       <PopoverContent side="top" className="w-48 p-1">
         <div className="flex flex-col">
           {FONTS.map((font) => {
             const isActive = currentFont === font.value || (!currentFont && font.value === '')
             return (
-              <button
+              <DropdownItem
                 key={font.value}
-                type="button"
+                active={isActive}
                 onClick={() => handleFontSelect(font.value)}
-                className={`px-3 py-2 text-sm text-left rounded-md transition-colors ${
-                  isActive
-                    ? 'bg-primary-50 text-primary'
-                    : 'text-muted-foreground hover:bg-surface-hover'
-                }`}
                 style={{ fontFamily: font.value || undefined }}
               >
                 {font.label}
-              </button>
+              </DropdownItem>
             )
           })}
         </div>

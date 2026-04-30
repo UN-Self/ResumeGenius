@@ -10,6 +10,9 @@ import UploadDialog from '@/components/intake/UploadDialog'
 import GitRepoDialog from '@/components/intake/GitRepoDialog'
 import NoteDialog from '@/components/intake/NoteDialog'
 import { useProjectData } from '@/hooks/useProjectData'
+import { Button } from '@/components/ui/button'
+import { Alert } from '@/components/ui/alert'
+import { FullPageState } from '@/components/ui/full-page-state'
 
 export default function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -106,19 +109,11 @@ export default function ProjectDetail() {
 
   // --- Loading / error states ---
   if (loading) {
-    return (
-      <div className="h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground text-sm">加载中...</p>
-      </div>
-    )
+    return <FullPageState variant="loading" />
   }
 
   if (!project) {
-    return (
-      <div className="h-screen bg-background flex items-center justify-center">
-        <p className="text-red-500 text-sm">{error || '项目不存在'}</p>
-      </div>
-    )
+    return <FullPageState variant="error" message={error || '项目不存在'} />
   }
 
   // --- Intake content (rendered inside left panel) ---
@@ -136,49 +131,50 @@ export default function ProjectDetail() {
             {project.title}
           </h1>
         </div>
-        <button
+        <Button
+          variant="danger"
+          size="sm"
+          className="shrink-0 ml-4"
           onClick={() => setDeleteTarget({ type: 'project', id: pid })}
-          className="shrink-0 ml-4 text-xs text-muted-foreground hover:text-red-500 px-3 py-1.5 rounded-lg border border-border hover:border-red-300 transition-colors"
         >
           删除项目
-        </button>
+        </Button>
       </div>
 
       {error && (
-        <div className="mb-4 px-4 py-2.5 text-sm rounded-lg bg-red-50 text-red-600 border border-red-200">
-          {error}
-        </div>
+        <Alert className="mb-4">{error}</Alert>
       )}
       {parseError && (
-        <div className="mb-4 px-4 py-2.5 text-sm rounded-lg bg-red-50 text-red-600 border border-red-200">
-          解析失败：{parseError}
-        </div>
+        <Alert className="mb-4">解析失败：{parseError}</Alert>
       )}
       {deleteError && (
-        <div className="mb-4 px-4 py-2.5 text-sm rounded-lg bg-red-50 text-red-600 border border-red-200">
-          删除失败：{deleteError}
-        </div>
+        <Alert className="mb-4">删除失败：{deleteError}</Alert>
       )}
 
       <div className="flex gap-2 mb-5">
-        <button
+        <Button
+          size="md"
+          className="h-9"
           onClick={() => setUploadOpen(true)}
-          className="h-9 px-4 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-500 transition-colors"
         >
           上传文件
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="secondary"
+          size="md"
+          className="h-9"
           onClick={() => setGitOpen(true)}
-          className="h-9 px-4 text-sm font-medium rounded-lg border border-border bg-white text-foreground hover:bg-gray-50 transition-colors"
         >
           接入 Git
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="secondary"
+          size="md"
+          className="h-9"
           onClick={() => { setEditingNote(null); setNoteOpen(true) }}
-          className="h-9 px-4 text-sm font-medium rounded-lg border border-border bg-white text-foreground hover:bg-gray-50 transition-colors"
         >
           添加备注
-        </button>
+        </Button>
       </div>
 
       <AssetList
@@ -188,13 +184,14 @@ export default function ProjectDetail() {
       />
 
       {assets.length > 0 && (
-        <button
+        <Button
+          size="lg"
+          className="mt-6 w-full h-11"
           onClick={handleParse}
           disabled={parseLoading}
-          className="mt-6 w-full h-11 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-500 transition-colors disabled:pointer-events-none disabled:opacity-50"
         >
           {parseLoading ? '解析中...' : '下一步：开始解析'}
-        </button>
+        </Button>
       )}
 
       <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} onUpload={handleUpload} />

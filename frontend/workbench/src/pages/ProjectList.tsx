@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { intakeApi, ApiError, authApi, type Project } from '@/lib/api-client'
 import ProjectCard from '@/components/intake/ProjectCard'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Alert } from '@/components/ui/alert'
 
 export default function ProjectList() {
   const navigate = useNavigate()
@@ -70,26 +73,24 @@ export default function ProjectList() {
         </div>
 
         <div className="flex gap-2 mb-6">
-          <input
+          <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="输入项目名称，按 Enter 创建"
-            className="flex-1 h-10 px-4 text-sm rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow"
+            className="flex-1"
           />
-          <button
+          <Button
+            size="lg"
             onClick={handleCreate}
             disabled={!title.trim()}
-            className="h-10 px-5 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-500 disabled:pointer-events-none disabled:opacity-50 transition-colors"
           >
             创建
-          </button>
+          </Button>
         </div>
 
         {error && (
-          <div className="mb-4 px-4 py-2.5 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/20">
-            {error}
-          </div>
+          <Alert className="mb-4">{error}</Alert>
         )}
 
         {loading ? (

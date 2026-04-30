@@ -1,4 +1,6 @@
 import { useState, useRef, useCallback } from 'react'
+import { Modal, ModalHeader, ModalFooter } from '@/components/ui/modal'
+import { Button } from '@/components/ui/button'
 
 const MAX_SIZE = 20 * 1024 * 1024
 const ALLOWED = ['.pdf', '.docx', '.png', '.jpg', '.jpeg']
@@ -80,69 +82,57 @@ export default function UploadDialog({ open, onClose, onUpload }: UploadDialogPr
     onClose()
   }
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/40" onClick={handleClose} />
-      <div className="relative bg-card rounded-lg border border-border shadow-lg p-6 w-full max-w-md mx-4">
-        <h3 className="text-base font-serif font-semibold text-foreground">上传文件</h3>
-        <p className="text-xs text-muted-foreground mt-1">支持 PDF、DOCX、PNG、JPG，最大 20MB</p>
+    <Modal open={open} onClose={handleClose}>
+      <ModalHeader>上传文件</ModalHeader>
+      <p className="text-xs text-muted-foreground mt-1">支持 PDF、DOCX、PNG、JPG，最大 20MB</p>
 
-        <div
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onClick={() => inputRef.current?.click()}
-          className={`mt-4 border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-            dragging
-              ? 'border-primary bg-accent'
-              : file
-                ? 'border-primary/50 bg-accent/50'
-                : 'border-border hover:border-primary/50'
-          }`}
-        >
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".pdf,.docx,.png,.jpg,.jpeg"
-            className="hidden"
-            onChange={handleInputChange}
-          />
-          {file ? (
-            <div>
-              <p className="text-sm font-medium text-foreground">{file.name}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {(file.size / 1024).toFixed(1)} KB
-              </p>
-            </div>
-          ) : (
-            <div>
-              <p className="text-sm text-muted-foreground">拖拽文件到此处，或点击选择</p>
-            </div>
-          )}
-        </div>
-
-        {error && (
-          <p className="text-xs text-destructive mt-2">{error}</p>
+      <div
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onClick={() => inputRef.current?.click()}
+        className={`mt-4 border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+          dragging
+            ? 'border-primary bg-accent'
+            : file
+              ? 'border-primary/50 bg-accent/50'
+              : 'border-border hover:border-primary/50'
+        }`}
+      >
+        <input
+          ref={inputRef}
+          type="file"
+          accept=".pdf,.docx,.png,.jpg,.jpeg"
+          className="hidden"
+          onChange={handleInputChange}
+        />
+        {file ? (
+          <div>
+            <p className="text-sm font-medium text-foreground">{file.name}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {(file.size / 1024).toFixed(1)} KB
+            </p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm text-muted-foreground">拖拽文件到此处，或点击选择</p>
+          </div>
         )}
-
-        <div className="flex justify-end gap-2 mt-5">
-          <button
-            onClick={handleClose}
-            className="px-4 py-2 text-sm rounded-lg border border-border bg-white text-foreground hover:bg-gray-50 transition-colors"
-          >
-            取消
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!file || uploading}
-            className="px-4 py-2 text-sm rounded-lg bg-primary text-white hover:bg-primary-500 disabled:pointer-events-none disabled:opacity-50 transition-colors"
-          >
-            {uploading ? '上传中...' : '上传'}
-          </button>
-        </div>
       </div>
-    </div>
+
+      {error && (
+        <p className="text-xs text-destructive mt-2">{error}</p>
+      )}
+
+      <ModalFooter>
+        <Button variant="secondary" onClick={handleClose}>
+          取消
+        </Button>
+        <Button onClick={handleSubmit} disabled={!file || uploading}>
+          {uploading ? '上传中...' : '上传'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }

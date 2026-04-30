@@ -13,6 +13,7 @@ import ParsedSidebar from '@/components/intake/ParsedSidebar'
 import { request, intakeApi, parsingApi, ApiError, type ParsedContent } from '@/lib/api-client'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useExport } from '@/hooks/useExport'
+import { FullPageState } from '@/components/ui/full-page-state'
 import type { Draft } from '@/types/editor'
 
 
@@ -145,19 +146,11 @@ export default function EditorPage() {
   useEffect(() => { return () => { flush() } }, [flush])
 
   if (loading) {
-    return (
-      <div className="h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground text-sm">加载中...</p>
-      </div>
-    )
+    return <FullPageState variant="loading" />
   }
 
   if (error) {
-    return (
-      <div className="h-screen bg-background flex items-center justify-center">
-        <p className="text-red-500 text-sm">{error}</p>
-      </div>
-    )
+    return <FullPageState variant="error" message={error!} />
   }
 
   const gridClass = [

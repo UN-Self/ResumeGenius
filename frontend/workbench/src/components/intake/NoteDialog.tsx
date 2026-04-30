@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react'
 import type { Asset } from '@/lib/api-client'
+import { Modal, ModalHeader, ModalFooter } from '@/components/ui/modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 
 interface NoteDialogProps {
   open: boolean
@@ -40,53 +44,41 @@ export default function NoteDialog({ open, onClose, onSubmit, initialNote }: Not
     }
   }
 
-  if (!open) return null
-
   const isEdit = !!initialNote
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-card rounded-lg border border-border shadow-lg p-6 w-full max-w-md mx-4">
-        <h3 className="text-base font-serif font-semibold text-foreground">
-          {isEdit ? '编辑备注' : '添加备注'}
-        </h3>
+    <Modal open={open} onClose={onClose}>
+      <ModalHeader>
+        {isEdit ? '编辑备注' : '添加备注'}
+      </ModalHeader>
 
-        <input
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="标签（可选）"
-          className="mt-4 w-full h-10 px-4 text-sm rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow"
-        />
+      <Input
+        value={label}
+        onChange={(e) => setLabel(e.target.value)}
+        placeholder="标签（可选）"
+        className="mt-4"
+      />
 
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="输入备注内容..."
-          rows={4}
-          className="mt-3 w-full px-4 py-3 text-sm rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow resize-none"
-        />
+      <Textarea
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        placeholder="输入备注内容..."
+        rows={4}
+        className="mt-3"
+      />
 
-        {error && (
-          <p className="text-xs text-destructive mt-2">{error}</p>
-        )}
+      {error && (
+        <p className="text-xs text-destructive mt-2">{error}</p>
+      )}
 
-        <div className="flex justify-end gap-2 mt-5">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm rounded-lg border border-border bg-white text-foreground hover:bg-gray-50 transition-colors"
-          >
-            取消
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!content.trim() || submitting}
-            className="px-4 py-2 text-sm rounded-lg bg-primary text-white hover:bg-primary-500 disabled:pointer-events-none disabled:opacity-50 transition-colors"
-          >
-            {submitting ? '保存中...' : isEdit ? '保存' : '添加'}
-          </button>
-        </div>
-      </div>
-    </div>
+      <ModalFooter>
+        <Button variant="secondary" onClick={onClose}>
+          取消
+        </Button>
+        <Button onClick={handleSubmit} disabled={!content.trim() || submitting}>
+          {submitting ? '保存中...' : isEdit ? '保存' : '添加'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }

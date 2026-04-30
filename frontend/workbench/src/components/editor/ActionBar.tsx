@@ -1,5 +1,6 @@
 import { FileText } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { Button } from '@/components/ui/button'
 import type { ExportStatus } from '@/hooks/useExport'
 
 interface ActionBarProps {
@@ -44,22 +45,19 @@ export function ActionBar({
       </div>
 
       {/* Version History Button */}
-      <button
-        type="button"
-        className="px-3 py-1.5 text-sm font-medium rounded-lg border border-border bg-white text-foreground hover:bg-gray-50 transition-colors cursor-pointer"
-      >
+      <Button variant="secondary" size="sm" type="button">
         版本历史
-      </button>
+      </Button>
 
       {/* Export Button */}
-      <button
+      <Button
+        size="sm"
         type="button"
         disabled={!draftId || exportStatus === 'exporting'}
         onClick={onExport}
-        className="px-3 py-1.5 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-500 disabled:pointer-events-none disabled:opacity-50 transition-colors cursor-pointer"
       >
         {EXPORT_LABEL[exportStatus]}
-      </button>
+      </Button>
     </div>
   )
 }

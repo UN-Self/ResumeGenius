@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { Modal, ModalHeader, ModalFooter } from '@/components/ui/modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 interface GitRepoDialogProps {
   open: boolean
@@ -36,43 +39,31 @@ export default function GitRepoDialog({ open, onClose, onSubmit }: GitRepoDialog
     onClose()
   }
 
-  if (!open) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/40" onClick={handleClose} />
-      <div className="relative bg-card rounded-lg border border-border shadow-lg p-6 w-full max-w-md mx-4">
-        <h3 className="text-base font-serif font-semibold text-foreground">接入 Git 仓库</h3>
-        <p className="text-xs text-muted-foreground mt-1">输入 GitHub / GitLab 仓库的 HTTPS 地址</p>
+    <Modal open={open} onClose={handleClose}>
+      <ModalHeader>接入 Git 仓库</ModalHeader>
+      <p className="text-xs text-muted-foreground mt-1">输入 GitHub / GitLab 仓库的 HTTPS 地址</p>
 
-        <input
-          value={repoUrl}
-          onChange={(e) => setRepoUrl(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-          placeholder="https://github.com/user/repo"
-          className="mt-4 w-full h-10 px-4 text-sm rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow"
-        />
+      <Input
+        value={repoUrl}
+        onChange={(e) => setRepoUrl(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+        placeholder="https://github.com/user/repo"
+        className="mt-4"
+      />
 
-        {error && (
-          <p className="text-xs text-destructive mt-2">{error}</p>
-        )}
+      {error && (
+        <p className="text-xs text-destructive mt-2">{error}</p>
+      )}
 
-        <div className="flex justify-end gap-2 mt-5">
-          <button
-            onClick={handleClose}
-            className="px-4 py-2 text-sm rounded-lg border border-border bg-white text-foreground hover:bg-gray-50 transition-colors"
-          >
-            取消
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!repoUrl.trim() || submitting}
-            className="px-4 py-2 text-sm rounded-lg bg-primary text-white hover:bg-primary-500 disabled:pointer-events-none disabled:opacity-50 transition-colors"
-          >
-            {submitting ? '接入中...' : '接入'}
-          </button>
-        </div>
-      </div>
-    </div>
+      <ModalFooter>
+        <Button variant="secondary" onClick={handleClose}>
+          取消
+        </Button>
+        <Button onClick={handleSubmit} disabled={!repoUrl.trim() || submitting}>
+          {submitting ? '接入中...' : '接入'}
+        </Button>
+      </ModalFooter>
+    </Modal>
   )
 }

@@ -1,5 +1,8 @@
 import { useState } from 'react'
 import { ApiError, authApi, type User } from '@/lib/api-client'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Alert } from '@/components/ui/alert'
 
 interface LoginPageProps {
   onSuccess: (user: User) => void
@@ -33,34 +36,33 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
         <p className="text-sm text-muted-foreground mb-6">输入用户名和密码后继续</p>
 
         <form id="login-form" onSubmit={handleSubmit} className="space-y-3">
-          <input
+          <Input
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="用户名"
-            className="w-full h-10 px-3 text-sm rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="bg-background px-3"
           />
-          <input
+          <Input
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             type="password"
             placeholder="密码（至少 6 位）"
-            className="w-full h-10 px-3 text-sm rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="bg-background px-3"
           />
 
           {error && (
-            <div className="px-3 py-2 text-sm rounded-lg bg-destructive/10 text-destructive border border-destructive/20">
-              {error}
-            </div>
+            <Alert>{error}</Alert>
           )}
 
-          <button
+          <Button
             type="submit"
             form="login-form"
+            size="lg"
+            className="w-full"
             disabled={loading || !username.trim() || !password}
-            className="w-full h-10 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-500 disabled:pointer-events-none disabled:opacity-50 transition-colors"
           >
             {loading ? '登录中...' : '登录'}
-          </button>
+          </Button>
         </form>
       </div>
     </div>

@@ -5,6 +5,7 @@ import ProjectDetail from '@/pages/ProjectDetail'
 import LoginPage from '@/pages/LoginPage'
 import EditorPage from '@/pages/EditorPage'
 import { authApi } from '@/lib/api-client'
+import { FullPageState } from '@/components/ui/full-page-state'
 
 type AuthState = 'checking' | 'authed' | 'guest'
 
@@ -29,11 +30,7 @@ export default function App() {
   }, [])
 
   if (authState === 'checking') {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground text-sm">加载中...</p>
-      </div>
-    )
+    return <FullPageState variant="loading" className="min-h-screen" />
   }
 
   return (

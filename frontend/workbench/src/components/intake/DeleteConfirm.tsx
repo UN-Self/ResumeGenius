@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/modal'
+import { Button } from '@/components/ui/button'
 
 interface DeleteConfirmProps {
   title: string
@@ -12,8 +14,6 @@ interface DeleteConfirmProps {
 export default function DeleteConfirm({ title, message, open, onConfirm, onCancel, loading }: DeleteConfirmProps) {
   const [confirming, setConfirming] = useState(false)
 
-  if (!open) return null
-
   const handleConfirm = () => {
     if (!confirming) {
       setConfirming(true)
@@ -23,50 +23,36 @@ export default function DeleteConfirm({ title, message, open, onConfirm, onCance
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/40" onClick={onCancel} />
-      <div className="relative bg-card rounded-lg border border-border shadow-lg p-6 w-full max-w-sm mx-4">
-        <h3 className="text-base font-serif font-semibold text-foreground">{title}</h3>
-        <p className="text-sm text-muted-foreground mt-2">{message}</p>
+    <Modal open={open} onClose={onCancel} maxWidth="max-w-sm">
+      <ModalHeader>{title}</ModalHeader>
+      <ModalBody>
+        <p className="text-sm text-muted-foreground">{message}</p>
+      </ModalBody>
 
-        {!confirming ? (
-          <div className="flex justify-end gap-2 mt-5">
-            <button
-              onClick={onCancel}
-              className="px-4 py-2 text-sm rounded-lg border border-border bg-white text-foreground hover:bg-gray-50 transition-colors"
-            >
+      {!confirming ? (
+        <ModalFooter>
+          <Button variant="secondary" onClick={onCancel}>
+            取消
+          </Button>
+          <Button variant="danger" onClick={handleConfirm}>
+            删除
+          </Button>
+        </ModalFooter>
+      ) : (
+        <div className="mt-5">
+          <p className="text-xs text-destructive font-medium">
+            确定要删除吗？此操作不可撤销。再次点击确认删除。
+          </p>
+          <div className="flex justify-end gap-2 mt-3">
+            <Button variant="secondary" onClick={() => { setConfirming(false); onCancel() }}>
               取消
-            </button>
-            <button
-              onClick={handleConfirm}
-              className="px-4 py-2 text-sm rounded-lg border border-border text-muted-foreground hover:text-red-500 hover:border-red-300 transition-colors"
-            >
-              删除
-            </button>
+            </Button>
+            <Button variant="danger" onClick={handleConfirm} disabled={loading}>
+              {loading ? '删除中...' : '确认删除'}
+            </Button>
           </div>
-        ) : (
-          <div className="mt-5">
-            <p className="text-xs text-destructive font-medium">
-              确定要删除吗？此操作不可撤销。再次点击确认删除。
-            </p>
-            <div className="flex justify-end gap-2 mt-3">
-              <button
-                onClick={() => { setConfirming(false); onCancel() }}
-                className="px-4 py-2 text-sm rounded-lg border border-border bg-white text-foreground hover:bg-gray-50 transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleConfirm}
-                disabled={loading}
-                className="px-4 py-2 text-sm rounded-lg border border-border text-muted-foreground hover:text-red-500 hover:border-red-300 transition-colors disabled:pointer-events-none disabled:opacity-50"
-              >
-                {loading ? '删除中...' : '确认删除'}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </Modal>
   )
 }

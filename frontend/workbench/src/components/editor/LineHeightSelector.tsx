@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { Editor } from '@tiptap/react'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { DropdownTrigger, DropdownItem } from '@/components/ui/dropdown'
 
 const LINE_HEIGHTS = ['1.0', '1.15', '1.5', '1.75', '2.0', '2.5'] as const
 
@@ -37,30 +38,22 @@ export function LineHeightSelector({ editor }: LineHeightSelectorProps) {
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label="行距"
-          className="flex items-center gap-1 px-2 min-h-[44px] rounded-md text-sm text-muted-foreground hover:bg-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-        <span>{currentLineHeight || '—'}</span>
-        <ChevronDown size={16} />
-        </button>
+        <DropdownTrigger aria-label="行距">
+          <span>{currentLineHeight || '—'}</span>
+          <ChevronDown size={16} />
+        </DropdownTrigger>
       </PopoverTrigger>
       <PopoverContent className="w-24 p-1" side="top">
         <div className="flex flex-col">
           {LINE_HEIGHTS.map((height) => (
-            <button
+            <DropdownItem
               key={height}
-              type="button"
+              active={currentLineHeight === height}
               onClick={() => handleLineHeightChange(height)}
-              className={`px-2 py-1 text-sm rounded-md hover:bg-surface-hover transition-colors ${
-                currentLineHeight === height
-                  ? 'bg-primary-50 text-primary'
-                  : 'text-muted-foreground'
-              }`}
+              className="px-2 py-1"
             >
               {height}
-            </button>
+            </DropdownItem>
           ))}
         </div>
       </PopoverContent>

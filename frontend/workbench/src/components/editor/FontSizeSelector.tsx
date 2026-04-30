@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { Editor } from '@tiptap/react'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
+import { DropdownTrigger, DropdownItem } from '@/components/ui/dropdown'
 
 const SIZES = ['10pt', '12pt', '14pt', '16pt', '18pt', '24pt'] as const
 type SizeType = (typeof SIZES)[number]
@@ -41,13 +42,10 @@ export function FontSizeSelector({ editor }: FontSizeSelectorProps) {
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className="flex items-center gap-1 px-2 min-h-[44px] rounded-md text-sm text-muted-foreground hover:bg-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-        <span>{currentSize}</span>
-        <ChevronDown size={16} />
-        </button>
+        <DropdownTrigger>
+          <span>{currentSize}</span>
+          <ChevronDown size={16} />
+        </DropdownTrigger>
       </PopoverTrigger>
       <PopoverContent side="top" className="w-24 p-1">
         <div className="flex flex-col">
@@ -55,17 +53,13 @@ export function FontSizeSelector({ editor }: FontSizeSelectorProps) {
             const sizeNumeric = size.match(/(\d+)/)?.[1] || ''
             const isActive = sizeNumeric === currentSize
             return (
-              <button
+              <DropdownItem
                 key={size}
+                active={isActive}
                 onClick={() => handleSizeSelect(size)}
-                className={`px-3 py-2 text-sm text-left rounded-md transition-colors ${
-                  isActive
-                    ? 'bg-primary-50 text-primary'
-                    : 'text-muted-foreground hover:bg-surface-hover'
-                }`}
               >
                 {size}
-              </button>
+              </DropdownItem>
             )
           })}
         </div>
