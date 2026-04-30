@@ -43,7 +43,7 @@ export function FontSizeSelector({ editor }: FontSizeSelectorProps) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-1 px-2 min-h-[44px] rounded-md text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+          className="flex items-center gap-1 px-2 min-h-[44px] rounded-md text-sm text-muted-foreground hover:bg-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
         >
         <span>{currentSize}</span>
         <ChevronDown size={16} />
@@ -60,8 +60,8 @@ export function FontSizeSelector({ editor }: FontSizeSelectorProps) {
                 onClick={() => handleSizeSelect(size)}
                 className={`px-3 py-2 text-sm text-left rounded-md transition-colors ${
                   isActive
-                    ? 'bg-[var(--color-primary-bg)] text-[var(--color-primary)]'
-                    : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)]'
+                    ? 'bg-primary-50 text-primary'
+                    : 'text-muted-foreground hover:bg-surface-hover'
                 }`}
               >
                 {size}

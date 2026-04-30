@@ -1,6 +1,20 @@
 @import "tailwindcss";
 
 @theme {
+  /* Primary scale */
+  --color-primary-50: #faf6f2;
+  --color-primary-100: #f2e8e0;
+  --color-primary-200: #e5d2c2;
+  --color-primary-300: #d4b99a;
+  --color-primary-400: #c4956a;
+  --color-primary-500: #b3804d;
+  --color-primary-600: #9c6b3a;
+  --color-primary-700: #7d5530;
+  --color-primary-800: #5e4025;
+  --color-primary-900: #3f2b1a;
+  --color-primary-950: #2a1c10;
+
+  /* Semantic colors */
   --color-background: #faf8f5;
   --color-foreground: #1a1815;
   --color-card: #ffffff;
@@ -9,18 +23,27 @@
   --color-popover-foreground: #1a1815;
   --color-primary: #c4956a;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #f0ebe4;
-  --color-secondary-foreground: #3d3831;
-  --color-muted: #f0ebe4;
-  --color-muted-foreground: #78716c;
-  --color-accent: #f0ebe4;
-  --color-accent-foreground: #3d3831;
-  --color-destructive: #ef4444;
+  --color-secondary: #e8d5c4;
+  --color-secondary-foreground: #5c4a3a;
+  --color-muted: #f5f1ed;
+  --color-muted-foreground: #8c8279;
+  --color-accent: #d4a574;
+  --color-accent-foreground: #4a3020;
+  --color-destructive: #d64545;
   --color-destructive-foreground: #ffffff;
-  --color-border: #e7e2db;
-  --color-input: #e7e2db;
+  --color-border: #e4ddd5;
+  --color-input: #e4ddd5;
   --color-ring: #c4956a;
+
+  /* Editor-specific tokens */
+  --color-canvas-bg: #ede8e0;
+  --color-surface-hover: #faf6f2;
+
+  /* Radii */
   --radius: 0.625rem;
+
+  /* Fonts */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }

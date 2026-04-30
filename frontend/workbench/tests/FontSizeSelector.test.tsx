@@ -96,6 +96,6 @@ describe('FontSizeSelector', () => {
     // The 16pt option should have the active styling
     const size16pt = screen.getByText('16pt')
     expect(size16pt).toBeInTheDocument()
-    expect(size16pt).toHaveClass('bg-[var(--color-primary-bg)]', 'text-[var(--color-primary)]')
+    expect(size16pt).toHaveClass('bg-primary-50', 'text-primary')
   })
 })

@@ -18,20 +18,20 @@ export function SaveIndicator({ status, lastSavedAt, onRetry }: SaveIndicatorPro
     <div aria-live="polite" className="flex items-center gap-1 text-xs">
       {status === 'saving' && (
         <>
-          <Loader2 size={14} className="animate-spin text-[#5f6368]" />
-          <span className="text-[#5f6368]">保存中...</span>
+          <Loader2 size={14} className="animate-spin text-muted-foreground" />
+          <span className="text-muted-foreground">保存中...</span>
         </>
       )}
       {status === 'saved' && (
         <>
-          <Check size={14} className="text-[#0d652d]" />
-          <span className="text-[#0d652d]">已保存 {timeStr}</span>
+          <Check size={14} className="text-primary" />
+          <span className="text-primary">已保存 {timeStr}</span>
         </>
       )}
       {status === 'error' && (
         <button
           onClick={onRetry}
-          className="flex items-center gap-1 text-[#c5221f] hover:underline cursor-pointer"
+          className="flex items-center gap-1 text-destructive hover:underline cursor-pointer"
         >
           <AlertCircle size={14} />
           <span>保存失败，点击重试</span>

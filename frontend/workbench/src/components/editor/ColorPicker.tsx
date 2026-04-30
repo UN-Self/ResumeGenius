@@ -75,7 +75,7 @@ export function ColorPicker({ editor }: ColorPickerProps) {
           aria-label="字体颜色"
           aria-haspopup="dialog"
           aria-expanded={open && target === 'font'}
-          className="relative p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+          className="relative p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md text-muted-foreground hover:bg-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <Type size={20} />
           {fontColor && (
@@ -90,7 +90,7 @@ export function ColorPicker({ editor }: ColorPickerProps) {
           aria-label="背景高亮"
           aria-haspopup="dialog"
           aria-expanded={open && target === 'background'}
-          className="relative p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+          className="relative p-2 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-md text-muted-foreground hover:bg-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <Highlighter size={20} />
           {backgroundColor && (
@@ -107,7 +107,7 @@ export function ColorPicker({ editor }: ColorPickerProps) {
               key={color}
               type="button"
               onClick={() => handleColorSelect(color)}
-              className="w-6 h-6 rounded border border-[var(--color-divider)] hover:scale-110 transition-transform"
+              className="w-6 h-6 rounded border border-border hover:scale-110 transition-transform"
               style={{ backgroundColor: color }}
               aria-label={`选择颜色 ${color}`}
             />
@@ -118,12 +118,12 @@ export function ColorPicker({ editor }: ColorPickerProps) {
           <button
             type="button"
             onClick={handleReset}
-            className="text-sm text-[var(--color-text-secondary)] hover:text-[var(--color-text-main)] transition-colors"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             重置
           </button>
 
-          <label className="flex items-center gap-2 text-sm text-[var(--color-text-secondary)] cursor-pointer">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
             自定义
             <input
               type="color"

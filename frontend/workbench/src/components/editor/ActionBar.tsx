@@ -28,12 +28,12 @@ export function ActionBar({
     <div className="action-bar">
       {/* Logo */}
       <div className="flex items-center gap-2">
-        <FileText size={24} className="text-[var(--color-primary)]" />
+        <FileText size={24} className="text-primary" />
       </div>
 
       {/* Project Name */}
-      <div className="h-6 w-px bg-[var(--color-divider)]" />
-      <span className="text-base font-medium text-[var(--color-text-main)]">{projectName}</span>
+      <div className="h-6 w-px bg-border" />
+      <span className="text-base font-medium text-foreground">{projectName}</span>
 
       {/* Spacer */}
       <div className="flex-1" />
@@ -46,7 +46,7 @@ export function ActionBar({
       {/* Version History Button */}
       <button
         type="button"
-        className="px-3 py-1.5 text-sm font-medium text-[var(--color-text-main)] hover:bg-[var(--color-primary-bg)] rounded-md transition-colors cursor-pointer"
+        className="px-3 py-1.5 text-sm font-medium text-foreground hover:bg-primary-50 rounded-md transition-colors cursor-pointer"
       >
         版本历史
       </button>
@@ -56,7 +56,7 @@ export function ActionBar({
         type="button"
         disabled={!draftId || exportStatus === 'exporting'}
         onClick={onExport}
-        className="px-3 py-1.5 text-sm font-medium text-[var(--color-text-main)] bg-[var(--color-page-bg)] border border-[var(--color-divider)] rounded-md disabled:cursor-not-allowed disabled:text-[var(--color-text-disabled)] hover:bg-[var(--color-primary-bg)] transition-colors cursor-pointer"
+        className="px-3 py-1.5 text-sm font-medium text-foreground bg-background border border-border rounded-md disabled:cursor-not-allowed disabled:text-muted-foreground/50 hover:bg-primary-50 transition-colors cursor-pointer"
       >
         {EXPORT_LABEL[exportStatus]}
       </button>

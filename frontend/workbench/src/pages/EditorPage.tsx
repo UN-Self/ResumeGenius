@@ -146,15 +146,15 @@ export default function EditorPage() {
 
   if (loading) {
     return (
-      <div className="h-screen bg-[var(--color-page-bg)] flex items-center justify-center">
-        <p className="text-[var(--color-text-secondary)] text-sm">加载中...</p>
+      <div className="h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground text-sm">加载中...</p>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="h-screen bg-[var(--color-page-bg)] flex items-center justify-center">
+      <div className="h-screen bg-background flex items-center justify-center">
         <p className="text-red-500 text-sm">{error}</p>
       </div>
     )
@@ -171,7 +171,7 @@ export default function EditorPage() {
       {/* Left Panel — Parsed Sidebar */}
       <div className="editor-panel-left">
         <div className="panel-header">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             素材
           </h2>
           <button
@@ -231,7 +231,7 @@ export default function EditorPage() {
       {/* Right Panel — AI */}
       <div className="editor-panel-right">
         <div className="panel-header">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             AI 助手
           </h2>
           <button

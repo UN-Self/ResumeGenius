@@ -2,7 +2,7 @@
 .action-bar {
   height: 56px;
   background: #ffffff;
-  border-bottom: 1px solid #dadce0;
+  border-bottom: 1px solid var(--color-border, #e4ddd5);
   padding: 12px 16px;
   display: flex;
   align-items: center;
@@ -33,7 +33,7 @@
 /* Format Toolbar */
 .format-toolbar {
   background: #ffffff;
-  border-top: 1px solid #dadce0;
+  border-top: 1px solid var(--color-border, #e4ddd5);
   padding: 8px 16px;
   min-height: 48px;
   display: flex;
@@ -43,7 +43,7 @@
 /* Skeleton Loading */
 .skeleton-line {
   height: 12px;
-  background: #e8eaed;
+  background: #d4d0ca;
   border-radius: 4px;
   margin-bottom: 8px;
   animation: pulse 1.5s ease-in-out infinite;
@@ -75,7 +75,7 @@
 
 /* Shimmer skeleton */
 .skeleton {
-  background: linear-gradient(90deg, #e8eaed 25%, #f1f3f4 50%, #e8eaed 75%);
+  background: linear-gradient(90deg, #d4d0ca 25%, #e8e2da 50%, #d4d0ca 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s ease-in-out infinite;
   border-radius: 4px;
@@ -102,7 +102,7 @@
   font-family: "Inter", "Noto Sans SC", -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 14px;
   line-height: 1.5;
-  color: #202124;
+  color: var(--color-foreground, #1a1815);
   outline: none;
   white-space: pre-wrap;
 }
@@ -152,24 +152,11 @@
   display: inline;
 }
 
-/* Design Tokens */
-:root {
-  --color-primary: #1a73e8;
-  --color-primary-hover: #1557b0;
-  --color-primary-bg: #e8f0fe;
-  --color-page-bg: #f8f9fa;
-  --color-card: #ffffff;
-  --color-divider: #dadce0;
-  --color-text-main: #202124;
-  --color-text-secondary: #5f6368;
-  --color-text-disabled: #9aa0a6;
-}
-
 /* === Editor Workspace — Three-Column Collapsible Layout === */
 .editor-workspace {
   display: grid;
   height: 100vh;
-  background: var(--color-page-bg);
+  background: var(--color-background, #faf8f5);
   transition: grid-template-columns 300ms ease-in-out;
 }
 
@@ -192,8 +179,8 @@
 
 /* Left Panel */
 .editor-panel-left {
-  background: var(--color-card);
-  border-right: 1px solid var(--color-divider);
+  background: #ffffff;
+  border-right: 1px solid var(--color-border, #e4ddd5);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -208,14 +195,14 @@
 /* Center Panel */
 .editor-panel-center {
   position: relative;
-  background: var(--color-page-bg);
+  background: var(--color-background, #faf8f5);
   overflow: hidden;
 }
 
 /* Right Panel */
 .editor-panel-right {
-  background: var(--color-card);
-  border-left: 1px solid var(--color-divider);
+  background: #ffffff;
+  border-left: 1px solid var(--color-border, #e4ddd5);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -231,17 +218,17 @@
 .panel-header {
   height: 48px;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--color-divider);
+  border-bottom: 1px solid var(--color-border, #e4ddd5);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--color-card);
+  background: #ffffff;
 }
 
 .panel-collapse-btn {
   background: transparent;
   border: none;
-  color: var(--color-text-secondary);
+  color: #8c8279;
   cursor: pointer;
   padding: 4px 8px;
   font-size: 18px;
@@ -251,12 +238,12 @@
 }
 
 .panel-collapse-btn:hover {
-  background: var(--color-page-bg);
-  color: var(--color-text-main);
+  background: var(--color-background, #faf8f5);
+  color: #1a1815;
 }
 
 .panel-collapse-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--color-primary, #c4956a);
   outline-offset: 2px;
 }
 
@@ -272,9 +259,9 @@
   top: 50%;
   transform: translateY(-50%);
   z-index: 10;
-  background: var(--color-card);
-  border: 1px solid var(--color-divider);
-  color: var(--color-text-secondary);
+  background: #ffffff;
+  border: 1px solid var(--color-border, #e4ddd5);
+  color: #8c8279;
   cursor: pointer;
   padding: 8px 6px;
   font-size: 18px;
@@ -285,13 +272,13 @@
 }
 
 .panel-expand-btn:hover {
-  background: var(--color-page-bg);
-  color: var(--color-text-main);
+  background: var(--color-background, #faf8f5);
+  color: #1a1815;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
 }
 
 .panel-expand-btn:focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--color-primary, #c4956a);
   outline-offset: 2px;
 }
 

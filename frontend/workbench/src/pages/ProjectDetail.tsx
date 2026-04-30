@@ -107,15 +107,15 @@ export default function ProjectDetail() {
   // --- Loading / error states ---
   if (loading) {
     return (
-      <div className="h-screen bg-[var(--color-page-bg)] flex items-center justify-center">
-        <p className="text-[var(--color-text-secondary)] text-sm">加载中...</p>
+      <div className="h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground text-sm">加载中...</p>
       </div>
     )
   }
 
   if (!project) {
     return (
-      <div className="h-screen bg-[var(--color-page-bg)] flex items-center justify-center">
+      <div className="h-screen bg-background flex items-center justify-center">
         <p className="text-red-500 text-sm">{error || '项目不存在'}</p>
       </div>
     )
@@ -128,17 +128,17 @@ export default function ProjectDetail() {
         <div className="min-w-0 flex-1">
           <button
             onClick={() => navigate('/')}
-            className="text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text-main)] transition-colors mb-1"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors mb-1"
           >
             &larr; 返回项目列表
           </button>
-          <h1 className="font-serif text-xl font-semibold text-[var(--color-text-main)] truncate">
+          <h1 className="font-serif text-xl font-semibold text-foreground truncate">
             {project.title}
           </h1>
         </div>
         <button
           onClick={() => setDeleteTarget({ type: 'project', id: pid })}
-          className="shrink-0 ml-4 text-xs text-[var(--color-text-secondary)] hover:text-red-500 px-3 py-1.5 rounded-lg border border-[var(--color-divider)] hover:border-red-300 transition-colors"
+          className="shrink-0 ml-4 text-xs text-muted-foreground hover:text-red-500 px-3 py-1.5 rounded-lg border border-border hover:border-red-300 transition-colors"
         >
           删除项目
         </button>
@@ -163,19 +163,19 @@ export default function ProjectDetail() {
       <div className="flex gap-2 mb-5">
         <button
           onClick={() => setUploadOpen(true)}
-          className="h-9 px-4 text-sm font-medium rounded-lg bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] transition-colors"
+          className="h-9 px-4 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-500 transition-colors"
         >
           上传文件
         </button>
         <button
           onClick={() => setGitOpen(true)}
-          className="h-9 px-4 text-sm font-medium rounded-lg border border-[var(--color-divider)] bg-white text-[var(--color-text-main)] hover:bg-gray-50 transition-colors"
+          className="h-9 px-4 text-sm font-medium rounded-lg border border-border bg-white text-foreground hover:bg-gray-50 transition-colors"
         >
           接入 Git
         </button>
         <button
           onClick={() => { setEditingNote(null); setNoteOpen(true) }}
-          className="h-9 px-4 text-sm font-medium rounded-lg border border-[var(--color-divider)] bg-white text-[var(--color-text-main)] hover:bg-gray-50 transition-colors"
+          className="h-9 px-4 text-sm font-medium rounded-lg border border-border bg-white text-foreground hover:bg-gray-50 transition-colors"
         >
           添加备注
         </button>
@@ -191,7 +191,7 @@ export default function ProjectDetail() {
         <button
           onClick={handleParse}
           disabled={parseLoading}
-          className="mt-6 w-full h-11 text-sm font-medium rounded-lg bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary-hover)] transition-colors disabled:opacity-50"
+          className="mt-6 w-full h-11 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-500 transition-colors disabled:opacity-50"
         >
           {parseLoading ? '解析中...' : '下一步：开始解析'}
         </button>
@@ -219,7 +219,7 @@ export default function ProjectDetail() {
   )
 
   return (
-    <div className="h-screen bg-[var(--color-page-bg)] overflow-y-auto">
+    <div className="h-screen bg-background overflow-y-auto">
       {intakeContent}
     </div>
   )

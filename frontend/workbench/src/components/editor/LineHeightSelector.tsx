@@ -40,7 +40,7 @@ export function LineHeightSelector({ editor }: LineHeightSelectorProps) {
         <button
           type="button"
           aria-label="行高"
-          className="flex items-center gap-1 px-2 min-h-[44px] rounded-md text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+          className="flex items-center gap-1 px-2 min-h-[44px] rounded-md text-sm text-muted-foreground hover:bg-surface-hover transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
         >
         <span>{currentLineHeight || '—'}</span>
         <ChevronDown size={16} />
@@ -52,10 +52,10 @@ export function LineHeightSelector({ editor }: LineHeightSelectorProps) {
             <button
               key={height}
               onClick={() => handleLineHeightChange(height)}
-              className={`px-2 py-1 text-sm rounded hover:bg-[var(--color-page-bg)] transition-colors ${
+              className={`px-2 py-1 text-sm rounded hover:bg-surface-hover transition-colors ${
                 currentLineHeight === height
-                  ? 'bg-[var(--color-primary-bg)] text-[var(--color-primary)]'
-                  : 'text-[var(--color-text-secondary)]'
+                  ? 'bg-primary-50 text-primary'
+                  : 'text-muted-foreground'
               }`}
             >
               {height}

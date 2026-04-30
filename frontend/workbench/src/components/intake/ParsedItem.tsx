@@ -15,11 +15,11 @@ export default function ParsedItem({ content }: ParsedItemProps) {
   const icon = TYPE_ICONS[content.type] || '📄'
 
   return (
-    <div className="rounded-lg bg-[var(--color-page-bg)] p-3">
-      <div className="mb-1.5 text-xs font-medium text-[var(--color-primary)]">
+    <div className="rounded-lg bg-background p-3">
+      <div className="mb-1.5 text-xs font-medium text-primary">
         {icon} {content.label}
       </div>
-      <div className="max-h-48 overflow-y-auto text-[13px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
+      <div className="max-h-48 overflow-y-auto text-[13px] leading-relaxed text-muted-foreground whitespace-pre-wrap">
         {content.text}
       </div>
     </div>

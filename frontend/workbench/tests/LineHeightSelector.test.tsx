@@ -89,7 +89,7 @@ describe('LineHeightSelector', () => {
     const allElements = screen.getAllByText('2.0')
     const buttonOption = allElements.find(el => el.tagName === 'BUTTON')
     expect(buttonOption).toBeInTheDocument()
-    expect(buttonOption).toHaveClass('bg-[var(--color-primary-bg)]', 'text-[var(--color-primary)]')
+    expect(buttonOption).toHaveClass('bg-primary-50', 'text-primary')
   })
 
   it('updates display when line height changes via transaction', async () => {
