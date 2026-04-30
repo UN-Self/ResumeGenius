@@ -43,7 +43,6 @@ const createMockEditor = () => {
     toggleBold: () => ({ run: runMock }),
     toggleItalic: () => ({ run: runMock }),
     toggleUnderline: () => ({ run: runMock }),
-    toggleHeading: () => ({ run: runMock }),
     toggleBulletList: () => ({ run: runMock }),
     toggleOrderedList: () => ({ run: runMock }),
     setTextAlign: () => ({ run: runMock }),
@@ -64,7 +63,6 @@ const createMockEditor = () => {
       if (name === 'bold') return false
       if (name === 'italic') return false
       if (name === 'underline') return false
-      if (name === 'heading') return attrs?.level === 1
       if (name === 'bulletList') return false
       if (name === 'orderedList') return false
       if (name === 'textAlign') {
@@ -150,19 +148,6 @@ describe('FormatToolbar', () => {
     expect(mockEditor.runMock).toHaveBeenCalled()
   })
 
-  it('shows active state for heading 1 when active', () => {
-    const activeEditor = {
-      ...createMockEditor(),
-      isActive: (name: string, attrs?: Record<string, unknown>) => {
-        return name === 'heading' && attrs?.level === 1
-      },
-    }
-    render(<FormatToolbar editor={activeEditor} />)
-
-    const h1Button = screen.getByRole('button', { name: /标题1/i })
-    expect(h1Button).toHaveAttribute('aria-pressed', 'true')
-  })
-
   it('renders all toolbar buttons', () => {
     const mockEditor = createMockEditor()
     render(<FormatToolbar editor={mockEditor} />)
@@ -171,9 +156,6 @@ describe('FormatToolbar', () => {
     expect(screen.getByRole('button', { name: /粗体/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /斜体/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /下划线/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /标题1/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /标题2/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /标题3/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /无序列表/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /有序列表/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /左对齐/i })).toBeInTheDocument()
@@ -230,30 +212,6 @@ function TestToolbarWrapper({ content, onEditor }: { content: string; onEditor?:
 }
 
 describe('FormatToolbar integration (real editor)', () => {
-  it('updates heading active state when heading is toggled', async () => {
-    let editorRef: Editor | null = null
-
-    render(
-      <TestToolbarWrapper
-        content="<p>Hello world</p>"
-        onEditor={(e) => { editorRef = e }}
-      />,
-    )
-
-    // Wait for toolbar to mount
-    await screen.findByRole('button', { name: /标题1/i })
-
-    // Apply H1 heading via editor command
-    act(() => {
-      editorRef!.chain().focus().setTextSelection(1).toggleHeading({ level: 1 }).run()
-    })
-
-    // Toolbar should re-render and show H1 as active
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /标题1/i })).toHaveAttribute('aria-pressed', 'true')
-    })
-  })
-
   it('updates bullet list active state when list is toggled', async () => {
     let editorRef: Editor | null = null
 
@@ -275,34 +233,4 @@ describe('FormatToolbar integration (real editor)', () => {
     })
   })
 
-  it('reflects active state when cursor moves into existing heading', async () => {
-    let editorRef: Editor | null = null
-
-    render(
-      <TestToolbarWrapper
-        content="<h1>Heading Text</h1><p>Normal paragraph</p>"
-        onEditor={(e) => { editorRef = e }}
-      />,
-    )
-
-    const h1Button = await screen.findByRole('button', { name: /标题1/i })
-
-    // Place cursor inside the heading
-    act(() => {
-      editorRef!.chain().focus().setTextSelection(1).run()
-    })
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /标题1/i })).toHaveAttribute('aria-pressed', 'true')
-    })
-
-    // Move cursor into the paragraph
-    act(() => {
-      editorRef!.chain().focus().setTextSelection(20).run()
-    })
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /标题1/i })).toHaveAttribute('aria-pressed', 'false')
-    })
-  })
 })
