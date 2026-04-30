@@ -60,14 +60,14 @@ export default function GitRepoDialog({ open, onClose, onSubmit }: GitRepoDialog
         <div className="flex justify-end gap-2 mt-5">
           <button
             onClick={handleClose}
-            className="px-4 py-2 text-sm rounded-lg border border-border text-foreground hover:bg-primary-50 transition-colors"
+            className="px-4 py-2 text-sm rounded-lg border border-border bg-white text-foreground hover:bg-gray-50 transition-colors"
           >
             取消
           </button>
           <button
             onClick={handleSubmit}
             disabled={!repoUrl.trim() || submitting}
-            className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            className="px-4 py-2 text-sm rounded-lg bg-primary text-white hover:bg-primary-500 disabled:pointer-events-none disabled:opacity-50 transition-colors"
           >
             {submitting ? '接入中...' : '接入'}
           </button>

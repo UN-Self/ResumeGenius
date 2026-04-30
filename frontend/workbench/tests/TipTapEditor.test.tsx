@@ -177,7 +177,7 @@ describe('FormatToolbar', () => {
     expect(screen.getByRole('button', { name: /背景高亮/ })).toBeInTheDocument()
 
     // Line height selector - has aria-label
-    expect(screen.getByRole('button', { name: /行高/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /行距/ })).toBeInTheDocument()
 
     // Alignment (including right-align)
     expect(screen.getByRole('button', { name: /右对齐/i })).toBeInTheDocument()

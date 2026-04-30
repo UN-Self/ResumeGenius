@@ -33,13 +33,13 @@ export default function DeleteConfirm({ title, message, open, onConfirm, onCance
           <div className="flex justify-end gap-2 mt-5">
             <button
               onClick={onCancel}
-              className="px-4 py-2 text-sm rounded-lg border border-border text-foreground hover:bg-primary-50 transition-colors"
+              className="px-4 py-2 text-sm rounded-lg border border-border bg-white text-foreground hover:bg-gray-50 transition-colors"
             >
               取消
             </button>
             <button
               onClick={handleConfirm}
-              className="px-4 py-2 text-sm rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+              className="px-4 py-2 text-sm rounded-lg border border-border text-muted-foreground hover:text-red-500 hover:border-red-300 transition-colors"
             >
               删除
             </button>
@@ -52,14 +52,14 @@ export default function DeleteConfirm({ title, message, open, onConfirm, onCance
             <div className="flex justify-end gap-2 mt-3">
               <button
                 onClick={() => { setConfirming(false); onCancel() }}
-                className="px-4 py-2 text-sm rounded-lg border border-border text-foreground hover:bg-primary-50 transition-colors"
+                className="px-4 py-2 text-sm rounded-lg border border-border bg-white text-foreground hover:bg-gray-50 transition-colors"
               >
                 取消
               </button>
               <button
                 onClick={handleConfirm}
                 disabled={loading}
-                className="px-4 py-2 text-sm rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-sm rounded-lg border border-border text-muted-foreground hover:text-red-500 hover:border-red-300 transition-colors disabled:pointer-events-none disabled:opacity-50"
               >
                 {loading ? '删除中...' : '确认删除'}
               </button>
