@@ -61,52 +61,45 @@ func (s *ProjectService) Delete(userID string, id uint) error {
 	}
 
 	// Cascade delete in dependency order to respect FK constraints:
-	// ai_messages → ai_sessions → versions → drafts → assets → project
-	tx := s.db.Begin()
+	// clear current_draft_id → ai_messages → ai_sessions → versions → drafts → assets → project
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		// Clear current_draft_id first — projects.current_draft_id is a FK to drafts (circular ref)
+		if err := tx.Model(&models.Project{}).Where("id = ?", id).Update("current_draft_id", nil).Error; err != nil {
+			return fmt.Errorf("clear current_draft_id: %w", err)
+		}
 
-	// Clear current_draft_id first — projects.current_draft_id is a FK to drafts (circular ref)
-	if err := tx.Model(&models.Project{}).Where("id = ?", id).Update("current_draft_id", nil).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("clear current_draft_id: %w", err)
-	}
+		// Delete AI messages for all drafts of this project
+		if err := tx.Exec(`DELETE FROM ai_messages WHERE session_id IN (SELECT id FROM ai_sessions WHERE draft_id IN (SELECT id FROM drafts WHERE project_id = ?))`, id).Error; err != nil {
+			return fmt.Errorf("delete ai_messages: %w", err)
+		}
 
-	// Delete AI messages for all drafts of this project
-	if err := tx.Raw(`DELETE FROM ai_messages WHERE session_id IN (SELECT id FROM ai_sessions WHERE draft_id IN (SELECT id FROM drafts WHERE project_id = ?))`, id).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("delete ai_messages: %w", err)
-	}
+		// Delete AI sessions for all drafts of this project
+		if err := tx.Exec(`DELETE FROM ai_sessions WHERE draft_id IN (SELECT id FROM drafts WHERE project_id = ?)`, id).Error; err != nil {
+			return fmt.Errorf("delete ai_sessions: %w", err)
+		}
 
-	// Delete AI sessions for all drafts of this project
-	if err := tx.Raw(`DELETE FROM ai_sessions WHERE draft_id IN (SELECT id FROM drafts WHERE project_id = ?)`, id).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("delete ai_sessions: %w", err)
-	}
+		// Delete versions for all drafts of this project
+		if err := tx.Exec(`DELETE FROM versions WHERE draft_id IN (SELECT id FROM drafts WHERE project_id = ?)`, id).Error; err != nil {
+			return fmt.Errorf("delete versions: %w", err)
+		}
 
-	// Delete versions for all drafts of this project
-	if err := tx.Raw(`DELETE FROM versions WHERE draft_id IN (SELECT id FROM drafts WHERE project_id = ?)`, id).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("delete versions: %w", err)
-	}
+		// Delete all drafts
+		if err := tx.Where("project_id = ?", id).Delete(&models.Draft{}).Error; err != nil {
+			return fmt.Errorf("delete drafts: %w", err)
+		}
 
-	// Delete all drafts
-	if err := tx.Where("project_id = ?", id).Delete(&models.Draft{}).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("delete drafts: %w", err)
-	}
+		// Delete all assets
+		if err := tx.Where("project_id = ?", id).Delete(&models.Asset{}).Error; err != nil {
+			return fmt.Errorf("delete assets: %w", err)
+		}
 
-	// Delete all assets
-	if err := tx.Where("project_id = ?", id).Delete(&models.Asset{}).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("delete assets: %w", err)
-	}
+		// Finally delete the project itself
+		if err := tx.Where("id = ?", id).Delete(&models.Project{}).Error; err != nil {
+			return fmt.Errorf("delete project: %w", err)
+		}
 
-	// Finally delete the project itself
-	if err := tx.Where("id = ?", id).Delete(&models.Project{}).Error; err != nil {
-		tx.Rollback()
-		return fmt.Errorf("delete project: %w", err)
-	}
-
-	return tx.Commit().Error
+		return nil
+	})
 }
 
 // --- Error definitions ---

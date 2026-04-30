@@ -79,6 +79,69 @@ func TestProjectService_Delete(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestProjectService_Delete_CascadeClearsDraftAndRelations(t *testing.T) {
+	db := SetupTestDB(t)
+	svc := NewProjectService(db)
+
+	proj, _ := svc.Create("user-1", "级联删除测试")
+
+	// Create a draft linked to the project
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: "<p>hello</p>"}
+	require.NoError(t, db.Create(&draft).Error)
+
+	// Set current_draft_id (circular FK)
+	require.NoError(t, db.Model(&proj).Update("current_draft_id", draft.ID).Error)
+
+	// Create downstream: version, ai_session, ai_message
+	version := models.Version{DraftID: draft.ID, HTMLSnapshot: "<p>v1</p>"}
+	require.NoError(t, db.Create(&version).Error)
+
+	session := models.AISession{DraftID: draft.ID}
+	require.NoError(t, db.Create(&session).Error)
+
+	msg := models.AIMessage{SessionID: session.ID, Role: "user", Content: "hello"}
+	require.NoError(t, db.Create(&msg).Error)
+
+	// Delete project
+	err := svc.Delete("user-1", proj.ID)
+	assert.NoError(t, err)
+
+	// Verify all related records are gone
+	var draftCount, versionCount, sessionCount, msgCount int64
+	db.Model(&models.Draft{}).Where("project_id = ?", proj.ID).Count(&draftCount)
+	db.Model(&models.Version{}).Where("draft_id = ?", draft.ID).Count(&versionCount)
+	db.Model(&models.AISession{}).Where("draft_id = ?", draft.ID).Count(&sessionCount)
+	db.Model(&models.AIMessage{}).Where("session_id = ?", session.ID).Count(&msgCount)
+
+	assert.Zero(t, draftCount, "drafts should be deleted")
+	assert.Zero(t, versionCount, "versions should be deleted")
+	assert.Zero(t, sessionCount, "ai_sessions should be deleted")
+	assert.Zero(t, msgCount, "ai_messages should be deleted")
+}
+
+func TestProjectService_Delete_CascadeClearsAssets(t *testing.T) {
+	db := SetupTestDB(t)
+	svc := NewProjectService(db)
+	storage := NewLocalStorage(t.TempDir())
+	assetSvc := NewAssetService(db, storage)
+
+	proj, _ := svc.Create("user-1", "资产删除测试")
+
+	// Create file and note assets
+	_, err := assetSvc.UploadFile("user-1", proj.ID, "resume.pdf", []byte("%PDF fake"), 10)
+	require.NoError(t, err)
+	_, err = assetSvc.CreateNote("user-1", proj.ID, "note content", "Label")
+	require.NoError(t, err)
+
+	err = svc.Delete("user-1", proj.ID)
+	assert.NoError(t, err)
+
+	// Assets should be gone from DB (file cleanup is AssetService responsibility)
+	var assetCount int64
+	db.Model(&models.Asset{}).Where("project_id = ?", proj.ID).Count(&assetCount)
+	assert.Zero(t, assetCount)
+}
+
 func TestProjectService_Delete_WrongUser(t *testing.T) {
 	db := SetupTestDB(t)
 	svc := NewProjectService(db)

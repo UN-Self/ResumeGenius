@@ -117,7 +117,11 @@ func (h *Handler) DeleteProject(c *gin.Context) {
 	uid := userID(c)
 	projectID := uint(id)
 
-	// DeleteProject handles full cascade (assets, drafts, versions, sessions, messages)
+	// Step 1: Delete asset files + DB records (DeleteProjectAssets handles both)
+	_ = h.assetSvc.DeleteProjectAssets(uid, projectID)
+
+	// Step 2: Cascade delete remaining DB records in a single transaction
+	// (includes assets as safety net in case step 1 partially failed)
 	if err := h.projectSvc.Delete(uid, projectID); err != nil {
 		if errors.Is(err, ErrProjectNotFound) {
 			response.Error(c, CodeProjectNotFound, "project not found")
