@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -47,6 +47,9 @@ export default function EditorPage() {
     },
   })
 
+  // Bridge state: loaded draft HTML waiting for editor to be ready
+  const [pendingHtml, setPendingHtml] = useState<string | null>(null)
+
   // Auto-save
   const { scheduleSave, flush, retry, status, lastSavedAt } = useAutoSave({
     save: async (html: string) => {
@@ -57,7 +60,7 @@ export default function EditorPage() {
     saveUrl: draftId ? `/api/v1/drafts/${draftId}` : undefined,
   })
 
-  // Load project (route guard) + draft + parsed contents
+  // Effect 1: Load project (route guard) + draft + parsed contents
   useEffect(() => {
     if (!projectId) return
 
@@ -81,9 +84,8 @@ export default function EditorPage() {
       })
       .then((draft) => {
         if (cancelled || !draft) return
-        if (editor) {
-          editor.commands.setContent(draft.html_content || '')
-        }
+        // Store draft HTML — Effect 2 will sync it to the editor
+        setPendingHtml(draft.html_content || '')
 
         // Load parsed contents for left panel
         return parsingApi.parseProject(pid).catch(() => {
@@ -103,7 +105,18 @@ export default function EditorPage() {
       })
 
     return () => { cancelled = true }
-  }, [projectId])
+  }, [projectId, navigate, pid])
+
+  // Ref guard: prevent re-applying draft content when editor updates
+  const hasAppliedRef = useRef(false)
+
+  // Effect 2: Sync pending draft HTML into editor once it's ready
+  useEffect(() => {
+    if (editor && pendingHtml !== null && !hasAppliedRef.current) {
+      hasAppliedRef.current = true
+      editor.commands.setContent(pendingHtml)
+    }
+  }, [editor, pendingHtml])
 
   // Connect editor to autosave
   useEffect(() => {
