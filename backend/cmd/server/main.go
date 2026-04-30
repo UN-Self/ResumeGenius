@@ -88,8 +88,13 @@ func setupRouter(db *gorm.DB) *gin.Engine {
 }
 
 func main() {
-	// Load .env file (ignore error if not found — env vars may be set externally)
-	_ = godotenv.Load()
+	// Load .env — search parent dirs so go run works from any subdirectory
+	for _, p := range []string{".env", "../.env", "../../.env"} {
+		if err := godotenv.Load(p); err == nil {
+			log.Printf("loaded env from %s", p)
+			break
+		}
+	}
 
 	db := database.Connect()
 	database.Migrate(db)

@@ -8,7 +8,7 @@ import { A4Canvas } from '@/components/editor/A4Canvas'
 import { ActionBar } from '@/components/editor/ActionBar'
 import { FormatToolbar } from '@/components/editor/FormatToolbar'
 import { SaveIndicator } from '@/components/editor/SaveIndicator'
-import { AiPanelPlaceholder } from '@/components/editor/AiPanelPlaceholder'
+import { ChatPanel } from '@/components/chat/ChatPanel'
 import ParsedSidebar from '@/components/intake/ParsedSidebar'
 import { request, intakeApi, parsingApi, ApiError, type ParsedContent } from '@/lib/api-client'
 import { useAutoSave } from '@/hooks/useAutoSave'
@@ -243,7 +243,16 @@ export default function EditorPage() {
           </button>
         </div>
         <div className="panel-body">
-          <AiPanelPlaceholder />
+          {draftId ? (
+            <ChatPanel
+              draftId={Number(draftId)}
+              onApplyHTML={(html) => editor?.commands.setContent(html)}
+            />
+          ) : (
+            <p className="text-xs text-[var(--color-text-secondary)] text-center mt-8">
+              等待草稿加载...
+            </p>
+          )}
         </div>
       </div>
     </div>

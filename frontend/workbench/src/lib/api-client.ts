@@ -145,6 +145,31 @@ export interface ParsedContent {
   images?: ParsedImage[]
 }
 
+// --- Agent API ---
+
+export interface AISession {
+  id: number
+  draft_id: number
+  created_at: string
+}
+
+export interface AIMessageItem {
+  id: number
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
+}
+
+export const agentApi = {
+  createSession: (draftId: number) =>
+    request<AISession>('/ai/sessions', {
+      method: 'POST',
+      body: JSON.stringify({ draft_id: draftId }),
+    }),
+  getHistory: (sessionId: number) =>
+    request<{ items: AIMessageItem[] }>(`/ai/sessions/${sessionId}/history`),
+}
+
 export const parsingApi = {
   parseProject: (projectId: number) =>
     request<{ parsed_contents: ParsedContent[] }>('/parsing/parse', {
