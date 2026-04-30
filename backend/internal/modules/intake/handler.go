@@ -117,12 +117,13 @@ func (h *Handler) DeleteProject(c *gin.Context) {
 	uid := userID(c)
 	projectID := uint(id)
 
-	// Cascade: delete project assets first
-	_ = h.assetSvc.DeleteProjectAssets(uid, projectID)
-
-	// Then delete the project
+	// DeleteProject handles full cascade (assets, drafts, versions, sessions, messages)
 	if err := h.projectSvc.Delete(uid, projectID); err != nil {
-		response.Error(c, CodeProjectNotFound, "project not found")
+		if errors.Is(err, ErrProjectNotFound) {
+			response.Error(c, CodeProjectNotFound, "project not found")
+		} else {
+			response.Error(c, CodeInternalError, "delete failed")
+		}
 		return
 	}
 
