@@ -2,35 +2,14 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { FontSizeSelector } from '@/components/editor/FontSizeSelector'
-
-const createMockEditor = () => {
-  const runMock = vi.fn()
-  const focusMock = () => ({
-    setFontSize: () => ({ run: runMock }),
-    unsetFontSize: () => ({ run: runMock }),
-  })
-  const listeners = new Map<string, Set<() => void>>()
-  const mock = {
-    chain: () => ({ focus: focusMock }),
-    getAttributes: vi.fn(() => ({ fontSize: null })),
-    on: vi.fn((event: string, cb: () => void) => {
-      if (!listeners.has(event)) listeners.set(event, new Set())
-      listeners.get(event)!.add(cb)
-    }),
-    off: vi.fn((event: string, cb: () => void) => {
-      listeners.get(event)?.delete(cb)
-    }),
-    runMock,
-  }
-  // Attach listeners and helper for testing
-  ;(mock as any).listeners = listeners
-  ;(mock as any).runMock = runMock
-  return mock as any
-}
+import { createMockEditor } from './helpers/mock-editor'
 
 describe('FontSizeSelector', () => {
   it('renders trigger button with default text', () => {
-    const mockEditor = createMockEditor()
+    const mockEditor = createMockEditor({
+      chainCommands: ['setFontSize', 'unsetFontSize'],
+      getAttributes: () => ({ fontSize: null }),
+    })
     render(<FontSizeSelector editor={mockEditor} />)
 
     const trigger = screen.getByRole('button')
@@ -40,7 +19,10 @@ describe('FontSizeSelector', () => {
 
   it('shows size list when clicked', async () => {
     const user = userEvent.setup()
-    const mockEditor = createMockEditor()
+    const mockEditor = createMockEditor({
+      chainCommands: ['setFontSize', 'unsetFontSize'],
+      getAttributes: () => ({ fontSize: null }),
+    })
     render(<FontSizeSelector editor={mockEditor} />)
 
     const trigger = screen.getByRole('button')
@@ -53,7 +35,10 @@ describe('FontSizeSelector', () => {
 
   it('calls editor command when a size is selected', async () => {
     const user = userEvent.setup()
-    const mockEditor = createMockEditor()
+    const mockEditor = createMockEditor({
+      chainCommands: ['setFontSize', 'unsetFontSize'],
+      getAttributes: () => ({ fontSize: null }),
+    })
     render(<FontSizeSelector editor={mockEditor} />)
 
     const trigger = screen.getByRole('button')
@@ -66,7 +51,10 @@ describe('FontSizeSelector', () => {
   })
 
   it('displays current size when set to 14pt', async () => {
-    const mockEditor = createMockEditor()
+    const mockEditor = createMockEditor({
+      chainCommands: ['setFontSize', 'unsetFontSize'],
+      getAttributes: () => ({ fontSize: null }),
+    })
     // Mock getAttributes to return fontSize
     mockEditor.getAttributes = vi.fn(() => ({ fontSize: '14pt' }))
 
@@ -79,7 +67,10 @@ describe('FontSizeSelector', () => {
 
   it('highlights the current size in the dropdown', async () => {
     const user = userEvent.setup()
-    const mockEditor = createMockEditor()
+    const mockEditor = createMockEditor({
+      chainCommands: ['setFontSize', 'unsetFontSize'],
+      getAttributes: () => ({ fontSize: null }),
+    })
     // Mock getAttributes to return fontSize
     mockEditor.getAttributes = vi.fn(() => ({ fontSize: '16pt' }))
 

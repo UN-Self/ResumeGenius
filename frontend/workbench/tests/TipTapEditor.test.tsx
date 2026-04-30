@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useEffect } from 'react'
@@ -35,56 +35,19 @@ function TestEditorWrapper({ content, onEditor }: { content: string; onEditor?: 
   return <TipTapEditor editor={editor} />
 }
 
-// Mock editor instance for FormatToolbar tests
-const createMockEditor = () => {
-  const runMock = vi.fn()
-  const listeners = new Map<string, Set<() => void>>()
-  const focusMock = () => ({
-    toggleBold: () => ({ run: runMock }),
-    toggleItalic: () => ({ run: runMock }),
-    toggleUnderline: () => ({ run: runMock }),
-    toggleBulletList: () => ({ run: runMock }),
-    toggleOrderedList: () => ({ run: runMock }),
-    setTextAlign: () => ({ run: runMock }),
-    setFontFamily: () => ({ run: runMock }),
-    setFontSize: () => ({ run: runMock }),
-    setColor: () => ({ run: runMock }),
-    setBackgroundColor: () => ({ run: runMock }),
-    setLineHeight: () => ({ run: runMock }),
-    unsetFontFamily: () => ({ run: runMock }),
-    unsetColor: () => ({ run: runMock }),
-    unsetBackgroundColor: () => ({ run: runMock }),
+// Shared mock editor from test helpers
+import { createMockEditor } from './helpers/mock-editor'
+
+const createFormatToolbarMockEditor = () =>
+  createMockEditor({
+    chainCommands: [
+      'toggleBold', 'toggleItalic', 'toggleUnderline',
+      'toggleBulletList', 'toggleOrderedList', 'setTextAlign',
+      'setFontFamily', 'setFontSize', 'setColor', 'setBackgroundColor',
+      'setLineHeight', 'unsetFontFamily', 'unsetColor', 'unsetBackgroundColor',
+    ],
+    isActive: () => false,
   })
-  const mock = {
-    chain: () => ({ focus: focusMock }),
-    isActive: (name: string, attrs?: Record<string, unknown>) => {
-      if (name === 'bold') return false
-      if (name === 'italic') return false
-      if (name === 'underline') return false
-      if (name === 'bulletList') return false
-      if (name === 'orderedList') return false
-      if (name === 'textAlign') {
-        if (attrs?.textAlign === 'left') return false
-        if (attrs?.textAlign === 'center') return false
-        if (attrs?.textAlign === 'right') return false
-        if (attrs?.textAlign === 'justify') return false
-        return false
-      }
-      return false
-    },
-    on: vi.fn((event: string, cb: () => void) => {
-      if (!listeners.has(event)) listeners.set(event, new Set())
-      listeners.get(event)!.add(cb)
-    }),
-    off: vi.fn((event: string, cb: () => void) => {
-      listeners.get(event)?.delete(cb)
-    }),
-    getAttributes: vi.fn(() => ({})),
-  }
-  // Attach runMock for testing
-  ;(mock as any).runMock = runMock
-  return mock as any
-}
 
 describe('TipTapEditor', () => {
   it('renders the sample draft html', async () => {
@@ -110,7 +73,7 @@ describe('TipTapEditor', () => {
 describe('FormatToolbar', () => {
   it('renders format toolbar buttons', async () => {
     const user = userEvent.setup()
-    const mockEditor = createMockEditor()
+    const mockEditor = createFormatToolbarMockEditor()
     render(<FormatToolbar editor={mockEditor} />)
 
     // Check for bold button
@@ -124,7 +87,7 @@ describe('FormatToolbar', () => {
 
   it('toggles bold when bold button is clicked', async () => {
     const user = userEvent.setup()
-    const mockEditor = createMockEditor()
+    const mockEditor = createFormatToolbarMockEditor()
 
     render(<FormatToolbar editor={mockEditor} />)
 
@@ -136,7 +99,7 @@ describe('FormatToolbar', () => {
 
   it('toggles italic when italic button is clicked', async () => {
     const user = userEvent.setup()
-    const mockEditor = createMockEditor()
+    const mockEditor = createFormatToolbarMockEditor()
 
     render(<FormatToolbar editor={mockEditor} />)
 
@@ -147,7 +110,7 @@ describe('FormatToolbar', () => {
   })
 
   it('renders all toolbar buttons', () => {
-    const mockEditor = createMockEditor()
+    const mockEditor = createFormatToolbarMockEditor()
     render(<FormatToolbar editor={mockEditor} />)
 
     // Check all expected buttons exist
@@ -163,7 +126,7 @@ describe('FormatToolbar', () => {
   })
 
   it('renders all typography selectors and toolbar buttons', () => {
-    const mockEditor = createMockEditor()
+    const mockEditor = createFormatToolbarMockEditor()
     render(<FormatToolbar editor={mockEditor} />)
 
     // Font selector - shows "字体" text
