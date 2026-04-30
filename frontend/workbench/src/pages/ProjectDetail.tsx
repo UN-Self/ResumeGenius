@@ -26,6 +26,7 @@ export default function ProjectDetail() {
   const [noteOpen, setNoteOpen] = useState(false)
   const [editingNote, setEditingNote] = useState<Asset | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'project' | 'asset'; id: number } | null>(null)
+  const [deleteError, setDeleteError] = useState('')
   const [deleting, setDeleting] = useState(false)
 
   // --- Intake handlers ---
@@ -69,8 +70,8 @@ export default function ProjectDetail() {
       setDeleting(true)
       await intakeApi.deleteProject(pid)
       navigate('/')
-    } catch {
-      // Delete failed — user stays on page, can retry
+    } catch (err) {
+      setDeleteError(err instanceof ApiError ? err.message : '删除失败')
     } finally {
       setDeleting(false)
       setDeleteTarget(null)
@@ -151,6 +152,11 @@ export default function ProjectDetail() {
       {parseError && (
         <div className="mb-4 px-4 py-2.5 text-sm rounded-lg bg-red-50 text-red-600 border border-red-200">
           解析失败：{parseError}
+        </div>
+      )}
+      {deleteError && (
+        <div className="mb-4 px-4 py-2.5 text-sm rounded-lg bg-red-50 text-red-600 border border-red-200">
+          删除失败：{deleteError}
         </div>
       )}
 

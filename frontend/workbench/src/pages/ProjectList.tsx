@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { intakeApi, ApiError, authApi, type Project } from '@/lib/api-client'
 import ProjectCard from '@/components/intake/ProjectCard'
 
 export default function ProjectList() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [projects, setProjects] = useState<Project[]>([])
   const [title, setTitle] = useState('')
   const [loading, setLoading] = useState(true)
@@ -23,7 +24,7 @@ export default function ProjectList() {
     }
   }, [])
 
-  useEffect(() => { loadProjects() }, [loadProjects])
+  useEffect(() => { loadProjects() }, [loadProjects, location.key])
 
   const handleCreate = async () => {
     const trimmed = title.trim()
