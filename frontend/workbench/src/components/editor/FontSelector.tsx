@@ -63,17 +63,24 @@ export function FontSelector({ editor }: FontSelectorProps) {
       </PopoverTrigger>
       <PopoverContent side="top" className="w-48 p-1">
         <div className="flex flex-col">
-          {FONTS.map((font) => (
-            <button
-              key={font.value}
-              type="button"
-              onClick={() => handleFontSelect(font.value)}
-              className="px-3 py-2 text-sm text-left hover:bg-surface-hover rounded-md transition-colors"
-              style={{ fontFamily: font.value || undefined }}
-            >
-              {font.label}
-            </button>
-          ))}
+          {FONTS.map((font) => {
+            const isActive = currentFont === font.value || (!currentFont && font.value === '')
+            return (
+              <button
+                key={font.value}
+                type="button"
+                onClick={() => handleFontSelect(font.value)}
+                className={`px-3 py-2 text-sm text-left rounded-md transition-colors ${
+                  isActive
+                    ? 'bg-primary-50 text-primary'
+                    : 'text-muted-foreground hover:bg-surface-hover'
+                }`}
+                style={{ fontFamily: font.value || undefined }}
+              >
+                {font.label}
+              </button>
+            )
+          })}
         </div>
       </PopoverContent>
     </Popover>

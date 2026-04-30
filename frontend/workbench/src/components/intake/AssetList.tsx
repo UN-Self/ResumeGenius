@@ -62,7 +62,7 @@ export default function AssetList({ assets, onDelete, onEditNote }: AssetListPro
             {asset.type === 'note' && (
               <button
                 onClick={() => onEditNote(asset)}
-                className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent transition-colors"
+                className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-primary-50 transition-colors"
               >
                 编辑
               </button>
