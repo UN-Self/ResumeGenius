@@ -2,8 +2,8 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
 import TextAlign from '@tiptap/extension-text-align'
+import { TextStyleKit } from '@tiptap/extension-text-style'
 import { A4Canvas } from '@/components/editor/A4Canvas'
 import { ActionBar } from '@/components/editor/ActionBar'
 import { FormatToolbar } from '@/components/editor/FormatToolbar'
@@ -36,8 +36,8 @@ export default function EditorPage() {
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Underline,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      TextStyleKit,
     ],
     content: '',
     editorProps: {

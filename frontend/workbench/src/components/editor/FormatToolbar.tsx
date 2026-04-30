@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Bold, Italic, Underline, Heading1, Heading2, Heading3, List, ListOrdered, AlignLeft, AlignCenter, AlignJustify } from 'lucide-react'
+import { Bold, Italic, Underline, Heading1, Heading2, Heading3, List, ListOrdered, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react'
 import type { Editor } from '@tiptap/react'
 import { ToolbarButton } from './ToolbarButton'
 import { ToolbarSeparator } from './ToolbarSeparator'
+import { FontSelector } from './FontSelector'
+import { FontSizeSelector } from './FontSizeSelector'
+import { ColorPicker } from './ColorPicker'
+import { LineHeightSelector } from './LineHeightSelector'
 
 interface ActiveStates {
   isBold: boolean
@@ -15,6 +19,7 @@ interface ActiveStates {
   isOrderedList: boolean
   isAlignLeft: boolean
   isAlignCenter: boolean
+  isAlignRight: boolean
   isAlignJustify: boolean
 }
 
@@ -30,6 +35,7 @@ function getActiveStates(editor: Editor): ActiveStates {
     isOrderedList: editor.isActive('orderedList'),
     isAlignLeft: editor.isActive({ textAlign: 'left' }),
     isAlignCenter: editor.isActive({ textAlign: 'center' }),
+    isAlignRight: editor.isActive({ textAlign: 'right' }),
     isAlignJustify: editor.isActive({ textAlign: 'justify' }),
   }
 }
@@ -54,7 +60,15 @@ export function FormatToolbar({ editor }: FormatToolbarProps) {
 
   return (
     <div className="flex items-center gap-1">
-      {/* Bold/Italic/Underline group */}
+      {/* Font & Size group */}
+      <div role="group" aria-label="字体和字号" className="flex items-center gap-1">
+        <FontSelector editor={editor} />
+        <FontSizeSelector editor={editor} />
+      </div>
+
+      <ToolbarSeparator />
+
+      {/* Text Format + Color group */}
       <div role="group" aria-label="文本格式" className="flex items-center gap-1">
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
@@ -74,6 +88,7 @@ export function FormatToolbar({ editor }: FormatToolbarProps) {
           icon={<Underline size={20} />}
           label="下划线 (Ctrl+U)"
         />
+        <ColorPicker editor={editor} />
       </div>
 
       <ToolbarSeparator />
@@ -120,8 +135,9 @@ export function FormatToolbar({ editor }: FormatToolbarProps) {
 
       <ToolbarSeparator />
 
-      {/* Alignment group */}
-      <div role="group" aria-label="文本对齐" className="flex items-center gap-1">
+      {/* Line Height + Alignment group */}
+      <div role="group" aria-label="行距和对齐" className="flex items-center gap-1">
+        <LineHeightSelector editor={editor} />
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign('left').run()}
           isActive={activeStates.isAlignLeft}
@@ -133,6 +149,12 @@ export function FormatToolbar({ editor }: FormatToolbarProps) {
           isActive={activeStates.isAlignCenter}
           icon={<AlignCenter size={20} />}
           label="居中"
+        />
+        <ToolbarButton
+          onClick={() => editor.chain().focus().setTextAlign('right').run()}
+          isActive={activeStates.isAlignRight}
+          icon={<AlignRight size={20} />}
+          label="右对齐"
         />
         <ToolbarButton
           onClick={() => editor.chain().focus().setTextAlign('justify').run()}

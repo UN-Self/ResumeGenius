@@ -4,8 +4,8 @@ import userEvent from '@testing-library/user-event'
 import { useEffect } from 'react'
 import { useEditor, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
 import TextAlign from '@tiptap/extension-text-align'
+import { TextStyleKit } from '@tiptap/extension-text-style'
 import { TipTapEditor } from '@/components/editor/TipTapEditor'
 import { FormatToolbar } from '@/components/editor/FormatToolbar'
 import { sampleDraftHtml } from '@/mocks/fixtures'
@@ -15,8 +15,8 @@ function TestEditorWrapper({ content, onEditor }: { content: string; onEditor?: 
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Underline,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      TextStyleKit,
     ],
     content,
     editorProps: {
@@ -47,6 +47,16 @@ const createMockEditor = () => {
     toggleBulletList: () => ({ run: runMock }),
     toggleOrderedList: () => ({ run: runMock }),
     setTextAlign: () => ({ run: runMock }),
+    setFontFamily: () => ({ run: runMock }),
+    setFontSize: () => ({ run: runMock }),
+    setColor: () => ({ run: runMock }),
+    setBackgroundColor: () => ({ run: runMock }),
+    setLineHeight: () => ({ run: runMock }),
+    unsetFontFamily: () => ({ run: runMock }),
+    unsetFontSize: () => ({ run: runMock }),
+    unsetColor: () => ({ run: runMock }),
+    unsetBackgroundColor: () => ({ run: runMock }),
+    unsetLineHeight: () => ({ run: runMock }),
   })
   const mock = {
     chain: () => ({ focus: focusMock }),
@@ -57,7 +67,13 @@ const createMockEditor = () => {
       if (name === 'heading') return attrs?.level === 1
       if (name === 'bulletList') return false
       if (name === 'orderedList') return false
-      if (name === 'textAlign') return false
+      if (name === 'textAlign') {
+        if (attrs?.textAlign === 'left') return false
+        if (attrs?.textAlign === 'center') return false
+        if (attrs?.textAlign === 'right') return false
+        if (attrs?.textAlign === 'justify') return false
+        return false
+      }
       return false
     },
     on: vi.fn((event: string, cb: () => void) => {
@@ -67,6 +83,7 @@ const createMockEditor = () => {
     off: vi.fn((event: string, cb: () => void) => {
       listeners.get(event)?.delete(cb)
     }),
+    getAttributes: vi.fn(() => ({})),
   }
   // Attach runMock for testing
   ;(mock as any).runMock = runMock
@@ -161,7 +178,29 @@ describe('FormatToolbar', () => {
     expect(screen.getByRole('button', { name: /有序列表/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /左对齐/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /居中/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /右对齐/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /两端对齐/i })).toBeInTheDocument()
+  })
+
+  it('renders all typography selectors and toolbar buttons', () => {
+    const mockEditor = createMockEditor()
+    render(<FormatToolbar editor={mockEditor} />)
+
+    // Font selector - shows "字体" text
+    expect(screen.getByRole('button', { name: /^字体$/ })).toBeInTheDocument()
+
+    // Font size selector - shows the current size number (default "12")
+    expect(screen.getByRole('button', { name: '12' })).toBeInTheDocument()
+
+    // Color picker buttons
+    expect(screen.getByRole('button', { name: /字体颜色/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /背景高亮/ })).toBeInTheDocument()
+
+    // Line height selector - has aria-label
+    expect(screen.getByRole('button', { name: /行高/ })).toBeInTheDocument()
+
+    // Alignment (including right-align)
+    expect(screen.getByRole('button', { name: /右对齐/i })).toBeInTheDocument()
   })
 
   it('returns null when editor is not provided', () => {
@@ -175,8 +214,8 @@ function TestToolbarWrapper({ content, onEditor }: { content: string; onEditor?:
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Underline,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      TextStyleKit,
     ],
     content,
   })

@@ -104,6 +104,7 @@
   line-height: 1.5;
   color: #202124;
   outline: none;
+  white-space: pre-wrap;
 }
 
 .ProseMirror h1 {
