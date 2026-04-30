@@ -216,7 +216,6 @@ export default function EditorPage() {
             projectName={projectTitle}
             saveIndicator={<SaveIndicator status={status} lastSavedAt={lastSavedAt} onRetry={retry} />}
             draftId={draftId}
-            getHtml={() => editor?.getHTML() ?? ''}
             exportStatus={exportStatus}
             onExport={handleExport}
           />

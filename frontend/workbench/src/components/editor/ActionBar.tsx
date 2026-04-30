@@ -6,7 +6,6 @@ interface ActionBarProps {
   projectName: string
   saveIndicator?: ReactNode
   draftId: string | null
-  getHtml: () => string
   exportStatus: ExportStatus
   onExport: () => void
 }
@@ -22,7 +21,6 @@ export function ActionBar({
   projectName,
   saveIndicator,
   draftId,
-  getHtml,
   exportStatus,
   onExport,
 }: ActionBarProps) {
