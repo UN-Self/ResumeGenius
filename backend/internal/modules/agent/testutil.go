@@ -16,19 +16,19 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 
 	host := os.Getenv("DB_HOST")
 	if host == "" {
-		host = "172.29.26.38"
+		host = "localhost"
 	}
 	port := os.Getenv("DB_PORT")
 	if port == "" {
-		port = "45432"
+		port = "5432"
 	}
 	user := os.Getenv("DB_USER")
 	if user == "" {
-		user = "unself"
+		user = "postgres"
 	}
 	password := os.Getenv("DB_PASSWORD")
 	if password == "" {
-		password = "unself"
+		password = "postgres"
 	}
 	dbname := os.Getenv("DB_NAME")
 	if dbname == "" {
