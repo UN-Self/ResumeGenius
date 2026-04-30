@@ -233,4 +233,50 @@ describe('EditorPage', () => {
       expect(screen.getByLabelText('收起左面板')).toBeInTheDocument()
     })
   })
+
+  describe('Upload button in sidebar', () => {
+    it('renders upload button in left panel', async () => {
+      server.use(
+        http.get('/api/v1/projects/:projectId', () => {
+          return HttpResponse.json({
+            code: 0,
+            data: {
+              id: 1,
+              title: 'Test Project',
+              status: 'active',
+              current_draft_id: 1,
+              created_at: '2026-04-28T12:00:00Z',
+            },
+            message: 'ok',
+          })
+        }),
+        http.get('/api/v1/drafts/1', () => {
+          return HttpResponse.json({
+            code: 0,
+            data: {
+              id: 1,
+              project_id: 1,
+              html_content: '',
+              updated_at: '2026-04-28T12:00:00Z',
+            },
+            message: 'ok',
+          })
+        }),
+        http.post('/api/v1/parsing/parse', () => {
+          return HttpResponse.json({
+            code: 0,
+            data: { parsed_contents: [] },
+            message: 'ok',
+          })
+        })
+      )
+
+      renderWithRouter()
+      await waitFor(() => {
+        expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText('上传文件')).toBeInTheDocument()
+    })
+  })
 })

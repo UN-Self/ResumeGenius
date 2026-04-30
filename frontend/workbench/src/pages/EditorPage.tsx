@@ -183,7 +183,11 @@ export default function EditorPage() {
           </button>
         </div>
         <div className="panel-body">
-          <ParsedSidebar contents={parsedContents} />
+          <ParsedSidebar
+            projectId={pid}
+            contents={parsedContents}
+            onParsed={setParsedContents}
+          />
         </div>
       </div>
 
