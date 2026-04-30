@@ -1,29 +1,26 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   intakeApi, parsingApi, workbenchApi,
-  ApiError, type Project, type Asset,
+  ApiError, type Asset,
 } from '@/lib/api-client'
 import AssetList from '@/components/intake/AssetList'
 import DeleteConfirm from '@/components/intake/DeleteConfirm'
 import UploadDialog from '@/components/intake/UploadDialog'
 import GitRepoDialog from '@/components/intake/GitRepoDialog'
 import NoteDialog from '@/components/intake/NoteDialog'
+import { useProjectData } from '@/hooks/useProjectData'
 
 export default function ProjectDetail() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const pid = Number(projectId)
 
-  // Parse state
+  const { project, assets, loading, error, reload } = useProjectData(pid)
+
+  // UI state
   const [parseLoading, setParseLoading] = useState(false)
   const [parseError, setParseError] = useState('')
-
-  // Intake state
-  const [project, setProject] = useState<Project | null>(null)
-  const [assets, setAssets] = useState<Asset[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [gitOpen, setGitOpen] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
@@ -31,47 +28,27 @@ export default function ProjectDetail() {
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'project' | 'asset'; id: number } | null>(null)
   const [deleting, setDeleting] = useState(false)
 
-  // Intake state
-  const load = useCallback(async () => {
-    try {
-      setLoading(true)
-      const [proj, asts] = await Promise.all([
-        intakeApi.getProject(pid),
-        intakeApi.listAssets(pid),
-      ])
-      setProject(proj)
-      setAssets(asts)
-      setError('')
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : '加载失败')
-    } finally {
-      setLoading(false)
-    }
-  }, [pid])
-
-  useEffect(() => { load() }, [load])
-
   // --- Intake handlers ---
   const handleUpload = async (file: File) => {
     await intakeApi.uploadFile(pid, file)
-    await load()
+    reload()
   }
 
   const handleCreateGit = async (repoUrl: string) => {
     await intakeApi.createGitRepo(pid, repoUrl)
-    await load()
+    reload()
   }
 
   const handleCreateNote = async (content: string, label: string) => {
     await intakeApi.createNote(pid, content, label)
-    await load()
+    reload()
   }
 
   const handleUpdateNote = async (content: string, label: string) => {
     if (!editingNote) return
     await intakeApi.updateNote(editingNote.id, content, label)
     setEditingNote(null)
-    await load()
+    reload()
   }
 
   const handleDeleteAsset = async () => {
@@ -79,7 +56,7 @@ export default function ProjectDetail() {
     try {
       setDeleting(true)
       await intakeApi.deleteAsset(deleteTarget.id)
-      await load()
+      reload()
     } finally {
       setDeleting(false)
       setDeleteTarget(null)
@@ -93,7 +70,7 @@ export default function ProjectDetail() {
       await intakeApi.deleteProject(pid)
       navigate('/')
     } catch {
-      setError('删除失败')
+      // Delete failed — user stays on page, can retry
     } finally {
       setDeleting(false)
       setDeleteTarget(null)
