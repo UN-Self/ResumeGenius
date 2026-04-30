@@ -110,6 +110,11 @@ export default function EditorPage() {
   // Ref guard: prevent re-applying draft content when editor updates
   const hasAppliedRef = useRef(false)
 
+  // Reset guard when projectId changes (navigation between projects)
+  useEffect(() => {
+    hasAppliedRef.current = false
+  }, [projectId])
+
   // Effect 2: Sync pending draft HTML into editor once it's ready
   useEffect(() => {
     if (editor && pendingHtml !== null && !hasAppliedRef.current) {

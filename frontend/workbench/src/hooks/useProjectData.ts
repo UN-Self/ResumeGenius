@@ -34,10 +34,18 @@ export function useProjectData(pid: number): UseProjectDataReturn {
     }
   }, [pid])
 
-  // Trigger fetch via subscription pattern — avoids direct setState in effect body
+  // Schedule fetch via requestAnimationFrame so setState calls happen in the RAF
+  // callback (async context), not in the effect's synchronous body.
+  // This satisfies react-hooks/set-state-in-effect.
   useEffect(() => {
-    const id = requestAnimationFrame(() => { doFetch() })
-    return () => cancelAnimationFrame(id)
+    let cancelled = false
+    const id = requestAnimationFrame(() => {
+      if (!cancelled) doFetch()
+    })
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(id)
+    }
   }, [doFetch, version])
 
   const reload = useCallback(() => { setVersion((v) => v + 1) }, [])
