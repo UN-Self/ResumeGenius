@@ -52,10 +52,8 @@ const createMockEditor = () => {
     setBackgroundColor: () => ({ run: runMock }),
     setLineHeight: () => ({ run: runMock }),
     unsetFontFamily: () => ({ run: runMock }),
-    unsetFontSize: () => ({ run: runMock }),
     unsetColor: () => ({ run: runMock }),
     unsetBackgroundColor: () => ({ run: runMock }),
-    unsetLineHeight: () => ({ run: runMock }),
   })
   const mock = {
     chain: () => ({ focus: focusMock }),

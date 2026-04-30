@@ -55,7 +55,7 @@ export function FontSelector({ editor }: FontSelectorProps) {
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-1 px-2 min-h-[44px] rounded-md text-sm text-[#5f6368] hover:bg-[#f8f9fa] transition-colors"
+          className="flex items-center gap-1 px-2 min-h-[44px] rounded-md text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
         >
           <span>{currentFontLabel}</span>
           <ChevronDown className="w-4 h-4" />
@@ -68,7 +68,7 @@ export function FontSelector({ editor }: FontSelectorProps) {
               key={font.value}
               type="button"
               onClick={() => handleFontSelect(font.value)}
-              className="px-3 py-2 text-sm text-left hover:bg-[#f8f9fa] rounded-md transition-colors"
+              className="px-3 py-2 text-sm text-left hover:bg-[var(--color-page-bg)] rounded-md transition-colors"
               style={{ fontFamily: font.value || undefined }}
             >
               {font.label}

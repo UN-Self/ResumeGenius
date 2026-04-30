@@ -36,12 +36,15 @@ export function LineHeightSelector({ editor }: LineHeightSelectorProps) {
 
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger
-        className="flex items-center gap-1 px-2 min-h-[44px] rounded-md text-sm text-[#5f6368] hover:bg-[#f8f9fa] transition-colors"
-        aria-label="行高"
-      >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="行高"
+          className="flex items-center gap-1 px-2 min-h-[44px] rounded-md text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-page-bg)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
+        >
         <span>{currentLineHeight || '—'}</span>
         <ChevronDown size={16} />
+        </button>
       </PopoverTrigger>
       <PopoverContent className="w-24 p-1" side="top">
         <div className="flex flex-col">
@@ -49,10 +52,10 @@ export function LineHeightSelector({ editor }: LineHeightSelectorProps) {
             <button
               key={height}
               onClick={() => handleLineHeightChange(height)}
-              className={`px-2 py-1 text-sm rounded hover:bg-[#f8f9fa] transition-colors ${
+              className={`px-2 py-1 text-sm rounded hover:bg-[var(--color-page-bg)] transition-colors ${
                 currentLineHeight === height
-                  ? 'bg-[#e8f0fe] text-[#1a73e8]'
-                  : 'text-[#5f6368]'
+                  ? 'bg-[var(--color-primary-bg)] text-[var(--color-primary)]'
+                  : 'text-[var(--color-text-secondary)]'
               }`}
             >
               {height}
