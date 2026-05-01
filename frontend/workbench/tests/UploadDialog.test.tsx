@@ -26,6 +26,26 @@ describe('UploadDialog', () => {
     expect(screen.getByText('DOCX')).toBeInTheDocument()
   })
 
+  it('shows a png badge for png files', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <UploadDialog
+        open
+        onClose={vi.fn()}
+        onUpload={vi.fn().mockResolvedValue(undefined)}
+      />,
+    )
+
+    const input = screen.getByLabelText('Upload file')
+    const file = new File(['image'], 'cover.png', { type: 'image/png' })
+
+    await user.upload(input, file)
+
+    expect(screen.getByText('cover')).toBeInTheDocument()
+    expect(screen.getByText('PNG')).toBeInTheDocument()
+  })
+
   it('shows a validation error for unsupported files', async () => {
     const user = userEvent.setup()
 

@@ -1,6 +1,6 @@
 import { FileImage, FileText, GitBranch, type LucideIcon } from 'lucide-react'
 
-type FileVisualKey = 'pdf' | 'docx' | 'image' | 'git' | 'note' | 'generic'
+type FileVisualKey = 'pdf' | 'docx' | 'png' | 'jpg' | 'jpeg' | 'git' | 'note' | 'generic'
 
 export interface FileVisual {
   key: FileVisualKey
@@ -31,10 +31,28 @@ const visuals: Record<FileVisualKey, FileVisual> = {
     iconClassName: 'text-sky-600',
     chipClassName: 'border-sky-200 bg-sky-100 text-sky-700',
   },
-  image: {
-    key: 'image',
-    chipLabel: 'IMAGE',
-    typeLabel: '\u56fe\u7247',
+  png: {
+    key: 'png',
+    chipLabel: 'PNG',
+    typeLabel: 'PNG \u56fe\u7247',
+    icon: FileImage,
+    iconWrapperClassName: 'border-emerald-200 bg-emerald-50',
+    iconClassName: 'text-emerald-600',
+    chipClassName: 'border-emerald-200 bg-emerald-100 text-emerald-700',
+  },
+  jpg: {
+    key: 'jpg',
+    chipLabel: 'JPG',
+    typeLabel: 'JPG \u56fe\u7247',
+    icon: FileImage,
+    iconWrapperClassName: 'border-emerald-200 bg-emerald-50',
+    iconClassName: 'text-emerald-600',
+    chipClassName: 'border-emerald-200 bg-emerald-100 text-emerald-700',
+  },
+  jpeg: {
+    key: 'jpeg',
+    chipLabel: 'JPEG',
+    typeLabel: 'JPEG \u56fe\u7247',
     icon: FileImage,
     iconWrapperClassName: 'border-emerald-200 bg-emerald-50',
     iconClassName: 'text-emerald-600',
@@ -90,22 +108,33 @@ export function getUploadFileVisual(name: string) {
     case '.docx':
       return visuals.docx
     case '.png':
+      return visuals.png
     case '.jpg':
+      return visuals.jpg
     case '.jpeg':
-      return visuals.image
+      return visuals.jpeg
     default:
       return visuals.generic
   }
 }
 
-export function getAssetVisual(type: string) {
+export function getAssetVisual(type: string, uri?: string | null) {
   switch (type) {
     case 'resume_pdf':
       return visuals.pdf
     case 'resume_docx':
       return visuals.docx
     case 'resume_image':
-      return visuals.image
+      switch (getExt(uri ?? '')) {
+        case '.png':
+          return visuals.png
+        case '.jpg':
+          return visuals.jpg
+        case '.jpeg':
+          return visuals.jpeg
+        default:
+          return visuals.png
+      }
     case 'git_repo':
       return visuals.git
     case 'note':

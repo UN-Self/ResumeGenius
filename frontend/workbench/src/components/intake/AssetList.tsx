@@ -22,7 +22,7 @@ export default function AssetList({ assets, onDelete, onEditNote }: AssetListPro
   return (
     <div className="divide-y divide-border rounded-lg border border-border bg-card">
       {assets.map((asset) => {
-        const visual = getAssetVisual(asset.type)
+        const visual = getAssetVisual(asset.type, asset.uri)
         const Icon = visual.icon
 
         return (
