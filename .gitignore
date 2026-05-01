@@ -62,8 +62,6 @@ backend/internal/modules/agent/testutil.go
 backend/**/testdb_test.go
 backend/**/testutil.go
 
-# Test files
-*_test.go
 
 # ===========================
 # Frontend (Node/Bun)

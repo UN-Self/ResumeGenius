@@ -174,7 +174,7 @@ func TestChatService_MockStream(t *testing.T) {
 	db := SetupTestDB(t)
 	draftID := createTestDraftDirect(t, db)
 	sessionSvc := NewSessionService(db)
-	chatSvc := NewChatService(db)
+	chatSvc := NewChatService(db, &MockAdapter{})
 
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
@@ -199,7 +199,7 @@ func TestChatService_MockStream_SavesMessages(t *testing.T) {
 	db := SetupTestDB(t)
 	draftID := createTestDraftDirect(t, db)
 	sessionSvc := NewSessionService(db)
-	chatSvc := NewChatService(db)
+	chatSvc := NewChatService(db, &MockAdapter{})
 
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
@@ -217,7 +217,7 @@ func TestChatService_SessionNotFound(t *testing.T) {
 	t.Setenv("USE_MOCK", "true")
 
 	db := SetupTestDB(t)
-	chatSvc := NewChatService(db)
+	chatSvc := NewChatService(db, &MockAdapter{})
 
 	err := chatSvc.StreamChat(9999, "hello", func(string) {})
 	assert.ErrorIs(t, err, ErrSessionNotFound)

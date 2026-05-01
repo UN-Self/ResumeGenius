@@ -161,6 +161,8 @@ export interface AIMessageItem {
 }
 
 export const agentApi = {
+  listSessions: (draftId: number) =>
+    request<AISession[]>(`/ai/sessions?draft_id=${draftId}`),
   createSession: (draftId: number) =>
     request<AISession>('/ai/sessions', {
       method: 'POST',

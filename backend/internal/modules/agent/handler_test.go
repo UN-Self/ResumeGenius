@@ -22,7 +22,7 @@ func setupTestHandler(t *testing.T) (*Handler, *gin.Engine, *gorm.DB) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := SetupTestDB(t)
-	h := NewHandler(NewSessionService(db), NewChatService(db))
+	h := NewHandler(NewSessionService(db), NewChatService(db, &MockAdapter{}))
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set(middleware.ContextUserID, "test-user-1"); c.Next() })
 	return h, r, db

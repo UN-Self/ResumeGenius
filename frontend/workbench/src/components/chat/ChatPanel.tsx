@@ -22,7 +22,7 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
   const [error, setError] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Create session on mount / draft change
+  // Reuse existing session or create one on mount / draft change
   useEffect(() => {
     let cancelled = false
     setSession(null)
@@ -30,16 +30,35 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
     setHtmlPreview(null)
     setError(null)
 
-    agentApi.createSession(draftId)
-      .then((s) => { if (!cancelled) setSession(s) })
-      .catch(() => { if (!cancelled) setError('创建会话失败') })
+    const init = async () => {
+      try {
+        const sessions = await agentApi.listSessions(draftId)
+        if (cancelled) return
 
+        let s: AISession
+        if (sessions && sessions.length > 0) {
+          s = sessions[0]
+          setSession(s)
+          const history = await agentApi.getHistory(s.id)
+          if (!cancelled) {
+            setMessages(history.items.map((m) => ({ role: m.role, text: m.content })))
+          }
+        } else {
+          s = await agentApi.createSession(draftId)
+          if (!cancelled) setSession(s)
+        }
+      } catch {
+        if (!cancelled) setError('创建会话失败')
+      }
+    }
+
+    init()
     return () => { cancelled = true }
   }, [draftId])
 
   // Auto-scroll
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: 'smooth' })
+    scrollRef.current?.scrollIntoView?.({ behavior: 'smooth' })
   }, [messages, htmlPreview])
 
   const handleSend = useCallback(async () => {
@@ -67,6 +86,10 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
       let currentText = ''
       let currentHTML = ''
 
+      const HTML_START = '<!--RESUME_HTML_START-->'
+      const HTML_END = '<!--RESUME_HTML_END-->'
+      let inHTML = false
+
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -84,6 +107,30 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
             switch (event.type) {
               case 'text':
                 currentText += event.content
+                // Detect and extract HTML markers from the text stream
+                if (!inHTML) {
+                  const startIdx = currentText.indexOf(HTML_START)
+                  if (startIdx !== -1) {
+                    inHTML = true
+                    currentHTML = ''
+                    const afterStart = currentText.substring(startIdx + HTML_START.length)
+                    const endIdx = afterStart.indexOf(HTML_END)
+                    if (endIdx !== -1) {
+                      currentHTML = afterStart.substring(0, endIdx)
+                      inHTML = false
+                      setHtmlPreview(currentHTML)
+                    } else {
+                      currentHTML = afterStart
+                    }
+                  }
+                } else {
+                  const endIdx = currentHTML.indexOf(HTML_END)
+                  if (endIdx !== -1) {
+                    currentHTML = currentHTML.substring(0, endIdx)
+                    inHTML = false
+                    setHtmlPreview(currentHTML)
+                  }
+                }
                 setMessages((prev) => {
                   const last = prev[prev.length - 1]
                   if (last?.role === 'assistant') {
@@ -91,16 +138,6 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
                   }
                   return [...prev, { role: 'assistant', text: currentText }]
                 })
-                break
-              case 'html_start':
-                currentHTML = ''
-                break
-              case 'html_chunk':
-                currentHTML += event.content
-                setHtmlPreview(currentHTML)
-                break
-              case 'html_end':
-                setHtmlPreview(currentHTML || null)
                 break
               case 'error':
                 setError(event.message || 'AI 响应出错')

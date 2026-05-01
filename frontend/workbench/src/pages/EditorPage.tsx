@@ -246,7 +246,19 @@ export default function EditorPage() {
           {draftId ? (
             <ChatPanel
               draftId={Number(draftId)}
-              onApplyHTML={(html) => editor?.commands.setContent(html)}
+              onApplyHTML={(html) => {
+                editor?.commands.setContent(html)
+                if (draftId) {
+                  request(`/drafts/${draftId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                      html_content: html,
+                      create_version: true,
+                      version_label: 'AI 修改',
+                    }),
+                  }).catch((err) => console.error('Failed to save AI changes:', err))
+                }
+              }}
             />
           ) : (
             <p className="text-xs text-[var(--color-text-secondary)] text-center mt-8">
