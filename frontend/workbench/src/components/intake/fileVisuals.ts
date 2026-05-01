@@ -69,7 +69,7 @@ const visuals: Record<FileVisualKey, FileVisual> = {
   },
   note: {
     key: 'note',
-    chipLabel: 'NOTE',
+    chipLabel: '\u5907\u6ce8',
     typeLabel: '\u5907\u6ce8',
     icon: FileText,
     iconWrapperClassName: 'border-amber-200 bg-amber-50',
@@ -87,18 +87,25 @@ const visuals: Record<FileVisualKey, FileVisual> = {
   },
 }
 
+const STORED_FILE_PREFIX_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i
+
 export function getExt(name: string) {
   const extIndex = name.lastIndexOf('.')
   return extIndex >= 0 ? name.substring(extIndex).toLowerCase() : ''
 }
 
+export function stripStoredFilePrefix(name: string) {
+  return name.replace(STORED_FILE_PREFIX_PATTERN, '')
+}
+
 export function getDisplayFileName(name: string) {
-  const extIndex = name.lastIndexOf('.')
+  const cleanedName = stripStoredFilePrefix(name.trim())
+  const extIndex = cleanedName.lastIndexOf('.')
   if (extIndex <= 0) {
-    return name
+    return cleanedName
   }
 
-  return name.substring(0, extIndex)
+  return cleanedName.substring(0, extIndex)
 }
 
 export function getUploadFileVisual(name: string) {
@@ -141,6 +148,44 @@ export function getAssetVisual(type: string, uri?: string | null) {
       return visuals.note
     default:
       return visuals.generic
+  }
+}
+
+export function getAssetBadgeText(type: string, reference?: string | null) {
+  switch (type) {
+    case 'resume_pdf':
+      return 'PDF'
+    case 'resume_docx':
+      return 'DOCX'
+    case 'resume_image':
+      return getUploadFileVisual(reference ?? '').chipLabel
+    case 'git_repo':
+      return 'GIT'
+    case 'note':
+      return '\u5907\u6ce8'
+    default:
+      return '\u7d20\u6750'
+  }
+}
+
+export function getDisplayAssetTitle(type: string, label: string) {
+  const trimmedLabel = label.trim()
+  if (!trimmedLabel) {
+    return ''
+  }
+
+  switch (type) {
+    case 'resume_pdf':
+    case 'resume_docx':
+    case 'resume_image':
+      return getDisplayFileName(trimmedLabel)
+    case 'git_repo': {
+      const normalized = trimmedLabel.replace(/\/+$/, '')
+      const repoName = normalized.split('/').pop() ?? normalized
+      return repoName.replace(/\.git$/i, '')
+    }
+    default:
+      return trimmedLabel
   }
 }
 
