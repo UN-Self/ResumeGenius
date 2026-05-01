@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -16,24 +16,19 @@ import { useExport } from '@/hooks/useExport'
 import { FullPageState } from '@/components/ui/full-page-state'
 import type { Draft } from '@/types/editor'
 
-
 export default function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
   const pid = Number(projectId)
 
-  // Route guard + data loading
   const [draftId, setDraftId] = useState<string | null>(null)
   const [projectTitle, setProjectTitle] = useState('')
   const [parsedContents, setParsedContents] = useState<ParsedContent[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  // Panel collapse state — both open by default, user can collapse manually
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
 
-  // TipTap editor
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -49,10 +44,8 @@ export default function EditorPage() {
     },
   })
 
-  // Bridge state: loaded draft HTML waiting for editor to be ready
   const [pendingHtml, setPendingHtml] = useState<string | null>(null)
 
-  // Auto-save
   const { scheduleSave, flush, retry, status, lastSavedAt } = useAutoSave({
     save: async (html: string) => {
       if (draftId) {
@@ -62,7 +55,6 @@ export default function EditorPage() {
     saveUrl: draftId ? `/api/v1/drafts/${draftId}` : undefined,
   })
 
-  // Export
   const { exportPdf, status: exportStatus } = useExport()
 
   const handleExport = () => {
@@ -71,7 +63,6 @@ export default function EditorPage() {
     }
   }
 
-  // Effect 1: Load project (route guard) + draft + parsed contents
   useEffect(() => {
     if (!projectId) return
 
@@ -81,7 +72,6 @@ export default function EditorPage() {
       .then((project) => {
         if (cancelled) return
 
-        // Route guard: redirect if no draft
         if (!project.current_draft_id) {
           navigate(`/projects/${pid}`, { replace: true })
           return
@@ -90,17 +80,15 @@ export default function EditorPage() {
         setProjectTitle(project.title)
         setDraftId(String(project.current_draft_id))
 
-        // Load draft content
         return request<Draft>(`/drafts/${project.current_draft_id}`)
       })
       .then((draft) => {
         if (cancelled || !draft) return
-        // Store draft HTML — Effect 2 will sync it to the editor
+
         setPendingHtml(draft.html_content || '')
 
-        // Load parsed contents for left panel
         return parsingApi.parseProject(pid).catch(() => {
-          // Non-blocking: empty sidebar if parsing fails
+          // Keep the editor usable even if parsing fails.
         })
       })
       .then((result) => {
@@ -118,15 +106,12 @@ export default function EditorPage() {
     return () => { cancelled = true }
   }, [projectId, navigate, pid])
 
-  // Ref guard: prevent re-applying draft content when editor updates
   const hasAppliedRef = useRef(false)
 
-  // Reset guard when projectId changes (navigation between projects)
   useEffect(() => {
     hasAppliedRef.current = false
   }, [projectId])
 
-  // Effect 2: Sync pending draft HTML into editor once it's ready
   useEffect(() => {
     if (editor && pendingHtml !== null && !hasAppliedRef.current) {
       hasAppliedRef.current = true
@@ -134,23 +119,29 @@ export default function EditorPage() {
     }
   }, [editor, pendingHtml])
 
-  // Connect editor to autosave
   useEffect(() => {
     if (!editor) return
+
     const handleUpdate = () => scheduleSave(editor.getHTML())
     editor.on('update', handleUpdate)
-    return () => { editor.off('update', handleUpdate) }
+
+    return () => {
+      editor.off('update', handleUpdate)
+    }
   }, [editor, scheduleSave])
 
-  // Flush on unmount
-  useEffect(() => { return () => { flush() } }, [flush])
+  useEffect(() => {
+    return () => {
+      flush()
+    }
+  }, [flush])
 
   if (loading) {
     return <FullPageState variant="loading" />
   }
 
   if (error) {
-    return <FullPageState variant="error" message={error!} />
+    return <FullPageState variant="error" message={error} />
   }
 
   const gridClass = [
@@ -161,18 +152,18 @@ export default function EditorPage() {
 
   return (
     <div className={gridClass}>
-      {/* Left Panel — Parsed Sidebar */}
       <div className="editor-panel-left">
         <div className="panel-header">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             素材
           </h2>
           <button
+            type="button"
             onClick={() => setLeftOpen(false)}
             className="panel-collapse-btn"
             aria-label="收起左面板"
           >
-            ‹
+            {'<'}
           </button>
         </div>
         <div className="panel-body">
@@ -184,27 +175,28 @@ export default function EditorPage() {
         </div>
       </div>
 
-      {/* Center — A4 Canvas */}
       <div className="editor-panel-center">
         {!leftOpen && (
           <button
+            type="button"
             onClick={() => setLeftOpen(true)}
             className="panel-expand-btn panel-expand-left"
             aria-label="展开左面板"
           >
-            ›
+            {'>'}
           </button>
         )}
         {!rightOpen && (
           <button
+            type="button"
             onClick={() => setRightOpen(true)}
             className="panel-expand-btn panel-expand-right"
             aria-label="展开右面板"
           >
-            ‹
+            {'<'}
           </button>
         )}
-        <div className="flex flex-col h-full">
+        <div className="flex h-full flex-col">
           <ActionBar
             projectName={projectTitle}
             saveIndicator={<SaveIndicator status={status} lastSavedAt={lastSavedAt} onRetry={retry} />}
@@ -221,18 +213,18 @@ export default function EditorPage() {
         </div>
       </div>
 
-      {/* Right Panel — AI */}
       <div className="editor-panel-right">
         <div className="panel-header">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             AI 助手
           </h2>
           <button
+            type="button"
             onClick={() => setRightOpen(false)}
             className="panel-collapse-btn"
             aria-label="收起右面板"
           >
-            ›
+            {'>'}
           </button>
         </div>
         <div className="panel-body">
@@ -241,6 +233,7 @@ export default function EditorPage() {
               draftId={Number(draftId)}
               onApplyHTML={(html) => {
                 editor?.commands.setContent(html)
+
                 if (draftId) {
                   request(`/drafts/${draftId}`, {
                     method: 'PUT',
@@ -254,7 +247,7 @@ export default function EditorPage() {
               }}
             />
           ) : (
-            <p className="text-xs text-[var(--color-text-secondary)] text-center mt-8">
+            <p className="mt-8 text-center text-xs text-[var(--color-text-secondary)]">
               等待草稿加载...
             </p>
           )}

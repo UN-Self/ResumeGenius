@@ -258,23 +258,30 @@
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 10;
-  background: #ffffff;
+  z-index: 30;
+  width: 36px;
+  min-height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.98);
   border: 1px solid var(--color-border, #e4ddd5);
   color: #8c8279;
   cursor: pointer;
-  padding: 8px 6px;
-  font-size: 18px;
+  padding: 0;
+  font-size: 20px;
+  font-weight: 600;
   line-height: 1;
-  border-radius: 0 4px 4px 0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: background 150ms, color 150ms, box-shadow 150ms;
+  border-radius: 999px;
+  box-shadow: 0 10px 24px rgba(44, 35, 24, 0.12);
+  transition: background 150ms, color 150ms, box-shadow 150ms, border-color 150ms;
 }
 
 .panel-expand-btn:hover {
   background: var(--color-background, #faf8f5);
   color: #1a1815;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  border-color: var(--color-primary, #c4956a);
+  box-shadow: 0 14px 28px rgba(44, 35, 24, 0.16);
 }
 
 .panel-expand-btn:focus-visible {
@@ -283,11 +290,10 @@
 }
 
 .panel-expand-left {
-  left: 0;
+  left: 12px;
 }
 
 .panel-expand-right {
-  right: 0;
-  border-radius: 4px 0 0 4px;
+  right: 12px;
 }
 
