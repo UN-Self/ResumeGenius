@@ -1,6 +1,6 @@
 # 模块 agent 契约：AI 对话助手
 
-更新时间：2026-04-23
+更新时间：2026-05-01
 
 ## 1. 角色定义
 
@@ -59,6 +59,9 @@ assistant 消息的 content 字段格式：
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/api/v1/ai/sessions` | 创建对话会话 |
+| GET | `/api/v1/ai/sessions` | 查询会话列表（按 draft_id 过滤） |
+| GET | `/api/v1/ai/sessions/{session_id}` | 获取单个会话详情 |
+| DELETE | `/api/v1/ai/sessions/{session_id}` | 删除会话（级联删除消息） |
 | POST | `/api/v1/ai/sessions/{session_id}/chat` | 发送消息（SSE 流式） |
 | GET | `/api/v1/ai/sessions/{session_id}/history` | 获取对话历史 |
 
@@ -85,7 +88,8 @@ Response:
 
 #### POST /api/v1/ai/sessions/{session_id}/chat
 
-SSE 流式响应。
+SSE 流式响应。后端不解析 AI 输出，将所有 chunk 统一透传为 `text` 事件。
+HTML 提取由前端根据 `<!--RESUME_HTML_START-->` / `<!--RESUME_HTML_END-->` 标记完成。
 
 ```
 Request:
@@ -94,26 +98,22 @@ Request:
 }
 
 Response: text/event-stream
-data: {"type": "text", "content": "好的"}
-data: {"type": "text", "content": "，我帮你精简了工作经历"}
-data: {"type": "text", "content": "部分。\n\n"}
-data: {"type": "html_start"}
-data: {"type": "html_chunk", "content": "<!DOCTYPE html><html>..."}
-data: {"type": "html_chunk", "content": "..."}
-data: {"type": "html_end"}
+data: {"type": "text", "content": "好的，我帮你精简了工作经历部分。\n\n"}
+data: {"type": "text", "content": "<!--RESUME_HTML_START-->\n<!DOCTYPE html><html>..."}
+data: {"type": "text", "content": "...</html>\n<!--RESUME_HTML_END-->"}
+data: {"type": "text", "content": "主要压缩了描述文字，保留核心量化指标。"}
 data: {"type": "done"}
 ```
 
 SSE 事件类型：
 
-| type | 说明 |
-|---|---|
-| `text` | AI 文字说明（逐字流式） |
-| `html_start` | HTML 内容开始 |
-| `html_chunk` | HTML 内容片段 |
-| `html_end` | HTML 内容结束 |
-| `error` | 出错 |
-| `done` | 响应完成 |
+| type | payload | 说明 |
+|---|---|---|
+| `text` | `{"type":"text","content":"..."}` | AI 输出内容（逐字流式透传，含 HTML 标记） |
+| `error` | `{"type":"error","code":3003,"message":"..."}` | 出错，code 为模块错误码 |
+| `done` | `{"type":"done"}` | 响应完成 |
+
+error 事件的 `code` 字段对应本模块错误码（见第 7 节），前端据此做差异化处理（如 3003 提示重新创建会话，3001 提示重试等）。
 
 #### GET /api/v1/ai/sessions/{session_id}/history
 

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -44,7 +45,7 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	}
 	session, err := h.sessionSvc.Create(req.DraftID)
 	if err != nil {
-		response.Error(c, 40400, "草稿不存在")
+		response.Error(c, CodeDraftNotFound, "草稿不存在")
 		return
 	}
 	response.Success(c, session)
@@ -72,7 +73,7 @@ func (h *Handler) GetSession(c *gin.Context) {
 	}
 	session, err := h.sessionSvc.GetByID(uint(id))
 	if err != nil {
-		response.Error(c, 40400, "会话不存在")
+		response.ErrorWithStatus(c, http.StatusNotFound, CodeSessionNotFound, "会话不存在")
 		return
 	}
 	response.Success(c, session)
@@ -85,10 +86,26 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 		return
 	}
 	if err := h.sessionSvc.Delete(uint(id)); err != nil {
-		response.Error(c, 40400, "会话不存在")
+		response.ErrorWithStatus(c, http.StatusNotFound, CodeSessionNotFound, "会话不存在")
 		return
 	}
 	response.Success(c, nil)
+}
+
+// errorCode maps sentinel errors to module error codes.
+func errorCode(err error) int {
+	switch {
+	case errors.Is(err, ErrSessionNotFound):
+		return CodeSessionNotFound
+	case errors.Is(err, ErrDraftNotFound):
+		return CodeDraftNotFound
+	case errors.Is(err, ErrModelTimeout):
+		return CodeModelTimeout
+	case errors.Is(err, ErrModelFormat):
+		return CodeModelFormat
+	default:
+		return CodeInternalError
+	}
 }
 
 func (h *Handler) Chat(c *gin.Context) {
@@ -119,7 +136,11 @@ func (h *Handler) Chat(c *gin.Context) {
 	}
 
 	if err := h.chatSvc.StreamChat(uint(sessionID), req.Message, sendEvent); err != nil {
-		errJSON, _ := json.Marshal(map[string]string{"type": "error", "message": err.Error()})
+		errJSON, _ := json.Marshal(map[string]interface{}{
+			"type":    "error",
+			"code":    errorCode(err),
+			"message": err.Error(),
+		})
 		sendEvent(string(errJSON))
 	}
 }

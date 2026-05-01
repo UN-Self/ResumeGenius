@@ -6,9 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 	"gorm.io/gorm"
@@ -17,6 +19,8 @@ import (
 var (
 	ErrSessionNotFound = errors.New("session not found")
 	ErrDraftNotFound   = errors.New("draft not found")
+	ErrModelTimeout    = errors.New("model call timeout")
+	ErrModelFormat     = errors.New("model returned invalid format")
 )
 
 type SessionService struct {
@@ -144,9 +148,7 @@ func (s *ChatService) StreamChat(sessionID uint, userMessage string, sendEvent f
 
 func (s *ChatService) mockStream(sessionID uint, sendEvent func(string)) error {
 	sendEvent(`{"type":"text","content":"好的，我来帮你优化简历。"}`)
-	sendEvent(`{"type":"html_start"}`)
-	sendEvent(`{"type":"html_chunk","content":"<!DOCTYPE html><html lang=\"zh-CN\"><head><meta charset=\"UTF-8\"/><style>body{font-family:sans-serif;padding:20mm}</style></head><body><h1>Mock优化简历</h1><p>这是AI生成的优化版本</p></body></html>"}`)
-	sendEvent(`{"type":"html_end"}`)
+	sendEvent(`{"type":"text","content":"\n<!--RESUME_HTML_START-->\n<html><body><h1>Mock优化简历</h1><p>这是AI生成的优化版本</p></body></html>\n<!--RESUME_HTML_END-->\n"}`)
 	sendEvent(`{"type":"done"}`)
 
 	s.db.Create(&models.AIMessage{
@@ -159,21 +161,27 @@ func (s *ChatService) mockStream(sessionID uint, sendEvent func(string)) error {
 
 func (s *ChatService) callAI(sessionID uint, sendEvent func(string)) error {
 	var messages []models.AIMessage
-	s.db.Where("session_id = ?", sessionID).Order("created_at ASC").Find(&messages)
+	if err := s.db.Where("session_id = ?", sessionID).Order("created_at ASC").Find(&messages).Error; err != nil {
+		return fmt.Errorf("load messages: %w", err)
+	}
 
 	var session models.AISession
-	s.db.First(&session, sessionID)
+	if err := s.db.First(&session, sessionID).Error; err != nil {
+		return fmt.Errorf("load session: %w", err)
+	}
 	var draft models.Draft
-	s.db.First(&draft, session.DraftID)
+	if err := s.db.First(&draft, session.DraftID).Error; err != nil {
+		return fmt.Errorf("load draft: %w", err)
+	}
 
 	var apiMessages []map[string]string
 	apiMessages = append(apiMessages, map[string]string{
 		"role": "system",
 		"content": `你是简历优化助手。根据用户的要求修改简历内容。
-	当需要修改简历时，在回复中用 <!--RESUME_HTML_START--> 和 <!--RESUME_HTML_END--> 包裹完整的简历 HTML。
+当需要修改简历时，在回复中用 <!--RESUME_HTML_START--> 和 <!--RESUME_HTML_END--> 包裹完整的简历 HTML。
 
-	当前简历 HTML：
-	` + draft.HTMLContent,
+当前简历 HTML：
+` + draft.HTMLContent,
 	})
 	for _, msg := range messages {
 		apiMessages = append(apiMessages, map[string]string{"role": msg.Role, "content": msg.Content})
@@ -190,8 +198,13 @@ func (s *ChatService) callAI(sessionID uint, sendEvent func(string)) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+s.apiKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
+		var netErr net.Error
+		if errors.As(err, &netErr) && netErr.Timeout() {
+			return fmt.Errorf("%w: %w", ErrModelTimeout, err)
+		}
 		return fmt.Errorf("model call failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -202,7 +215,6 @@ func (s *ChatService) callAI(sessionID uint, sendEvent func(string)) error {
 func (s *ChatService) processSSEStream(body io.Reader, sessionID uint, sendEvent func(string)) error {
 	scanner := bufio.NewScanner(body)
 	var fullContent strings.Builder
-	inHTML := false
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -233,24 +245,8 @@ func (s *ChatService) processSSEStream(body io.Reader, sessionID uint, sendEvent
 		}
 		fullContent.WriteString(content)
 
-		if strings.Contains(fullContent.String(), "<!--RESUME_HTML_START-->") && !inHTML {
-			inHTML = true
-			sendEvent(`{"type":"html_start"}`)
-			continue
-		}
-		if strings.Contains(fullContent.String(), "<!--RESUME_HTML_END-->") && inHTML {
-			inHTML = false
-			sendEvent(`{"type":"html_end"}`)
-			continue
-		}
-
-		if inHTML {
-			event, _ := json.Marshal(map[string]string{"type": "html_chunk", "content": content})
-			sendEvent(string(event))
-		} else {
-			event, _ := json.Marshal(map[string]string{"type": "text", "content": content})
-			sendEvent(string(event))
-		}
+		event, _ := json.Marshal(map[string]string{"type": "text", "content": content})
+		sendEvent(string(event))
 	}
 
 	s.db.Create(&models.AIMessage{

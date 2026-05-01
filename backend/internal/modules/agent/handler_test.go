@@ -109,10 +109,10 @@ func TestHandler_CreateSession_DraftNotFound(t *testing.T) {
 	r.POST("/ai/sessions", h.CreateSession)
 
 	w := doJSON(t, r, "POST", "/ai/sessions", map[string]interface{}{"draft_id": 9999})
-	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 
 	resp := parseResponse(t, w)
-	assert.Equal(t, 40400, resp.Code)
+	assert.Equal(t, CodeDraftNotFound, resp.Code)
 }
 
 func TestHandler_ListSessions(t *testing.T) {
@@ -181,9 +181,6 @@ func TestHandler_Chat_MockMode(t *testing.T) {
 
 	body := rec.Body.String()
 	assert.Contains(t, body, `data: {"type":"text"`)
-	assert.Contains(t, body, `data: {"type":"html_start"}`)
-	assert.Contains(t, body, `data: {"type":"html_chunk"`)
-	assert.Contains(t, body, `data: {"type":"html_end"}`)
 	assert.Contains(t, body, `data: {"type":"done"}`)
 }
 

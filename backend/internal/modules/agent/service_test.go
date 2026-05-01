@@ -186,14 +186,10 @@ func TestChatService_MockStream(t *testing.T) {
 	assert.NotEmpty(t, events)
 	assert.Contains(t, events[0], `"type":"text"`)
 
-	var hasStart, hasEnd, hasDone bool
+	var hasDone bool
 	for _, e := range events {
-		if strings.Contains(e, `"type":"html_start"`) { hasStart = true }
-		if strings.Contains(e, `"type":"html_end"`) { hasEnd = true }
 		if strings.Contains(e, `"type":"done"`) { hasDone = true }
 	}
-	assert.True(t, hasStart)
-	assert.True(t, hasEnd)
 	assert.True(t, hasDone)
 }
 
