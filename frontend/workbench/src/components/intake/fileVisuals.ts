@@ -74,6 +74,15 @@ export function getExt(name: string) {
   return extIndex >= 0 ? name.substring(extIndex).toLowerCase() : ''
 }
 
+export function getDisplayFileName(name: string) {
+  const extIndex = name.lastIndexOf('.')
+  if (extIndex <= 0) {
+    return name
+  }
+
+  return name.substring(0, extIndex)
+}
+
 export function getUploadFileVisual(name: string) {
   switch (getExt(name)) {
     case '.pdf':

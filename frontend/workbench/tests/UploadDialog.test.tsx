@@ -22,7 +22,7 @@ describe('UploadDialog', () => {
 
     await user.upload(input, file)
 
-    expect(screen.getByText('sample_resume.docx')).toBeInTheDocument()
+    expect(screen.getByText('sample_resume')).toBeInTheDocument()
     expect(screen.getByText('DOCX')).toBeInTheDocument()
   })
 

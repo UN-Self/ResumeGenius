@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { Upload } from 'lucide-react'
 import { Modal, ModalFooter, ModalHeader } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
-import { formatFileSize, getExt, getUploadFileVisual } from './fileVisuals'
+import { formatFileSize, getDisplayFileName, getExt, getUploadFileVisual } from './fileVisuals'
 
 const MAX_SIZE = 20 * 1024 * 1024
 const ALLOWED = ['.pdf', '.docx', '.png', '.jpg', '.jpeg']
@@ -135,7 +135,7 @@ export default function UploadDialog({ open, onClose, onUpload }: UploadDialogPr
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="min-w-0 break-all text-sm font-semibold text-foreground">{file.name}</p>
+                <p className="min-w-0 break-all text-sm font-semibold text-foreground">{getDisplayFileName(file.name)}</p>
                 <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold tracking-wide ${selectedVisual.chipClassName}`}>
                   {selectedVisual.chipLabel}
                 </span>
