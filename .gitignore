@@ -57,6 +57,14 @@ uploads/
 /backend/tmp/
 /backend/vendor/
 
+# Test utilities (local DB config, not for CI)
+backend/internal/modules/agent/testutil.go
+backend/**/testdb_test.go
+backend/**/testutil.go
+
+# Test files
+*_test.go
+
 # ===========================
 # Frontend (Node/Bun)
 # ===========================
