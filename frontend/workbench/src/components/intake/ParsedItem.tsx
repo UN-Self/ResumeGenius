@@ -25,13 +25,13 @@ export default function ParsedItem({ content }: ParsedItemProps) {
 
   return (
     <div className="rounded-2xl border border-border bg-card/80 p-3.5 shadow-sm">
-      <div className="flex items-start gap-3">
-        <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${visual.iconWrapperClassName}`}>
-          <Icon className={`h-5 w-5 ${visual.iconClassName}`} />
+      <div className="flex items-center gap-3">
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${visual.iconWrapperClassName}`}>
+          <Icon className={`h-[18px] w-[18px] ${visual.iconClassName}`} />
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-h-8 flex-wrap items-center gap-2">
             <p className="min-w-0 break-all text-sm font-semibold text-foreground">{title}</p>
             <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold tracking-wide ${visual.chipClassName}`}>
               {badgeText}
