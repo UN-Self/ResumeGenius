@@ -22,7 +22,7 @@ func setupTestHandler(t *testing.T) (*Handler, *gin.Engine, *gorm.DB) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := SetupTestDB(t)
-	h := NewHandler(NewSessionService(db), NewChatService(db, &MockAdapter{}, nil, 3))
+	h := NewHandler(NewSessionService(db), NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3))
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set(middleware.ContextUserID, "test-user-1"); c.Next() })
 	return h, r, db
@@ -180,6 +180,10 @@ func TestHandler_Chat_MockMode(t *testing.T) {
 	assert.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
 
 	body := rec.Body.String()
+	// Verify all SSE event types produced by ReAct loop
+	assert.Contains(t, body, `"type":"thinking"`)
+	assert.Contains(t, body, `"type":"tool_call"`)
+	assert.Contains(t, body, `"type":"tool_result"`)
 	assert.Contains(t, body, `"type":"text"`)
 	assert.Contains(t, body, `"type":"done"`)
 }
@@ -204,4 +208,30 @@ func TestHandler_GetHistory(t *testing.T) {
 	dataMap := parseDataMap(t, resp.Data)
 	items := dataMap["items"].([]interface{})
 	assert.Len(t, items, 2)
+}
+
+func TestHandler_Chat_MaxIterations(t *testing.T) {
+	t.Setenv("USE_MOCK", "true")
+
+	db := SetupTestDB(t)
+	h := NewHandler(NewSessionService(db), NewChatService(db, &ToolCallLoopMock{}, &MockToolExecutor{}, 3))
+	r := gin.New()
+	r.POST("/ai/sessions", h.CreateSession)
+	r.POST("/ai/sessions/:session_id/chat", h.Chat)
+
+	draftID := seedDraft(t, db)
+	sessionID := createSessionViaHandler(t, r, draftID)
+
+	req, err := http.NewRequest("POST", "/ai/sessions/"+strconv.Itoa(sessionID)+"/chat", strings.NewReader(`{"message":"test"}`))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+
+	body := rec.Body.String()
+	assert.Contains(t, body, `"type":"error"`)
+	assert.Contains(t, body, strconv.Itoa(CodeMaxIterations))
 }

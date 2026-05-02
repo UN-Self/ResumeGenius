@@ -16,6 +16,7 @@ const (
 	CodeModelFormat     = 3002
 	CodeSessionNotFound = 3003
 	CodeDraftNotFound   = 3004
+	CodeMaxIterations   = 3005
 	CodeParamInvalid    = 30000
 	CodeInternalError   = 50000
 )
@@ -103,6 +104,8 @@ func errorCode(err error) int {
 		return CodeModelTimeout
 	case errors.Is(err, ErrModelFormat):
 		return CodeModelFormat
+	case errors.Is(err, ErrMaxIterations):
+		return CodeMaxIterations
 	default:
 		return CodeInternalError
 	}
@@ -135,7 +138,7 @@ func (h *Handler) Chat(c *gin.Context) {
 		flusher.Flush()
 	}
 
-	if err := h.chatSvc.StreamChat(uint(sessionID), req.Message, sendEvent); err != nil {
+	if err := h.chatSvc.StreamChatReAct(uint(sessionID), req.Message, sendEvent); err != nil {
 		errJSON, _ := json.Marshal(map[string]interface{}{
 			"type":    "error",
 			"code":    errorCode(err),
