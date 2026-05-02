@@ -13,6 +13,18 @@ interface Props {
   onApplyHTML?: (html: string) => void
 }
 
+const HTML_START = '<!--RESUME_HTML_START-->'
+const HTML_END = '<!--RESUME_HTML_END-->'
+
+function getDisplayText(rawText: string): string {
+  const startIdx = rawText.indexOf(HTML_START)
+  if (startIdx === -1) return rawText
+  const endIdx = rawText.indexOf(HTML_END, startIdx)
+  const before = rawText.substring(0, startIdx)
+  const after = endIdx !== -1 ? rawText.substring(endIdx + HTML_END.length) : ''
+  return (before + after).trim()
+}
+
 const TOOL_LABELS: Record<string, string> = {
   get_project_assets: '获取项目资产',
   get_draft: '获取当前草稿',
@@ -53,7 +65,23 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
           setSession(s)
           const history = await agentApi.getHistory(s.id)
           if (!cancelled) {
-            setMessages(history.items.map((m) => ({ role: m.role, text: m.content })))
+            const loadedMessages: Message[] = []
+            let loadedHTML: string | null = null
+            for (const m of history.items) {
+              const displayText = getDisplayText(m.content)
+              loadedMessages.push({ role: m.role, text: displayText })
+              if (m.role === 'assistant') {
+                const startIdx = m.content.indexOf(HTML_START)
+                if (startIdx !== -1) {
+                  const endIdx = m.content.indexOf(HTML_END, startIdx + HTML_START.length)
+                  if (endIdx !== -1) {
+                    loadedHTML = m.content.substring(startIdx + HTML_START.length, endIdx)
+                  }
+                }
+              }
+            }
+            setMessages(loadedMessages)
+            if (loadedHTML) setHtmlPreview(loadedHTML)
           }
         } else {
           s = await agentApi.createSession(draftId)
@@ -99,9 +127,6 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
       let buffer = ''
       let currentText = ''
       let currentHTML = ''
-
-      const HTML_START = '<!--RESUME_HTML_START-->'
-      const HTML_END = '<!--RESUME_HTML_END-->'
       let inHTML = false
 
       while (true) {
@@ -156,11 +181,12 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
                   }
                 }
                 setMessages((prev) => {
+                  const displayText = getDisplayText(currentText)
                   const last = prev[prev.length - 1]
                   if (last?.role === 'assistant') {
-                    return [...prev.slice(0, -1), { ...last, text: currentText }]
+                    return [...prev.slice(0, -1), { ...last, text: displayText }]
                   }
-                  return [...prev, { role: 'assistant', text: currentText }]
+                  return [...prev, { role: 'assistant', text: displayText }]
                 })
                 break
               case 'error':

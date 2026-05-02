@@ -158,4 +158,4 @@ Gin 路由分组注册，每个模块统一签名 `func RegisterRoutes(rg *gin.R
 - 错误码段：intake=01xxx, parsing=02xxx, agent=03xxx, workbench=04xxx, render=05xxx
 - 前端不直接操作数据库，所有数据通过 API 获取
 - Commit 消息前缀：`feat:` / `fix:` / `docs:` / `refactor:` / `test:`
-- commit不要用co-worker-by
+- commit不要用Co-Authored-By
