@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -234,4 +236,447 @@ func TestHandler_Chat_MaxIterations(t *testing.T) {
 	body := rec.Body.String()
 	assert.Contains(t, body, `"type":"error"`)
 	assert.Contains(t, body, strconv.Itoa(CodeMaxIterations))
+}
+
+// ---------------------------------------------------------------------------
+// SSE event parsing helpers
+// ---------------------------------------------------------------------------
+
+// sseEvent represents a single parsed SSE data event.
+type sseEvent map[string]interface{}
+
+// parseSSEEvents parses an SSE response body into a slice of event maps.
+func parseSSEEvents(t *testing.T, body string) []sseEvent {
+	t.Helper()
+	var events []sseEvent
+	for _, block := range strings.Split(body, "\n\n") {
+		block = strings.TrimSpace(block)
+		if !strings.HasPrefix(block, "data: ") {
+			continue
+		}
+		data := strings.TrimPrefix(block, "data: ")
+		if data == "" {
+			continue
+		}
+		var ev sseEvent
+		if err := json.Unmarshal([]byte(data), &ev); err == nil {
+			events = append(events, ev)
+		}
+	}
+	return events
+}
+
+// ---------------------------------------------------------------------------
+// Configurable mock tool executor for integration tests
+// ---------------------------------------------------------------------------
+
+// mockToolExecutor is a configurable mock implementing ToolExecutor.
+// It supports per-tool results and errors, and can optionally persist
+// save_draft changes to the database.
+type mockToolExecutor struct {
+	results map[string]string // tool name -> result JSON
+	errors  map[string]error  // tool name -> error
+	db      *gorm.DB          // optional — if set, save_draft updates the draft row
+}
+
+func (m *mockToolExecutor) Tools() []ToolDef {
+	return []ToolDef{
+		{Name: "parse_project_assets", Description: "Parse project assets", Parameters: map[string]interface{}{"type": "object"}},
+		{Name: "save_draft", Description: "Save draft HTML", Parameters: map[string]interface{}{"type": "object"}},
+	}
+}
+
+func (m *mockToolExecutor) Execute(_ context.Context, name string, params map[string]interface{}) (string, error) {
+	if err, ok := m.errors[name]; ok {
+		return "", err
+	}
+	// When a db is available and the tool is save_draft, actually persist the change.
+	if name == "save_draft" && m.db != nil {
+		draftID, err := getIntParam(params, "draft_id")
+		if err == nil {
+			htmlContent, _ := getStringParam(params, "html_content")
+			if htmlContent != "" {
+				_ = m.db.Model(&models.Draft{}).Where("id = ?", draftID).Update("html_content", htmlContent).Error
+			}
+		}
+		out, _ := json.Marshal(map[string]interface{}{
+			"draft_id": draftID,
+			"status":   "saved",
+		})
+		return string(out), nil
+	}
+	if result, ok := m.results[name]; ok {
+		return result, nil
+	}
+	return "{}", nil
+}
+
+// ---------------------------------------------------------------------------
+// Custom mock adapters for specific test scenarios
+// ---------------------------------------------------------------------------
+
+// fullPipelineMockAdapter simulates the same ReAct sequence as MockAdapter but
+// uses the provided draft/project IDs so tool execution against the DB works.
+type fullPipelineMockAdapter struct {
+	draftID   float64
+	projectID float64
+}
+
+func (a *fullPipelineMockAdapter) StreamChat(_ context.Context, _ []Message, sendChunk func(string) error) error {
+	return sendChunk("已经根据你的资料生成了简历。")
+}
+
+func (a *fullPipelineMockAdapter) StreamChatReAct(
+	_ context.Context,
+	_ []Message,
+	_ []ToolDef,
+	onReasoning func(string) error,
+	onToolCall func(ToolCallRequest) error,
+	onText func(string) error,
+) error {
+	if err := onReasoning("我需要先获取项目中的资料。"); err != nil {
+		return err
+	}
+	if err := onToolCall(ToolCallRequest{
+		Name:   "parse_project_assets",
+		Params: map[string]interface{}{"project_id": a.projectID},
+	}); err != nil {
+		return err
+	}
+	if err := onReasoning("资料显示用户有3年前端开发经验，我来生成简历。"); err != nil {
+		return err
+	}
+	if err := onToolCall(ToolCallRequest{
+		Name: "save_draft",
+		Params: map[string]interface{}{
+			"draft_id":     a.draftID,
+			"html_content": "<!DOCTYPE html><html><body><h1>简历</h1><p>3年前端开发经验</p></body></html>",
+		},
+	}); err != nil {
+		return err
+	}
+	if err := onText("我已经根据你的资料生成了简历。"); err != nil {
+		return err
+	}
+	return nil
+}
+
+// textOnlyMockAdapter produces only a text response, no reasoning or tool calls.
+type textOnlyMockAdapter struct {
+	response string
+}
+
+func (a *textOnlyMockAdapter) StreamChat(_ context.Context, _ []Message, sendChunk func(string) error) error {
+	return sendChunk(a.response)
+}
+
+func (a *textOnlyMockAdapter) StreamChatReAct(
+	_ context.Context,
+	_ []Message,
+	_ []ToolDef,
+	_ func(string) error,
+	_ func(ToolCallRequest) error,
+	onText func(string) error,
+) error {
+	if a.response == "" {
+		a.response = "你好！我是简历助手，有什么可以帮你的吗？"
+	}
+	return onText(a.response)
+}
+
+// htmlMarkerMockAdapter returns text containing HTML markers.
+type htmlMarkerMockAdapter struct{}
+
+func (a *htmlMarkerMockAdapter) StreamChat(_ context.Context, _ []Message, sendChunk func(string) error) error {
+	return sendChunk("已生成简历。\n<!--RESUME_HTML_START-->\n<html>test</html>\n<!--RESUME_HTML_END-->")
+}
+
+func (a *htmlMarkerMockAdapter) StreamChatReAct(
+	_ context.Context,
+	_ []Message,
+	_ []ToolDef,
+	_ func(string) error,
+	_ func(ToolCallRequest) error,
+	onText func(string) error,
+) error {
+	return onText("已生成简历。\n<!--RESUME_HTML_START-->\n<html>test</html>\n<!--RESUME_HTML_END-->")
+}
+
+// ---------------------------------------------------------------------------
+// Integration tests
+// ---------------------------------------------------------------------------
+
+func TestHandler_Chat_FullPipeline(t *testing.T) {
+	db := SetupTestDB(t)
+	draftID := seedDraft(t, db)
+
+	// Adapter configured with the actual draft ID so save_draft updates the right row.
+	adapter := &fullPipelineMockAdapter{
+		draftID:   float64(draftID),
+		projectID: float64(1),
+	}
+
+	// Mock executor that persists save_draft to DB.
+	executor := &mockToolExecutor{
+		db: db,
+		results: map[string]string{
+			"parse_project_assets": `{"assets":[{"id":1,"content":"test resume content"}]}`,
+		},
+	}
+
+	chatSvc := NewChatService(db, adapter, executor, 3)
+	sessionSvc := NewSessionService(db)
+	h := NewHandler(sessionSvc, chatSvc)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) { c.Set(middleware.ContextUserID, "test-user-1"); c.Next() })
+	r.POST("/ai/sessions", h.CreateSession)
+	r.POST("/ai/sessions/:session_id/chat", h.Chat)
+
+	sessionID := createSessionViaHandler(t, r, draftID)
+
+	// --- Send chat message ---
+	body := `{"message":"帮我生成一份简历"}`
+	req, err := http.NewRequest("POST", "/ai/sessions/"+strconv.Itoa(sessionID)+"/chat", strings.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+
+	events := parseSSEEvents(t, rec.Body.String())
+	require.GreaterOrEqual(t, len(events), 6, "should have at least 6 SSE events")
+
+	// --- Verify event type sequence ---
+	types := make([]string, len(events))
+	for i, ev := range events {
+		types[i] = ev["type"].(string)
+	}
+
+	assert.Equal(t, "thinking", types[0], "event 0 should be thinking")
+	assert.Equal(t, "tool_call", types[1], "event 1 should be tool_call")
+	assert.Equal(t, "tool_result", types[2], "event 2 should be tool_result")
+	assert.Equal(t, "thinking", types[3], "event 3 should be thinking")
+	assert.Equal(t, "tool_call", types[4], "event 4 should be tool_call")
+	assert.Equal(t, "tool_result", types[5], "event 5 should be tool_result")
+
+	// Verify tool_call names
+	assert.Equal(t, "parse_project_assets", events[1]["name"])
+	assert.Equal(t, "save_draft", events[4]["name"])
+
+	// Verify tool_result statuses
+	assert.Equal(t, "completed", events[2]["status"])
+	assert.Equal(t, "completed", events[5]["status"])
+
+	// Verify text and done events exist
+	var hasText, hasDone bool
+	for _, ev := range events {
+		switch ev["type"] {
+		case "text":
+			hasText = true
+		case "done":
+			hasDone = true
+		}
+	}
+	assert.True(t, hasText, "should have at least one text event")
+	assert.True(t, hasDone, "should have a done event")
+
+	// --- Verify draft HTML was updated by save_draft ---
+	var draft models.Draft
+	err = db.First(&draft, draftID).Error
+	require.NoError(t, err)
+	assert.Contains(t, draft.HTMLContent, "<h1>简历</h1>", "draft HTML should have been updated by save_draft")
+
+	// --- Verify messages saved to DB ---
+	var messages []models.AIMessage
+	err = db.Where("session_id = ?", sessionID).Order("created_at ASC").Find(&messages).Error
+	require.NoError(t, err)
+	require.Len(t, messages, 2, "should have exactly 2 messages (user + assistant)")
+	assert.Equal(t, "user", messages[0].Role)
+	assert.Equal(t, "帮我生成一份简历", messages[0].Content)
+	assert.Equal(t, "assistant", messages[1].Role)
+	assert.Equal(t, "我已经根据你的资料生成了简历。", messages[1].Content)
+}
+
+func TestHandler_Chat_ToolExecutionError(t *testing.T) {
+	db := SetupTestDB(t)
+	draftID := seedDraft(t, db)
+
+	// ToolCallLoopMock only produces tool calls (never text).
+	// Combined with an executor that always errors, the ReAct loop hits maxIterations.
+	executor := &mockToolExecutor{
+		errors: map[string]error{
+			"parse_project_assets": fmt.Errorf("database connection failed"),
+			"save_draft":          fmt.Errorf("permission denied"),
+		},
+	}
+
+	chatSvc := NewChatService(db, &ToolCallLoopMock{}, executor, 3)
+	sessionSvc := NewSessionService(db)
+	h := NewHandler(sessionSvc, chatSvc)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) { c.Set(middleware.ContextUserID, "test-user-1"); c.Next() })
+	r.POST("/ai/sessions", h.CreateSession)
+	r.POST("/ai/sessions/:session_id/chat", h.Chat)
+
+	sessionID := createSessionViaHandler(t, r, draftID)
+
+	body := `{"message":"帮我生成简历"}`
+	req, err := http.NewRequest("POST", "/ai/sessions/"+strconv.Itoa(sessionID)+"/chat", strings.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+
+	events := parseSSEEvents(t, rec.Body.String())
+
+	// Verify tool_call and tool_result events for each of the 3 iterations
+	var toolCallCount, toolResultCount int
+	var errorCode float64
+	var hasErrorEvent bool
+
+	for _, ev := range events {
+		switch ev["type"] {
+		case "tool_call":
+			toolCallCount++
+		case "tool_result":
+			toolResultCount++
+			assert.Equal(t, "failed", ev["status"], "tool result should have failed status")
+		case "error":
+			hasErrorEvent = true
+			if code, ok := ev["code"]; ok {
+				errorCode = code.(float64)
+			}
+		}
+	}
+
+	assert.Equal(t, 3, toolCallCount, "should have 3 tool_call events (one per iteration)")
+	assert.Equal(t, 3, toolResultCount, "should have 3 tool_result events (one per iteration)")
+	assert.True(t, hasErrorEvent, "should have an error event after max iterations exceeded")
+	assert.Equal(t, float64(CodeMaxIterations), errorCode, "error code should be max iterations (3005)")
+}
+
+func TestHandler_Chat_NoToolsNeeded(t *testing.T) {
+	db := SetupTestDB(t)
+	draftID := seedDraft(t, db)
+
+	adapter := &textOnlyMockAdapter{response: "你好！我是简历助手，有什么可以帮你的吗？"}
+	executor := &mockToolExecutor{results: map[string]string{}}
+
+	chatSvc := NewChatService(db, adapter, executor, 3)
+	sessionSvc := NewSessionService(db)
+	h := NewHandler(sessionSvc, chatSvc)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) { c.Set(middleware.ContextUserID, "test-user-1"); c.Next() })
+	r.POST("/ai/sessions", h.CreateSession)
+	r.POST("/ai/sessions/:session_id/chat", h.Chat)
+
+	sessionID := createSessionViaHandler(t, r, draftID)
+
+	body := `{"message":"你好"}`
+	req, err := http.NewRequest("POST", "/ai/sessions/"+strconv.Itoa(sessionID)+"/chat", strings.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+
+	events := parseSSEEvents(t, rec.Body.String())
+
+	// Should only have text + done — no thinking, tool_call, tool_result, or error.
+	var hasText, hasDone bool
+	var hasThinking, hasToolCall, hasToolResult, hasError bool
+	for _, ev := range events {
+		switch ev["type"] {
+		case "text":
+			hasText = true
+		case "done":
+			hasDone = true
+		case "thinking":
+			hasThinking = true
+		case "tool_call":
+			hasToolCall = true
+		case "tool_result":
+			hasToolResult = true
+		case "error":
+			hasError = true
+		}
+	}
+
+	assert.True(t, hasText, "should have text event")
+	assert.True(t, hasDone, "should have done event")
+	assert.False(t, hasThinking, "should NOT have thinking events when no tool calls are needed")
+	assert.False(t, hasToolCall, "should NOT have tool_call events")
+	assert.False(t, hasToolResult, "should NOT have tool_result events")
+	assert.False(t, hasError, "should NOT have error events")
+
+	// Verify user + assistant messages saved to DB
+	var messages []models.AIMessage
+	err = db.Where("session_id = ?", sessionID).Order("created_at ASC").Find(&messages).Error
+	require.NoError(t, err)
+	require.Len(t, messages, 2, "should have exactly 2 messages (user + assistant)")
+	assert.Equal(t, "user", messages[0].Role)
+	assert.Equal(t, "你好", messages[0].Content)
+	assert.Equal(t, "assistant", messages[1].Role)
+	assert.Equal(t, "你好！我是简历助手，有什么可以帮你的吗？", messages[1].Content)
+}
+
+func TestHandler_Chat_HTMLPreviewInText(t *testing.T) {
+	db := SetupTestDB(t)
+	draftID := seedDraft(t, db)
+
+	adapter := &htmlMarkerMockAdapter{}
+	executor := &mockToolExecutor{results: map[string]string{}}
+
+	chatSvc := NewChatService(db, adapter, executor, 3)
+	sessionSvc := NewSessionService(db)
+	h := NewHandler(sessionSvc, chatSvc)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) { c.Set(middleware.ContextUserID, "test-user-1"); c.Next() })
+	r.POST("/ai/sessions", h.CreateSession)
+	r.POST("/ai/sessions/:session_id/chat", h.Chat)
+
+	sessionID := createSessionViaHandler(t, r, draftID)
+
+	body := `{"message":"生成简历"}`
+	req, err := http.NewRequest("POST", "/ai/sessions/"+strconv.Itoa(sessionID)+"/chat", strings.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+
+	events := parseSSEEvents(t, rec.Body.String())
+
+	// Collate text event content
+	var textContent string
+	var hasDone bool
+	for _, ev := range events {
+		switch ev["type"] {
+		case "text":
+			content, ok := ev["content"].(string)
+			if ok {
+				textContent += content
+			}
+		case "done":
+			hasDone = true
+		}
+	}
+
+	assert.Contains(t, textContent, "<!--RESUME_HTML_START-->", "text should contain HTML start marker")
+	assert.Contains(t, textContent, "<!--RESUME_HTML_END-->", "text should contain HTML end marker")
+	assert.Contains(t, textContent, "<html>test</html>", "text should contain HTML content")
+	assert.True(t, hasDone, "should have done event")
 }
