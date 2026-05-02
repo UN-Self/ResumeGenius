@@ -17,8 +17,8 @@ const (
 	CodeSessionNotFound = 3003
 	CodeDraftNotFound   = 3004
 	CodeMaxIterations   = 3005
-	CodeParamInvalid    = 30000
-	CodeInternalError   = 50000
+	CodeParamInvalid    = 3000
+	CodeInternalError   = 3999
 )
 
 type Handler struct {
