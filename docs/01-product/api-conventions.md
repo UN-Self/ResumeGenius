@@ -150,19 +150,21 @@ POST /api/v1/ai/sessions/{session_id}/chat
 Accept: text/event-stream
 
 Response:
-data: {"type": "text", "content": "好的，我来帮你..."}
-data: {"type": "text", "content": "建议将项目经历精简为："}
-data: {"type": "html_start"}
-data: {"type": "html_chunk", "content": "<div class=\"resume\">..."}
-data: {"type": "html_end"}
-data: {"type": "done"}
+data: {"type":"thinking","content":"我需要先获取项目中的资料..."}
+data: {"type":"tool_call","name":"parse_project_assets","params":{"project_id":1}}
+data: {"type":"tool_result","name":"parse_project_assets","status":"completed"}
+data: {"type":"text","content":"好的，我来帮你..."}
+data: {"type":"done"}
 ```
 
-事件类型：
-- `text`：AI 文字说明（逐字流式）
-- `html_start`：HTML 内容开始标记
-- `html_chunk`：HTML 内容片段
-- `html_end`：HTML 内容结束标记
+SSE 事件类型以 [docs/modules/agent/contract.md](../modules/agent/contract.md) 为准。
+
+主要事件类型：
+- `text`：AI 文本回复（逐字流式，含 HTML 标记）
+- `thinking`：AI 推理链（ReAct think 阶段，流式）
+- `tool_call`：AI 发起工具调用
+- `tool_result`：工具执行完成
+- `error`：出错
 - `done`：响应完成
 
 ## 8. 异步任务

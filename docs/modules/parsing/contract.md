@@ -1,6 +1,6 @@
 # 模块 parsing 契约：文件解析与 AI 初稿生成
 
-更新时间：2026-04-30
+更新时间：2026-05-02
 
 ## 1. 角色定义
 
@@ -54,7 +54,7 @@ AI 输出：
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/api/v1/parsing/parse` | 触发解析（同步） |
-| POST | `/api/v1/parsing/generate` | 触发 AI 初稿生成（同步） |
+| POST | `/api/v1/parsing/generate` | ⚠️ deprecated：AI 初稿生成已由 agent 模块的 ReAct Tool 系统接管（2026-05-02） |
 
 ### 关键端点详情
 
@@ -132,7 +132,7 @@ Response (AI 调用失败):
 | Git | clone → 抽 README + 项目名 + 技术栈 + 目录结构 |
 | 补充文本 | 直接使用 content 字段 |
 
-## 6. AI 初稿生成
+## 6. AI 初稿生成（⚠️ deprecated: 2026-05-02 起由 agent 模块 ReAct Tool 系统接管）
 
 ### 6.1 Prompt 构建
 

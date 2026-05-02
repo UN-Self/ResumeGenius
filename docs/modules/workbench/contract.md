@@ -1,6 +1,6 @@
 # 模块 workbench 契约：可视化编辑器
 
-更新时间：2026-04-23
+更新时间：2026-05-02
 
 ## 1. 角色定义
 
@@ -184,7 +184,9 @@ Response:
 ### 上游
 
 - 模块 parsing 产出初始 drafts.html_content
-- 模块 agent 通过 AI 对话修改后，前端替换 HTML
+- 模块 agent 通过 AI 对话修改 HTML（两种方式）：
+  - 原有：AI 返回 HTML → 前端"应用到简历" → `PUT /api/v1/drafts/{draft_id}`
+  - 新增（v2）：AI 通过 `save_draft` tool 直接写入 `drafts` 表，workbench 编辑器可通过轮询或 SSE 事件感知更新
 
 ### 下游
 
