@@ -408,7 +408,7 @@ git commit -m "docs: 统一 assets.content 为素材正文契约"
 git commit -m "feat(parsing): 新增共享文本清洗器"
 ```
 
-### Step 3：把 parse 结果持久化到 assets
+### Step 3：把 parse 结果持久化到 assets（已完成）
 
 目标：
 
