@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -294,7 +295,7 @@ func TestToolExecutor_GetDraft_NotFound(t *testing.T) {
 
 	_, err := executor.Execute(context.Background(), "get_draft", map[string]interface{}{"draft_id": float64(99999)})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "record not found")
+	assert.True(t, errors.Is(err, gorm.ErrRecordNotFound))
 }
 
 func TestToolExecutor_SaveDraft(t *testing.T) {
@@ -600,5 +601,3 @@ func strPtr(s string) *string {
 	return &s
 }
 
-// Ensure unused imports are referenced.
-var _ = gorm.ErrRecordNotFound

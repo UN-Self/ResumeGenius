@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -95,6 +96,11 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []Message, send
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+
 	scanner := bufio.NewScanner(resp.Body)
 	for scanner.Scan() {
 		select {
@@ -120,6 +126,7 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []Message, send
 			} `json:"choices"`
 		}
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			log.Printf("agent: skipping malformed SSE line: %v", err)
 			continue
 		}
 		if len(chunk.Choices) == 0 {
@@ -250,6 +257,7 @@ func (a *OpenAIAdapter) StreamChatReAct(
 			} `json:"choices"`
 		}
 		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			log.Printf("agent: skipping malformed SSE line: %v", err)
 			continue
 		}
 		if len(chunk.Choices) == 0 {
@@ -316,6 +324,9 @@ func (a *OpenAIAdapter) StreamChatReAct(
 
 	// dispatch any remaining accumulated tool calls (stream ended without explicit finish_reason)
 	for _, acc := range toolCallAccums {
+		if acc.id == "" || acc.name == "" {
+			continue
+		}
 		var params map[string]interface{}
 		if err := json.Unmarshal([]byte(acc.arguments), &params); err != nil {
 			params = map[string]interface{}{}

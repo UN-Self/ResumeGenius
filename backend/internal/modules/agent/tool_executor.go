@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 	"gorm.io/gorm"
@@ -40,7 +41,7 @@ type AgentToolExecutor struct {
 func NewAgentToolExecutor(db *gorm.DB, baseURL string) *AgentToolExecutor {
 	return &AgentToolExecutor{
 		db:         db,
-		httpClient: &http.Client{},
+		httpClient: &http.Client{Timeout: 30 * time.Second},
 		baseURL:    baseURL,
 	}
 }
@@ -325,7 +326,7 @@ func (e *AgentToolExecutor) httpPost(ctx context.Context, path string, body map[
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
 	if err != nil {
 		return "", fmt.Errorf("read response body: %w", err)
 	}
