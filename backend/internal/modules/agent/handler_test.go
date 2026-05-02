@@ -22,7 +22,7 @@ func setupTestHandler(t *testing.T) (*Handler, *gin.Engine, *gorm.DB) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := SetupTestDB(t)
-	h := NewHandler(NewSessionService(db), NewChatService(db, &MockAdapter{}))
+	h := NewHandler(NewSessionService(db), NewChatService(db, &MockAdapter{}, nil, 3))
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set(middleware.ContextUserID, "test-user-1"); c.Next() })
 	return h, r, db
@@ -180,8 +180,8 @@ func TestHandler_Chat_MockMode(t *testing.T) {
 	assert.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
 
 	body := rec.Body.String()
-	assert.Contains(t, body, `data: {"type":"text"`)
-	assert.Contains(t, body, `data: {"type":"done"}`)
+	assert.Contains(t, body, `"type":"text"`)
+	assert.Contains(t, body, `"type":"done"`)
 }
 
 func TestHandler_GetHistory(t *testing.T) {

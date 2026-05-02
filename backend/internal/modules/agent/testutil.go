@@ -51,7 +51,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		tx.Rollback()
 	})
 
-	tx.AutoMigrate(&models.Project{}, &models.Draft{}, &models.AISession{}, &models.AIMessage{})
+	tx.AutoMigrate(&models.Project{}, &models.Draft{}, &models.AISession{}, &models.AIMessage{}, &models.AIToolCall{})
 
 	return tx
 }

@@ -21,7 +21,8 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 		)
 	}
 
-	chatSvc := NewChatService(db, provider)
+	toolExecutor := NewAgentToolExecutor(db, "http://127.0.0.1:8080")
+	chatSvc := NewChatService(db, provider, toolExecutor, 3)
 	h := NewHandler(sessionSvc, chatSvc)
 
 	rg.POST("/ai/sessions", h.CreateSession)
