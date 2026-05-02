@@ -284,7 +284,7 @@ func (s *ParsingService) parsePDFAsset(asset models.Asset) (*ParsedContent, erro
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrPDFParseFailed, err)
 	}
-	return attachAssetMetadata(asset, parsed), nil
+	return cleanParsedContentText(attachAssetMetadata(asset, parsed)), nil
 }
 
 func (s *ParsingService) parseDOCXAsset(asset models.Asset) (*ParsedContent, error) {
@@ -300,7 +300,7 @@ func (s *ParsingService) parseDOCXAsset(asset models.Asset) (*ParsedContent, err
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrDOCXParseFailed, err)
 	}
-	return attachAssetMetadata(asset, parsed), nil
+	return cleanParsedContentText(attachAssetMetadata(asset, parsed)), nil
 }
 
 func (s *ParsingService) parseGitAsset(asset models.Asset) (*ParsedContent, error) {
@@ -316,7 +316,7 @@ func (s *ParsingService) parseGitAsset(asset models.Asset) (*ParsedContent, erro
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrGitExtractFailed, err)
 	}
-	return attachAssetMetadata(asset, parsed), nil
+	return cleanParsedContentText(attachAssetMetadata(asset, parsed)), nil
 }
 
 func (s *ParsingService) parseNoteAsset(asset models.Asset) (*ParsedContent, error) {
@@ -325,10 +325,10 @@ func (s *ParsingService) parseNoteAsset(asset models.Asset) (*ParsedContent, err
 		return nil, err
 	}
 
-	return attachAssetMetadata(asset, &ParsedContent{
+	return cleanParsedContentText(attachAssetMetadata(asset, &ParsedContent{
 		Text:   text,
 		Images: nil,
-	}), nil
+	})), nil
 }
 
 func (s *ParsingService) resolveAssetPath(asset models.Asset) (string, error) {
