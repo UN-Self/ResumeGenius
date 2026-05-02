@@ -54,8 +54,11 @@ export interface Asset {
   project_id: number
   type: string
   uri?: string
+  // Canonical asset body for AI / sidebar consumption.
+  // Notes write it directly; file and git assets are expected to be backfilled by parsing after cleanup.
   content?: string
   label?: string
+  metadata?: Record<string, unknown>
   created_at: string
 }
 
@@ -141,6 +144,7 @@ export interface ParsedContent {
   asset_id: number
   type: string
   label: string
+  // Temporary parse preview payload. The canonical persisted body should live in assets.content.
   text: string
   images?: ParsedImage[]
 }
