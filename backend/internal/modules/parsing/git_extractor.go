@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	maxReadmePreviewLength = 1800
-	maxTopLevelEntries     = 10
+	maxReadmePreviewLength   = 1800
+	maxTopLevelEntries       = 10
 	defaultGitCommandTimeout = 30 * time.Second
 )
 
@@ -338,17 +338,7 @@ func inferRepositoryName(repoURL, repoDir string) string {
 }
 
 func truncateAndNormalizeText(input string, limit int) string {
-	normalized := strings.ReplaceAll(input, "\r\n", "\n")
-	normalized = strings.TrimSpace(normalized)
-	if normalized == "" {
-		return ""
-	}
-
-	runes := []rune(normalized)
-	if len(runes) <= limit {
-		return normalized
-	}
-	return strings.TrimSpace(string(runes[:limit])) + "..."
+	return truncateCleanedText(input, limit)
 }
 
 func defaultRunGitCommand(dir string, args ...string) ([]byte, error) {

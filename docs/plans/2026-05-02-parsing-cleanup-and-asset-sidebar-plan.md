@@ -375,7 +375,7 @@ note 不做“重写”，只做轻清洗：
 git commit -m "docs: 统一 assets.content 为素材正文契约"
 ```
 
-### Step 2：抽出共享清洗器
+### Step 2：抽出共享清洗器（已完成）
 
 目标：
 

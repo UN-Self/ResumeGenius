@@ -919,6 +919,51 @@ func TestParseAssetBuildsParsedContentForNoteWithoutLabel(t *testing.T) {
 	}
 }
 
+func TestParseAssetCleansNoteContent(t *testing.T) {
+	svc := NewParsingService(nil, nil, nil, nil)
+	content := "\n• React   工程化\n----\n第 2 页 / 共 3 页\n\nTypeScript  组件设计\n"
+	label := "求职方向"
+
+	parsed, err := svc.parseAsset(models.Asset{
+		ID:      46,
+		Type:    AssetTypeNote,
+		Content: &content,
+		Label:   &label,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expectedText := "求职方向\n- React 工程化\n\nTypeScript 组件设计"
+	if parsed.Text != expectedText {
+		t.Fatalf("expected cleaned note text %q, got %q", expectedText, parsed.Text)
+	}
+}
+
+func TestParseAssetCleansParserOutputText(t *testing.T) {
+	path := "fixtures/sample_resume.pdf"
+	pdfParser := &stubPdfParser{
+		result: &ParsedContent{
+			Text: "Page 1 of 2\n• React   工程化\n----\n量化结果",
+		},
+	}
+	svc := NewParsingService(nil, pdfParser, nil, nil)
+
+	parsed, err := svc.parseAsset(models.Asset{
+		ID:   47,
+		Type: AssetTypeResumePDF,
+		URI:  &path,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expectedText := "- React 工程化\n量化结果"
+	if parsed.Text != expectedText {
+		t.Fatalf("expected cleaned parser text %q, got %q", expectedText, parsed.Text)
+	}
+}
+
 func TestParseAssetRequiresContentForNote(t *testing.T) {
 	svc := NewParsingService(nil, nil, nil, nil)
 	blank := "   "
