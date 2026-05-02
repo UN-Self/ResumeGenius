@@ -24,7 +24,7 @@ export function HtmlPreview({ html }: Props) {
       ref={iframeRef}
       className="w-full border-0"
       style={{ height: 200 }}
-      sandbox="allow-same-origin"
+      sandbox=""
       title="AI 生成的简历 HTML 预览"
     />
   )
