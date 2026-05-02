@@ -42,7 +42,8 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		DisableForeignKeyConstraintWhenMigrating: true,
 	})
 	if err != nil {
-		t.Fatalf("connect test db: %v", err)
+		t.Skipf("skip db test: connect postgres: %v", err)
+		return nil
 	}
 
 	tx := db.Begin()
