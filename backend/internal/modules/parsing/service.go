@@ -1,6 +1,7 @@
 package parsing
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"strings"
@@ -398,15 +399,71 @@ func (s *ParsingService) persistParsedAsset(asset models.Asset, parsed *ParsedCo
 		return nil
 	}
 
-	updates := map[string]interface{}{
-		"metadata": withAssetParsingMetadata(asset.Metadata, "success", parsed, shouldPersistParsedText(asset)),
+	var oldDerivedAssets []models.Asset
+	if s.storage != nil {
+		oldDerivedAssets = loadDerivedImageAssetsByIDs(s.db, asset.ProjectID, derivedImageAssetIDsFromMetadata(asset.Metadata))
 	}
-	if content, ok := parsedAssetContentForPersistence(asset, parsed); ok {
-		updates["content"] = content
+	savedKeys := make([]string, 0, len(parsed.Images))
+	newDerivedImageAssetIDs := make([]uint, 0, len(parsed.Images))
+
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if s.storage != nil {
+			for index, image := range parsed.Images {
+				key, createdID, err := s.createDerivedImageAsset(tx, asset, image, index)
+				if err != nil {
+					return err
+				}
+				savedKeys = append(savedKeys, key)
+				newDerivedImageAssetIDs = append(newDerivedImageAssetIDs, createdID)
+			}
+		}
+
+		derivedImageIDsForMetadata := []uint(nil)
+		if s.storage != nil {
+			derivedImageIDsForMetadata = newDerivedImageAssetIDs
+		}
+		imagesPersisted := s.storage != nil && len(parsed.Images) > 0
+
+		updates := map[string]interface{}{
+			"metadata": withAssetParsingMetadata(
+				asset.Metadata,
+				"success",
+				parsed,
+				shouldPersistParsedText(asset),
+				derivedImageIDsForMetadata,
+				imagesPersisted,
+			),
+		}
+		if content, ok := parsedAssetContentForPersistence(asset, parsed); ok {
+			updates["content"] = content
+		}
+		if err := tx.Model(&models.Asset{}).Where("id = ?", asset.ID).Updates(updates).Error; err != nil {
+			return err
+		}
+
+		oldIDs := assetIDs(oldDerivedAssets)
+		if len(oldIDs) > 0 {
+			if err := tx.Where("project_id = ? AND id IN ?", asset.ProjectID, oldIDs).Delete(&models.Asset{}).Error; err != nil {
+				return fmt.Errorf("delete stale derived image assets: %w", err)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		for _, key := range savedKeys {
+			_ = s.storage.Delete(key)
+		}
+		return err
 	}
 
-	result := s.db.Model(&models.Asset{}).Where("id = ?", asset.ID).Updates(updates)
-	return result.Error
+	for _, oldAsset := range oldDerivedAssets {
+		if oldAsset.URI != nil {
+			_ = s.storage.Delete(*oldAsset.URI)
+		}
+	}
+
+	return nil
 }
 
 func (s *ParsingService) persistAssetParsingStatus(asset models.Asset, status string) error {
@@ -416,7 +473,7 @@ func (s *ParsingService) persistAssetParsingStatus(asset models.Asset, status st
 
 	result := s.db.Model(&models.Asset{}).
 		Where("id = ?", asset.ID).
-		Update("metadata", withAssetParsingMetadata(asset.Metadata, status, nil, false))
+		Update("metadata", withAssetParsingMetadata(asset.Metadata, status, nil, false, nil, false))
 	return result.Error
 }
 
@@ -436,7 +493,14 @@ func shouldPersistParsedText(asset models.Asset) bool {
 	}
 }
 
-func withAssetParsingMetadata(existing models.JSONB, status string, parsed *ParsedContent, contentPersisted bool) models.JSONB {
+func withAssetParsingMetadata(
+	existing models.JSONB,
+	status string,
+	parsed *ParsedContent,
+	contentPersisted bool,
+	derivedImageAssetIDs []uint,
+	imagesPersisted bool,
+) models.JSONB {
 	metadata := cloneJSONB(existing)
 	parsing := cloneJSONMap(metadata["parsing"])
 	parsing["status"] = status
@@ -447,6 +511,12 @@ func withAssetParsingMetadata(existing models.JSONB, status string, parsed *Pars
 		if contentPersisted {
 			parsing["content_persisted"] = true
 		}
+	}
+	if derivedImageAssetIDs != nil {
+		parsing["derived_image_asset_ids"] = uintSliceToInterfaceSlice(derivedImageAssetIDs)
+	}
+	if imagesPersisted {
+		parsing["images_persisted"] = true
 	}
 
 	metadata["parsing"] = parsing
@@ -489,6 +559,123 @@ func parsedImageCount(parsed *ParsedContent) int {
 		return 0
 	}
 	return len(parsed.Images)
+}
+
+func (s *ParsingService) createDerivedImageAsset(tx *gorm.DB, sourceAsset models.Asset, image ParsedImage, index int) (string, uint, error) {
+	if s.storage == nil {
+		return "", 0, ErrDatabaseNotConfigured
+	}
+
+	imageBytes, err := base64.StdEncoding.DecodeString(image.DataBase64)
+	if err != nil {
+		return "", 0, fmt.Errorf("decode parsed image base64: %w", err)
+	}
+
+	filename := fmt.Sprintf("asset-%d-image-%d.png", sourceAsset.ID, index+1)
+	key, err := s.storage.Save(sourceAsset.ProjectID, filename, imageBytes)
+	if err != nil {
+		return "", 0, fmt.Errorf("save parsed image: %w", err)
+	}
+
+	label := derivedPersistedImageLabel(sourceAsset, index)
+	metadata := models.JSONB{
+		"parsing": map[string]interface{}{
+			"derived":           true,
+			"source_asset_id":   sourceAsset.ID,
+			"source_asset_type": sourceAsset.Type,
+		},
+	}
+	if strings.TrimSpace(image.Description) != "" {
+		metadata["image_description"] = strings.TrimSpace(image.Description)
+	}
+
+	derivedAsset := models.Asset{
+		ProjectID: sourceAsset.ProjectID,
+		Type:      AssetTypeResumeImage,
+		URI:       &key,
+		Label:     &label,
+		Metadata:  metadata,
+	}
+	if err := tx.Create(&derivedAsset).Error; err != nil {
+		_ = s.storage.Delete(key)
+		return "", 0, fmt.Errorf("create derived image asset: %w", err)
+	}
+
+	return key, derivedAsset.ID, nil
+}
+
+func derivedImageLabel(sourceAsset models.Asset, index int) string {
+	base := strings.TrimSpace(AssetLabel(sourceAsset.Label, sourceAsset.URI))
+	if base == "" {
+		base = fmt.Sprintf("素材 %d", sourceAsset.ID)
+	}
+	return fmt.Sprintf("%s 图片 %d", base, index+1)
+}
+
+func derivedImageAssetIDsFromMetadata(metadata models.JSONB) []uint {
+	parsing := cloneJSONMap(metadata["parsing"])
+	rawIDs, ok := parsing["derived_image_asset_ids"]
+	if !ok {
+		return nil
+	}
+
+	items, ok := rawIDs.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	ids := make([]uint, 0, len(items))
+	for _, item := range items {
+		switch typed := item.(type) {
+		case float64:
+			ids = append(ids, uint(typed))
+		case int:
+			ids = append(ids, uint(typed))
+		case uint:
+			ids = append(ids, typed)
+		}
+	}
+	return ids
+}
+
+func loadDerivedImageKeysForCleanup(db *gorm.DB, projectID uint, ids []uint) []models.Asset {
+	if db == nil || len(ids) == 0 {
+		return nil
+	}
+
+	var assets []models.Asset
+	if err := db.Where("project_id = ? AND id IN ?", projectID, ids).Find(&assets).Error; err != nil {
+		return nil
+	}
+	return assets
+}
+
+func uintSliceToInterfaceSlice(ids []uint) []interface{} {
+	values := make([]interface{}, 0, len(ids))
+	for _, id := range ids {
+		values = append(values, id)
+	}
+	return values
+}
+
+func derivedPersistedImageLabel(sourceAsset models.Asset, index int) string {
+	base := strings.TrimSpace(AssetLabel(sourceAsset.Label, sourceAsset.URI))
+	if base == "" {
+		base = fmt.Sprintf("Asset %d", sourceAsset.ID)
+	}
+	return fmt.Sprintf("%s Image %d", base, index+1)
+}
+
+func loadDerivedImageAssetsByIDs(db *gorm.DB, projectID uint, ids []uint) []models.Asset {
+	return loadDerivedImageKeysForCleanup(db, projectID, ids)
+}
+
+func assetIDs(assets []models.Asset) []uint {
+	ids := make([]uint, 0, len(assets))
+	for _, asset := range assets {
+		ids = append(ids, asset.ID)
+	}
+	return ids
 }
 
 func isRecoverableAssetError(err error) bool {

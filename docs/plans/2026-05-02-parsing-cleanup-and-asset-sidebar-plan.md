@@ -439,7 +439,13 @@ git commit -m "feat(parsing): 新增共享文本清洗器"
 git commit -m "feat(parsing): 持久化清洗后的素材正文"
 ```
 
-### Step 4：给解析出的图片补持久化落点
+### Step 4：给解析出的图片补持久化落点（已完成）
+
+完成情况：
+
+- `ParsedContent.Images` 现在会落成独立的 `resume_image` 资产
+- 主资产 `metadata.parsing.derived_image_asset_ids` 会记录衍生图片资产 ID
+- 重复 parse 时会替换旧的衍生图片资产与文件，避免无限堆积
 
 目标：
 

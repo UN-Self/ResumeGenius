@@ -1,6 +1,7 @@
 package parsing
 
 import (
+	"encoding/base64"
 	"errors"
 	"strings"
 	"testing"
@@ -436,6 +437,206 @@ func TestParseMarksFailedAndSkippedAssetsInMetadata(t *testing.T) {
 		t.Fatalf("fetch image asset: %v", err)
 	}
 	assertParsingStatus(t, storedImage.Metadata, "skipped")
+}
+
+func TestParsePersistsDerivedImageAssetsForParsedImages(t *testing.T) {
+	db := setupParsingTestDB(t)
+	store := newTestStorage(t)
+	project := models.Project{
+		UserID: "test-user-1",
+		Title:  "Persist derived images",
+		Status: "active",
+	}
+	if err := db.Create(&project).Error; err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	pdfURI := "fixtures/sample_resume.pdf"
+	pdfAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeResumePDF, URI: &pdfURI}
+	if err := db.Create(&pdfAsset).Error; err != nil {
+		t.Fatalf("create pdf asset: %v", err)
+	}
+
+	pdfParser := &stubPdfParser{
+		result: &ParsedContent{
+			Text: "Page 1 of 1\n* React   engineering",
+			Images: []ParsedImage{
+				{
+					Description: "avatar",
+					DataBase64:  base64.StdEncoding.EncodeToString([]byte("avatar-bytes")),
+				},
+				{
+					Description: "badge",
+					DataBase64:  base64.StdEncoding.EncodeToString([]byte("badge-bytes")),
+				},
+			},
+		},
+	}
+
+	svc := NewParsingServiceWithGeneratorAndStorage(db, pdfParser, nil, nil, nil, store)
+
+	parsedContents, err := svc.Parse(project.ID)
+	if err != nil {
+		t.Fatalf("parse project: %v", err)
+	}
+	if len(parsedContents) != 1 {
+		t.Fatalf("expected 1 parsed content, got %d", len(parsedContents))
+	}
+
+	var storedPDF models.Asset
+	if err := db.First(&storedPDF, pdfAsset.ID).Error; err != nil {
+		t.Fatalf("fetch source pdf asset: %v", err)
+	}
+
+	parsing := getParsingMetadataMap(t, storedPDF.Metadata)
+	if got := parsing["images_persisted"]; got != true {
+		t.Fatalf("expected images_persisted true, got %+v", got)
+	}
+
+	derivedIDs := derivedImageAssetIDsFromMetadata(storedPDF.Metadata)
+	if len(derivedIDs) != 2 {
+		t.Fatalf("expected 2 derived image ids, got %+v", derivedIDs)
+	}
+
+	var derivedAssets []models.Asset
+	if err := db.Where("project_id = ? AND id IN ?", project.ID, derivedIDs).Order("id asc").Find(&derivedAssets).Error; err != nil {
+		t.Fatalf("fetch derived image assets: %v", err)
+	}
+	if len(derivedAssets) != 2 {
+		t.Fatalf("expected 2 derived image assets, got %d", len(derivedAssets))
+	}
+
+	for _, derivedAsset := range derivedAssets {
+		if derivedAsset.Type != AssetTypeResumeImage {
+			t.Fatalf("expected derived asset type %s, got %s", AssetTypeResumeImage, derivedAsset.Type)
+		}
+		if derivedAsset.URI == nil || strings.TrimSpace(*derivedAsset.URI) == "" {
+			t.Fatalf("expected derived asset URI, got %+v", derivedAsset.URI)
+		}
+		if !store.Exists(*derivedAsset.URI) {
+			t.Fatalf("expected persisted image file %q to exist", *derivedAsset.URI)
+		}
+		if derivedAsset.Label == nil || strings.TrimSpace(*derivedAsset.Label) == "" {
+			t.Fatalf("expected derived asset label, got %+v", derivedAsset.Label)
+		}
+
+		derivedParsing := getParsingMetadataMap(t, derivedAsset.Metadata)
+		if got := derivedParsing["derived"]; got != true {
+			t.Fatalf("expected derived flag true, got %+v", got)
+		}
+		if got := derivedParsing["source_asset_type"]; got != AssetTypeResumePDF {
+			t.Fatalf("expected source asset type %s, got %+v", AssetTypeResumePDF, got)
+		}
+		if got := derivedParsing["source_asset_id"]; got != float64(pdfAsset.ID) {
+			t.Fatalf("expected source asset id %d, got %+v", pdfAsset.ID, got)
+		}
+	}
+
+	assertPersistedAssetContent(t, db, pdfAsset.ID, "- React engineering", "success", true, 2)
+}
+
+func TestParseReplacesDerivedImageAssetsOnReparse(t *testing.T) {
+	db := setupParsingTestDB(t)
+	store := newTestStorage(t)
+	project := models.Project{
+		UserID: "test-user-1",
+		Title:  "Replace derived images",
+		Status: "active",
+	}
+	if err := db.Create(&project).Error; err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	pdfURI := "fixtures/sample_resume.pdf"
+	pdfAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeResumePDF, URI: &pdfURI}
+	if err := db.Create(&pdfAsset).Error; err != nil {
+		t.Fatalf("create pdf asset: %v", err)
+	}
+
+	pdfParser := &stubPdfParser{
+		result: &ParsedContent{
+			Text: "first version",
+			Images: []ParsedImage{
+				{Description: "old", DataBase64: base64.StdEncoding.EncodeToString([]byte("old-image"))},
+			},
+		},
+	}
+	svc := NewParsingServiceWithGeneratorAndStorage(db, pdfParser, nil, nil, nil, store)
+
+	if _, err := svc.Parse(project.ID); err != nil {
+		t.Fatalf("first parse: %v", err)
+	}
+
+	var firstStoredPDF models.Asset
+	if err := db.First(&firstStoredPDF, pdfAsset.ID).Error; err != nil {
+		t.Fatalf("fetch source asset after first parse: %v", err)
+	}
+
+	firstIDs := derivedImageAssetIDsFromMetadata(firstStoredPDF.Metadata)
+	if len(firstIDs) != 1 {
+		t.Fatalf("expected 1 first derived image id, got %+v", firstIDs)
+	}
+
+	var firstDerived models.Asset
+	if err := db.First(&firstDerived, firstIDs[0]).Error; err != nil {
+		t.Fatalf("fetch first derived asset: %v", err)
+	}
+	if firstDerived.URI == nil {
+		t.Fatal("expected first derived asset URI")
+	}
+	firstKey := *firstDerived.URI
+	if !store.Exists(firstKey) {
+		t.Fatalf("expected first derived image file %q to exist", firstKey)
+	}
+
+	pdfParser.result = &ParsedContent{
+		Text: "second version",
+		Images: []ParsedImage{
+			{Description: "new", DataBase64: base64.StdEncoding.EncodeToString([]byte("new-image"))},
+		},
+	}
+
+	if _, err := svc.Parse(project.ID); err != nil {
+		t.Fatalf("second parse: %v", err)
+	}
+
+	var secondStoredPDF models.Asset
+	if err := db.First(&secondStoredPDF, pdfAsset.ID).Error; err != nil {
+		t.Fatalf("fetch source asset after second parse: %v", err)
+	}
+
+	secondIDs := derivedImageAssetIDsFromMetadata(secondStoredPDF.Metadata)
+	if len(secondIDs) != 1 {
+		t.Fatalf("expected 1 second derived image id, got %+v", secondIDs)
+	}
+	if secondIDs[0] == firstIDs[0] {
+		t.Fatalf("expected derived image id to change after reparse, still got %d", secondIDs[0])
+	}
+
+	var derivedCount int64
+	if err := db.Model(&models.Asset{}).Where("project_id = ? AND type = ?", project.ID, AssetTypeResumeImage).Count(&derivedCount).Error; err != nil {
+		t.Fatalf("count derived assets: %v", err)
+	}
+	if derivedCount != 1 {
+		t.Fatalf("expected 1 derived image asset after replacement, got %d", derivedCount)
+	}
+
+	var stale models.Asset
+	err := db.First(&stale, firstIDs[0]).Error
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("expected old derived asset to be deleted, got %v", err)
+	}
+	if store.Exists(firstKey) {
+		t.Fatalf("expected old derived image file %q to be deleted", firstKey)
+	}
+
+	var secondDerived models.Asset
+	if err := db.First(&secondDerived, secondIDs[0]).Error; err != nil {
+		t.Fatalf("fetch second derived asset: %v", err)
+	}
+	if secondDerived.URI == nil || !store.Exists(*secondDerived.URI) {
+		t.Fatalf("expected new derived image file to exist, got %+v", secondDerived.URI)
+	}
 }
 
 func TestGenerateCreatesDraftVersionAndUpdatesCurrentDraftID(t *testing.T) {
