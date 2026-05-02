@@ -1,6 +1,6 @@
 # 模块 intake 契约：项目管理与资料接入
 
-更新时间：2026-04-23
+更新时间：2026-05-03
 
 ## 1. 角色定义
 
@@ -36,9 +36,27 @@
 | 表 | 说明 |
 |---|---|
 | `projects` | 项目记录 |
-| `assets` | 资产记录（文件元信息 / Git URL / 补充文本） |
+| `assets` | 资产记录（原始来源 + 素材正文 + 元信息） |
 
 文件存储到本地磁盘：`uploads/{project_id}/{filename}`
+
+### assets 字段语义
+
+`assets` 在本轮收口后的目标语义如下：
+
+| 字段 | 含义 |
+|---|---|
+| `uri` | 原始来源。文件资产保存上传路径，Git 资产保存仓库 URL，note 可为空 |
+| `content` | 素材正文。note 为用户原文；PDF / DOCX / Git 在 parsing 清洗后写回这里 |
+| `label` | 展示标题，可供前端展示或后续人工调整 |
+| `metadata` | 上传信息、解析状态、派生图片信息等附加元数据 |
+
+说明：
+
+- intake 阶段负责创建资产记录和保存原始文件
+- 文件型资产在刚上传完成时，`content` 可以暂时为空
+- parsing 成功后会将清洗后的正文写回 `assets.content`
+- 当正文和需要保留的图片都已完成持久化后，原始文件可以进入删除流程
 
 ## 4. API 端点
 
@@ -108,6 +126,7 @@ Response:
     "project_id": 1,
     "type": "resume_pdf",
     "uri": "uploads/1/resume.pdf",
+    "content": null,
     "metadata": {
       "filename": "resume.pdf",
       "size_bytes": 102400,
@@ -118,7 +137,9 @@ Response:
 }
 ```
 
-> v1 限制：`resume_image` 类型的资产仅存储，parsing 模块解析时跳过。图片可用于前端手动引用（如头像），暂不支持 OCR 识别。
+Notes:
+- `resume_pdf` / `resume_docx` / `git_repo` 在 intake 阶段只先保存原始来源，`content` 由 parsing 在后续步骤中回填。
+- `resume_image` 类型的资产仅存储，parsing 模块解析时跳过。图片可用于前端手动引用（如头像），暂不支持 OCR 识别。
 
 #### POST /api/v1/assets/notes
 
@@ -152,7 +173,8 @@ Response:
 
 ### 下游
 
-- 模块 parsing（解析与初稿生成）消费 assets 中的文件路径和文本
+- 模块 parsing（解析与初稿生成）消费 assets 中的原始来源，并负责将清洗后的正文回写到 `assets.content`
+- 模块 workbench / agent 后续统一消费 `assets.content` 作为素材正文
 
 ### 可 mock 的边界
 
