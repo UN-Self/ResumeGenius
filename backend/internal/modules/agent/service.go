@@ -170,7 +170,9 @@ func (s *ChatService) StreamChat(sessionID uint, userMessage string, sendEvent f
 		return ErrSessionNotFound
 	}
 
-	s.db.Create(&models.AIMessage{SessionID: sessionID, Role: "user", Content: userMessage})
+	if err := s.db.Create(&models.AIMessage{SessionID: sessionID, Role: "user", Content: userMessage}).Error; err != nil {
+		return fmt.Errorf("save user message: %w", err)
+	}
 
 	var draft models.Draft
 	if err := s.db.First(&draft, session.DraftID).Error; err != nil {
