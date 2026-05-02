@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Sparkles, Send } from 'lucide-react'
+import { Sparkles, Send, Loader2 } from 'lucide-react'
 import { agentApi, type AISession } from '@/lib/api-client'
 import { HtmlPreview } from './HtmlPreview'
 
@@ -13,6 +13,15 @@ interface Props {
   onApplyHTML?: (html: string) => void
 }
 
+const TOOL_LABELS: Record<string, string> = {
+  get_project_assets: '获取项目资产',
+  parse_project_assets: '解析项目资料',
+  get_draft: '获取当前草稿',
+  save_draft: '保存草稿',
+  create_version: '创建版本快照',
+  export_pdf: '导出PDF',
+}
+
 export function ChatPanel({ draftId, onApplyHTML }: Props) {
   const [session, setSession] = useState<AISession | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -20,6 +29,8 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
   const [streaming, setStreaming] = useState(false)
   const [htmlPreview, setHtmlPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [thinking, setThinking] = useState('')
+  const [activeTool, setActiveTool] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Reuse existing session or create one on mount / draft change
@@ -28,6 +39,8 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
     setSession(null)
     setMessages([])
     setHtmlPreview(null)
+    setThinking('')
+    setActiveTool(null)
     setError(null)
 
     const init = async () => {
@@ -66,6 +79,8 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
     if (!text || !session || streaming) return
 
     setInput('')
+    setThinking('')
+    setActiveTool(null)
     setError(null)
     setMessages((prev) => [...prev, { role: 'user', text }])
     setStreaming(true)
@@ -105,6 +120,15 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
           try {
             const event = JSON.parse(trimmed.slice(6))
             switch (event.type) {
+              case 'thinking':
+                setThinking(prev => prev + event.content)
+                break
+              case 'tool_call':
+                setActiveTool(TOOL_LABELS[event.name] || event.name)
+                break
+              case 'tool_result':
+                setActiveTool(null)
+                break
               case 'text':
                 currentText += event.content
                 // Detect and extract HTML markers from the text stream
@@ -124,6 +148,7 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
                     }
                   }
                 } else {
+                  currentHTML += event.content
                   const endIdx = currentHTML.indexOf(HTML_END)
                   if (endIdx !== -1) {
                     currentHTML = currentHTML.substring(0, endIdx)
@@ -179,6 +204,16 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+        {/* Thinking collapsible */}
+        {thinking && (
+          <details className="bg-[var(--color-page-bg)] border border-[var(--color-divider)] rounded-lg text-sm">
+            <summary className="px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] cursor-pointer select-none">
+              AI 推理过程
+            </summary>
+            <pre className="px-3 py-2 text-xs text-[var(--color-text-secondary)] whitespace-pre-wrap max-h-40 overflow-y-auto border-t border-[var(--color-divider)]">{thinking}</pre>
+          </details>
+        )}
+
         {messages.length === 0 && !streaming && (
           <p className="text-xs text-[var(--color-text-secondary)] text-center mt-8">
             输入你的需求，AI 将帮你优化简历内容
@@ -196,6 +231,14 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
             </div>
           </div>
         ))}
+
+        {/* Tool Status */}
+        {activeTool && (
+          <div className="flex items-center gap-2 px-3 py-2 text-xs text-[var(--color-text-secondary)] bg-[var(--color-page-bg)] border border-[var(--color-divider)] rounded-lg">
+            <Loader2 size={12} className="animate-spin" />
+            <span>正在执行：{activeTool}</span>
+          </div>
+        )}
 
         {/* HTML Preview */}
         {htmlPreview && (
