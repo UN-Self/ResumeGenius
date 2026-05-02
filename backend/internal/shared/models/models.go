@@ -95,6 +95,15 @@ type AISession struct {
 }
 
 func (s *AISession) BeforeDelete(tx *gorm.DB) error {
+	// First, NULL out tool_call_id in messages that reference tool calls being deleted
+	if err := tx.Model(&AIMessage{}).Where("session_id = ?", s.ID).Update("tool_call_id", nil).Error; err != nil {
+		return err
+	}
+	// Then delete all AIMessage records for this session
+	if err := tx.Where("session_id = ?", s.ID).Delete(&AIMessage{}).Error; err != nil {
+		return err
+	}
+	// Then delete all AIToolCall records for this session
 	return tx.Where("session_id = ?", s.ID).Delete(&AIToolCall{}).Error
 }
 

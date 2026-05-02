@@ -347,7 +347,9 @@ func setupTestDB(t *testing.T) *gorm.DB {
 		tx.Rollback()
 	})
 
-	tx.AutoMigrate(&AISession{}, &AIMessage{}, &AIToolCall{})
+	if err := tx.AutoMigrate(&AISession{}, &AIMessage{}, &AIToolCall{}); err != nil {
+		t.Fatalf("AutoMigrate failed: %v", err)
+	}
 
 	return tx
 }
