@@ -313,6 +313,131 @@ func TestParseSkipsRecoverableAssetErrorsWhenOtherAssetsAreUsable(t *testing.T) 
 	}
 }
 
+func TestParsePersistsCleanedContentForFileAndGitAssets(t *testing.T) {
+	db := setupParsingTestDB(t)
+	project := models.Project{
+		UserID: "test-user-1",
+		Title:  "Persist parsed assets",
+		Status: "active",
+	}
+	if err := db.Create(&project).Error; err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	pdfURI := "fixtures/sample_resume.pdf"
+	docxURI := "fixtures/sample_resume.docx"
+	gitURI := "https://github.com/example/project"
+	noteContent := "原始备注正文"
+	noteLabel := "备注标题"
+
+	pdfAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeResumePDF, URI: &pdfURI}
+	docxAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeResumeDOCX, URI: &docxURI}
+	gitAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeGitRepo, URI: &gitURI}
+	noteAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeNote, Content: &noteContent, Label: &noteLabel}
+	if err := db.Create(&pdfAsset).Error; err != nil {
+		t.Fatalf("create pdf asset: %v", err)
+	}
+	if err := db.Create(&docxAsset).Error; err != nil {
+		t.Fatalf("create docx asset: %v", err)
+	}
+	if err := db.Create(&gitAsset).Error; err != nil {
+		t.Fatalf("create git asset: %v", err)
+	}
+	if err := db.Create(&noteAsset).Error; err != nil {
+		t.Fatalf("create note asset: %v", err)
+	}
+
+	pdfParser := &stubPdfParser{
+		result: &ParsedContent{
+			Text: "Page 1 of 2\n• React   工程化",
+			Images: []ParsedImage{
+				{Description: "头像", DataBase64: "abc"},
+			},
+		},
+	}
+	docxParser := &stubDocxParser{
+		result: &ParsedContent{Text: "\n工作经历\n\n\nABC   科技"},
+	}
+	gitExtractor := &stubGitExtractor{
+		result: &ParsedContent{Text: "README:\n----\nVite   React"},
+	}
+
+	svc := NewParsingService(db, pdfParser, docxParser, gitExtractor)
+
+	parsedContents, err := svc.Parse(project.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(parsedContents) != 4 {
+		t.Fatalf("expected 4 parsed contents, got %d", len(parsedContents))
+	}
+
+	assertPersistedAssetContent(t, db, pdfAsset.ID, "- React 工程化", "success", true, 1)
+	assertPersistedAssetContent(t, db, docxAsset.ID, "工作经历\n\nABC 科技", "success", true, 0)
+	assertPersistedAssetContent(t, db, gitAsset.ID, "README:\nVite React", "success", true, 0)
+
+	var storedNote models.Asset
+	if err := db.First(&storedNote, noteAsset.ID).Error; err != nil {
+		t.Fatalf("fetch note asset: %v", err)
+	}
+	if storedNote.Content == nil || *storedNote.Content != noteContent {
+		t.Fatalf("expected note content to remain unchanged, got %+v", storedNote.Content)
+	}
+	assertParsingStatus(t, storedNote.Metadata, "success")
+}
+
+func TestParseMarksFailedAndSkippedAssetsInMetadata(t *testing.T) {
+	db := setupParsingTestDB(t)
+	project := models.Project{
+		UserID: "test-user-1",
+		Title:  "Parse statuses",
+		Status: "active",
+	}
+	if err := db.Create(&project).Error; err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	brokenPDFURI := "fixtures/sample_resume.pdf"
+	imageURI := "uploads/1/avatar.png"
+	noteContent := "可用备注"
+
+	brokenPDF := models.Asset{ProjectID: project.ID, Type: AssetTypeResumePDF, URI: &brokenPDFURI}
+	imageAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeResumeImage, URI: &imageURI}
+	noteAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeNote, Content: &noteContent}
+	if err := db.Create(&brokenPDF).Error; err != nil {
+		t.Fatalf("create broken pdf asset: %v", err)
+	}
+	if err := db.Create(&imageAsset).Error; err != nil {
+		t.Fatalf("create image asset: %v", err)
+	}
+	if err := db.Create(&noteAsset).Error; err != nil {
+		t.Fatalf("create note asset: %v", err)
+	}
+
+	pdfParser := &stubPdfParser{err: errors.New("broken pdf")}
+	svc := NewParsingService(db, pdfParser, nil, nil)
+
+	parsedContents, err := svc.Parse(project.ID)
+	if err != nil {
+		t.Fatalf("expected parse to succeed with surviving note asset, got %v", err)
+	}
+	if len(parsedContents) != 1 || parsedContents[0].Type != AssetTypeNote {
+		t.Fatalf("expected only note parsed content to survive, got %+v", parsedContents)
+	}
+
+	var storedBrokenPDF models.Asset
+	if err := db.First(&storedBrokenPDF, brokenPDF.ID).Error; err != nil {
+		t.Fatalf("fetch broken pdf asset: %v", err)
+	}
+	assertParsingStatus(t, storedBrokenPDF.Metadata, "failed")
+
+	var storedImage models.Asset
+	if err := db.First(&storedImage, imageAsset.ID).Error; err != nil {
+		t.Fatalf("fetch image asset: %v", err)
+	}
+	assertParsingStatus(t, storedImage.Metadata, "skipped")
+}
+
 func TestGenerateCreatesDraftVersionAndUpdatesCurrentDraftID(t *testing.T) {
 	db := setupParsingTestDB(t)
 	project := models.Project{
@@ -1000,4 +1125,55 @@ func TestParseAssetReturnsSkippedForResumeImage(t *testing.T) {
 	if !errors.Is(err, ErrAssetTypeSkipped) {
 		t.Fatalf("expected ErrAssetTypeSkipped, got %v", err)
 	}
+}
+
+func assertPersistedAssetContent(t *testing.T, db *gorm.DB, assetID uint, wantContent, wantStatus string, wantPersisted bool, wantImageCount int) {
+	t.Helper()
+
+	var asset models.Asset
+	if err := db.First(&asset, assetID).Error; err != nil {
+		t.Fatalf("fetch asset %d: %v", assetID, err)
+	}
+	if asset.Content == nil || *asset.Content != wantContent {
+		t.Fatalf("expected asset %d content %q, got %+v", assetID, wantContent, asset.Content)
+	}
+
+	parsing := getParsingMetadataMap(t, asset.Metadata)
+	if got := parsing["status"]; got != wantStatus {
+		t.Fatalf("expected asset %d parsing.status %q, got %+v", assetID, wantStatus, got)
+	}
+	if got := parsing["content_persisted"]; got != wantPersisted {
+		t.Fatalf("expected asset %d content_persisted %v, got %+v", assetID, wantPersisted, got)
+	}
+	if got := parsing["image_count"]; got != float64(wantImageCount) {
+		t.Fatalf("expected asset %d image_count %d, got %+v", assetID, wantImageCount, got)
+	}
+}
+
+func assertParsingStatus(t *testing.T, metadata models.JSONB, want string) {
+	t.Helper()
+
+	parsing := getParsingMetadataMap(t, metadata)
+	if got := parsing["status"]; got != want {
+		t.Fatalf("expected parsing.status %q, got %+v", want, got)
+	}
+}
+
+func getParsingMetadataMap(t *testing.T, metadata models.JSONB) map[string]interface{} {
+	t.Helper()
+
+	if metadata == nil {
+		t.Fatal("expected metadata to be present")
+	}
+
+	rawParsing, ok := metadata["parsing"]
+	if !ok {
+		t.Fatalf("expected metadata.parsing, got %+v", metadata)
+	}
+
+	parsing, ok := rawParsing.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected metadata.parsing to be a map, got %T", rawParsing)
+	}
+	return parsing
 }

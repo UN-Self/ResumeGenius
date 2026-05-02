@@ -79,11 +79,17 @@ func (s *ParsingService) Parse(projectID uint) ([]ParsedContent, error) {
 	var firstRecoverableErr error
 	for _, asset := range assets {
 		if s.shouldSkipAssetInParseFlow(asset) {
+			if err := s.persistAssetParsingStatus(asset, "skipped"); err != nil {
+				return nil, err
+			}
 			continue
 		}
 
 		parsed, err := s.parseAsset(asset)
 		if err != nil {
+			if persistErr := s.persistAssetParsingStatus(asset, "failed"); persistErr != nil {
+				return nil, persistErr
+			}
 			if isRecoverableAssetError(err) {
 				if firstRecoverableErr == nil {
 					firstRecoverableErr = err
@@ -93,6 +99,9 @@ func (s *ParsingService) Parse(projectID uint) ([]ParsedContent, error) {
 			return nil, err
 		}
 		if parsed != nil {
+			if err := s.persistParsedAsset(asset, parsed); err != nil {
+				return nil, err
+			}
 			parsedContents = append(parsedContents, *parsed)
 		}
 	}
@@ -382,6 +391,104 @@ func attachAssetMetadata(asset models.Asset, parsed *ParsedContent) *ParsedConte
 	decorated.Type = asset.Type
 	decorated.Label = AssetLabel(asset.Label, asset.URI)
 	return &decorated
+}
+
+func (s *ParsingService) persistParsedAsset(asset models.Asset, parsed *ParsedContent) error {
+	if s.db == nil || asset.ID == 0 {
+		return nil
+	}
+
+	updates := map[string]interface{}{
+		"metadata": withAssetParsingMetadata(asset.Metadata, "success", parsed, shouldPersistParsedText(asset)),
+	}
+	if content, ok := parsedAssetContentForPersistence(asset, parsed); ok {
+		updates["content"] = content
+	}
+
+	result := s.db.Model(&models.Asset{}).Where("id = ?", asset.ID).Updates(updates)
+	return result.Error
+}
+
+func (s *ParsingService) persistAssetParsingStatus(asset models.Asset, status string) error {
+	if s.db == nil || asset.ID == 0 {
+		return nil
+	}
+
+	result := s.db.Model(&models.Asset{}).
+		Where("id = ?", asset.ID).
+		Update("metadata", withAssetParsingMetadata(asset.Metadata, status, nil, false))
+	return result.Error
+}
+
+func parsedAssetContentForPersistence(asset models.Asset, parsed *ParsedContent) (string, bool) {
+	if parsed == nil || !shouldPersistParsedText(asset) {
+		return "", false
+	}
+	return strings.TrimSpace(parsed.Text), true
+}
+
+func shouldPersistParsedText(asset models.Asset) bool {
+	switch asset.Type {
+	case AssetTypeResumePDF, AssetTypeResumeDOCX, AssetTypeGitRepo:
+		return true
+	default:
+		return false
+	}
+}
+
+func withAssetParsingMetadata(existing models.JSONB, status string, parsed *ParsedContent, contentPersisted bool) models.JSONB {
+	metadata := cloneJSONB(existing)
+	parsing := cloneJSONMap(metadata["parsing"])
+	parsing["status"] = status
+
+	if status == "success" {
+		parsing["cleaned"] = true
+		parsing["image_count"] = parsedImageCount(parsed)
+		if contentPersisted {
+			parsing["content_persisted"] = true
+		}
+	}
+
+	metadata["parsing"] = parsing
+	return metadata
+}
+
+func cloneJSONB(input models.JSONB) models.JSONB {
+	if input == nil {
+		return models.JSONB{}
+	}
+
+	cloned := make(models.JSONB, len(input))
+	for key, value := range input {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func cloneJSONMap(input interface{}) map[string]interface{} {
+	switch typed := input.(type) {
+	case map[string]interface{}:
+		cloned := make(map[string]interface{}, len(typed))
+		for key, value := range typed {
+			cloned[key] = value
+		}
+		return cloned
+	case models.JSONB:
+		cloned := make(map[string]interface{}, len(typed))
+		for key, value := range typed {
+			cloned[key] = value
+		}
+		return cloned
+	default:
+		return map[string]interface{}{}
+	}
+}
+
+func parsedImageCount(parsed *ParsedContent) int {
+	if parsed == nil {
+		return 0
+	}
+	return len(parsed.Images)
 }
 
 func isRecoverableAssetError(err error) bool {
