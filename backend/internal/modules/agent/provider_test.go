@@ -89,7 +89,7 @@ func TestMockAdapter_StreamChatReAct(t *testing.T) {
 
 	// Verify tool calls
 	require.Len(t, toolCalls, 2)
-	assert.Equal(t, "parse_project_assets", toolCalls[0].Name)
+	assert.Equal(t, "get_project_assets", toolCalls[0].Name)
 	assert.Equal(t, float64(1), toolCalls[0].Params["project_id"])
 	assert.Equal(t, "save_draft", toolCalls[1].Name)
 	assert.Equal(t, float64(1), toolCalls[1].Params["draft_id"])

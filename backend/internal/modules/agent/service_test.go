@@ -254,7 +254,7 @@ func (m *ToolCallLoopMock) StreamChatReAct(
 	_ func(string) error,
 ) error {
 	return onToolCall(ToolCallRequest{
-		Name:   "parse_project_assets",
+		Name:   "get_project_assets",
 		Params: map[string]interface{}{"project_id": float64(1)},
 	})
 }
@@ -378,7 +378,7 @@ func TestChatService_StreamChatReAct_SavesToolCalls(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, toolCalls, 2, "MockAdapter produces 2 tool calls")
 
-	assert.Equal(t, "parse_project_assets", toolCalls[0].ToolName)
+	assert.Equal(t, "get_project_assets", toolCalls[0].ToolName)
 	assert.Equal(t, "completed", toolCalls[0].Status)
 
 	assert.Equal(t, "save_draft", toolCalls[1].ToolName)

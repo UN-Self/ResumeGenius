@@ -20,10 +20,10 @@ import (
 // Tool definition tests
 // ---------------------------------------------------------------------------
 
-func TestToolExecutor_Tools_SixDefinitions(t *testing.T) {
+func TestToolExecutor_Tools_FiveDefinitions(t *testing.T) {
 	executor := NewAgentToolExecutor(nil, "")
 	tools := executor.Tools()
-	require.Len(t, tools, 6)
+	require.Len(t, tools, 5)
 
 	// Verify each tool has the required fields.
 	for _, tool := range tools {
@@ -57,7 +57,6 @@ func TestToolExecutor_Tools_NamesAreCorrect(t *testing.T) {
 
 	expected := []string{
 		"get_project_assets",
-		"parse_project_assets",
 		"get_draft",
 		"save_draft",
 		"create_version",
@@ -81,15 +80,6 @@ func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
 		assert.Contains(t, props, "project_id")
 		p := props["project_id"].(map[string]interface{})
 		assert.Equal(t, "integer", p["type"])
-		req := tool.Parameters["required"].([]interface{})
-		assert.Contains(t, req, "project_id")
-	}
-
-	// parse_project_assets: required = ["project_id"]
-	{
-		tool := toolByName["parse_project_assets"]
-		props := tool.Parameters["properties"].(map[string]interface{})
-		assert.Contains(t, props, "project_id")
 		req := tool.Parameters["required"].([]interface{})
 		assert.Contains(t, req, "project_id")
 	}
@@ -227,12 +217,10 @@ func TestToolExecutor_GetProjectAssets(t *testing.T) {
 	result, err := executor.Execute(context.Background(), "get_project_assets", map[string]interface{}{"project_id": float64(proj.ID)})
 	require.NoError(t, err)
 
-	var assets []map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(result), &assets))
-	require.Len(t, assets, 1)
-	assert.Equal(t, float64(asset.ID), assets[0]["id"])
-	assert.Equal(t, "resume_pdf", assets[0]["type"])
-	assert.Equal(t, content, assets[0]["content"])
+	assert.Contains(t, result, "项目资产列表")
+	assert.Contains(t, result, "[resume_pdf]")
+	assert.Contains(t, result, "resume.pdf")
+	assert.Contains(t, result, fmt.Sprintf("ID:%d", asset.ID))
 }
 
 func TestToolExecutor_GetProjectAssets_EmptyList(t *testing.T) {
@@ -245,7 +233,7 @@ func TestToolExecutor_GetProjectAssets_EmptyList(t *testing.T) {
 
 	result, err := executor.Execute(context.Background(), "get_project_assets", map[string]interface{}{"project_id": float64(proj.ID)})
 	require.NoError(t, err)
-	assert.Equal(t, "[]", result)
+	assert.Equal(t, "该项目暂无资产。", result)
 }
 
 func TestToolExecutor_GetProjectAssets_HasMultipleAssets(t *testing.T) {
@@ -264,9 +252,10 @@ func TestToolExecutor_GetProjectAssets_HasMultipleAssets(t *testing.T) {
 	result, err := executor.Execute(context.Background(), "get_project_assets", map[string]interface{}{"project_id": float64(proj.ID)})
 	require.NoError(t, err)
 
-	var assets []map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(result), &assets))
-	assert.Len(t, assets, 2)
+	assert.Contains(t, result, "pdf")
+	assert.Contains(t, result, "docx")
+	assert.Contains(t, result, "content1")
+	assert.Contains(t, result, "content2")
 }
 
 func TestToolExecutor_GetDraft(t *testing.T) {
@@ -366,29 +355,6 @@ func TestToolExecutor_SaveDraft_EmptyContent(t *testing.T) {
 // ---------------------------------------------------------------------------
 // HTTP tool tests (use mock HTTP server)
 // ---------------------------------------------------------------------------
-
-func TestToolExecutor_ParseProjectAssets(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/parsing/parse", func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "POST", r.Method)
-		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
-
-		var body map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, float64(42), body["project_id"])
-
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"code":0,"data":{"parsed_contents":[{"asset_id":1,"type":"resume_pdf","text":"parsed content"}]}}`)
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	executor := NewAgentToolExecutor(nil, srv.URL)
-	result, err := executor.Execute(context.Background(), "parse_project_assets", map[string]interface{}{"project_id": float64(42)})
-	require.NoError(t, err)
-	assert.Contains(t, result, "parsed_contents")
-	assert.Contains(t, result, "parsed content")
-}
 
 func TestToolExecutor_CreateVersion(t *testing.T) {
 	mux := http.NewServeMux()
@@ -490,22 +456,6 @@ func TestToolExecutor_HTTP_ServerError(t *testing.T) {
 	assert.Contains(t, err.Error(), "500")
 }
 
-func TestToolExecutor_HTTP_APIBusinessError(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/parsing/parse", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"code":2004,"data":null,"message":"project has no available assets"}`)
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	executor := NewAgentToolExecutor(nil, srv.URL)
-	_, err := executor.Execute(context.Background(), "parse_project_assets", map[string]interface{}{"project_id": float64(1)})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "api error code 2004")
-	assert.Contains(t, err.Error(), "no available assets")
-}
-
 func TestToolExecutor_HTTP_NotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/drafts/999/versions", func(w http.ResponseWriter, r *http.Request) {
@@ -522,57 +472,6 @@ func TestToolExecutor_HTTP_NotFound(t *testing.T) {
 	})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "404")
-}
-
-func TestToolExecutor_HTTP_NonJSONResponse(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/parsing/parse", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `this is not json`)
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	executor := NewAgentToolExecutor(nil, srv.URL)
-	_, err := executor.Execute(context.Background(), "parse_project_assets", map[string]interface{}{"project_id": float64(1)})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "parse response")
-}
-
-func TestToolExecutor_HTTP_NullData(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/parsing/parse", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"code":0,"data":null,"message":"ok"}`)
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	executor := NewAgentToolExecutor(nil, srv.URL)
-	result, err := executor.Execute(context.Background(), "parse_project_assets", map[string]interface{}{"project_id": float64(1)})
-	require.NoError(t, err)
-	assert.Equal(t, "{}", result)
-}
-
-// ---------------------------------------------------------------------------
-// Edge cases
-// ---------------------------------------------------------------------------
-
-func TestToolExecutor_ContextCancelled(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/parsing/parse", func(w http.ResponseWriter, r *http.Request) {
-		// Do nothing — context will be cancelled before the handler runs.
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	executor := NewAgentToolExecutor(nil, srv.URL)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // cancel immediately
-
-	_, err := executor.Execute(ctx, "parse_project_assets", map[string]interface{}{"project_id": float64(1)})
-	assert.Error(t, err)
 }
 
 func TestToolExecutor_GetIntParam_Float64(t *testing.T) {

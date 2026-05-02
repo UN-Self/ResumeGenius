@@ -15,7 +15,6 @@ interface Props {
 
 const TOOL_LABELS: Record<string, string> = {
   get_project_assets: '获取项目资产',
-  parse_project_assets: '解析项目资料',
   get_draft: '获取当前草稿',
   save_draft: '保存草稿',
   create_version: '创建版本快照',

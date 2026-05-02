@@ -27,7 +27,7 @@
 | `drafts.html_content` | 模块 parsing/workbench | 当前简历 HTML |
 | 用户自然语言消息 | 前端输入 | — |
 | 对话历史 | `ai_messages` 表 | 最近 N 轮 |
-| 项目资产解析结果 | 模块 parsing（HTTP 调用） | `POST /api/v1/parsing/parse` |
+| 项目资产解析结果 | DB 直查 assets 表 | `get_project_assets` 工具 |
 
 Mock：`USE_MOCK=true` 时使用 `MockAdapter` 模拟 AI 响应。
 
@@ -35,7 +35,7 @@ Mock：`USE_MOCK=true` 时使用 `MockAdapter` 模拟 AI 响应。
 
 AI 通过 ReAct 循环完成以下动作：
 
-1. **获取资料**：调用 `parse_project_assets` tool → 后端 HTTP 调用 parsing 端点 → 返回解析文本
+1. **获取资料**：调用 `get_project_assets` tool → 后端 DB 直查 assets 表 → 返回完整资产列表及内容
 2. **生成/修改 HTML**：AI 生成完整简历 HTML，通过 `save_draft` tool 直接保存到 `drafts` 表
 3. **创建快照**（可选）：调用 `create_version` tool → HTTP 调用 render 端点
 4. **导出 PDF**（可选）：调用 `export_pdf` tool → HTTP 调用 render 端点
@@ -107,8 +107,8 @@ Request:
 
 Response: text/event-stream
 data: {"type":"thinking","content":"我需要先获取项目中的资料，了解用户的背景信息。"}
-data: {"type":"tool_call","name":"parse_project_assets","params":{"project_id":1}}
-data: {"type":"tool_result","name":"parse_project_assets","status":"completed"}
+data: {"type":"tool_call","name":"get_project_assets","params":{"project_id":1}}
+data: {"type":"tool_result","name":"get_project_assets","status":"completed"}
 data: {"type":"thinking","content":"资料显示用户有3年前端开发经验...我来生成一份合适的简历HTML。"}
 data: {"type":"tool_call","name":"save_draft","params":{"draft_id":1,"html_content":"<!DOCTYPE html>..."}}
 data: {"type":"tool_result","name":"save_draft","status":"completed"}
@@ -149,7 +149,7 @@ Response:
         "thinking": "我需要先获取项目中的资料...\n资料显示用户有3年前端开发经验...",
         "tool_call": {
           "id": 1,
-          "tool_name": "parse_project_assets",
+          "tool_name": "get_project_assets",
           "params": {"project_id": 1},
           "result": {"parsed_contents": [...]},
           "status": "completed"
@@ -187,7 +187,7 @@ Response:
 你是一个专业的简历助手。你的任务是根据用户提供的资料和要求，生成一份完整的、可直接渲染的HTML简历。
 
 ## 工作流程
-1. 如果用户提到了项目/文件，首先调用 parse_project_assets 获取资料内容
+1. 如果用户提到了项目/文件，首先调用 get_project_assets 获取资料内容
 2. 如果需要查看当前草稿，调用 get_draft 获取最新的简历 HTML
 3. 分析资料内容，按照用户要求的格式和内容生成完整的简历 HTML
 4. 生成后调用 save_draft 保存到草稿
@@ -211,7 +211,7 @@ Response:
 - 仅在用户明确要求时才创建版本快照或导出 PDF
 
 ## 重要规则
-- 生成 HTML 前必须先获取资料（parse_project_assets）或查看当前草稿（get_draft）
+- 生成 HTML 前必须先获取资料（get_project_assets）或查看当前草稿（get_draft）
 - 生成 HTML 后必须调用 save_draft 保存
 - 不要编造用户没有提供的信息（信息不足时合理推断并标注）
 - 如果资料不足以生成完整简历，在第 3 轮直接生成最佳可用版本
@@ -223,8 +223,7 @@ AI 可在 ReAct 循环中调用以下工具。所有工具由后端 agent 模块
 
 | Tool Name | 说明 | 参数 | 数据来源 |
 |---|---|---|---|
-| `get_project_assets` | 获取项目资产列表 | `project_id: uint` | DB 直查 assets 表 |
-| `parse_project_assets` | 解析项目资产的文本内容 | `project_id: uint` | HTTP `POST /api/v1/parsing/parse` |
+| `get_project_assets` | 获取项目资产列表及解析内容（含 note 文本内容） | `project_id: uint` | DB 直查 assets 表 |
 | `get_draft` | 获取当前草稿 HTML | `draft_id: uint` | DB 直查 drafts 表 |
 | `save_draft` | 保存/更新草稿 HTML | `draft_id: uint, html_content: string` | DB 直写 drafts 表 |
 | `create_version` | 创建版本快照 | `draft_id: uint, label: string` | HTTP `POST /api/v1/drafts/:id/versions` |
@@ -259,7 +258,7 @@ AI 可在 ReAct 循环中调用以下工具。所有工具由后端 agent 模块
 ### 模块间调用
 
 agent 通过 **同进程 HTTP** 调用其他模块的 REST 端点：
-- `POST /api/v1/parsing/parse`（获取解析内容）
+- ~~`POST /api/v1/parsing/parse`~~ 已移除，改为 DB 直查 assets 表（`get_project_assets` 工具）
 - `POST /api/v1/drafts/{draft_id}/versions`（创建版本快照）
 - `POST /api/v1/drafts/{draft_id}/export`（触发 PDF 导出）
 

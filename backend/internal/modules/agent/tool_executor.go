@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
@@ -46,7 +47,7 @@ func NewAgentToolExecutor(db *gorm.DB, baseURL string) *AgentToolExecutor {
 	}
 }
 
-// Tools returns the six AI-callable tool definitions.
+// Tools returns the five AI-callable tool definitions.
 func (e *AgentToolExecutor) Tools() []ToolDef {
 	return []ToolDef{
 		{
@@ -58,20 +59,6 @@ func (e *AgentToolExecutor) Tools() []ToolDef {
 					"project_id": map[string]interface{}{
 						"type":        "integer",
 						"description": "The project ID to get assets from",
-					},
-				},
-				"required": []interface{}{"project_id"},
-			},
-		},
-		{
-			Name:        "parse_project_assets",
-			Description: "Parse project assets text content",
-			Parameters: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"project_id": map[string]interface{}{
-						"type":        "integer",
-						"description": "The project ID to parse assets from",
 					},
 				},
 				"required": []interface{}{"project_id"},
@@ -153,8 +140,6 @@ func (e *AgentToolExecutor) Execute(ctx context.Context, toolName string, params
 	switch toolName {
 	case "get_project_assets":
 		return e.getProjectAssets(ctx, params)
-	case "parse_project_assets":
-		return e.parseProjectAssets(ctx, params)
 	case "get_draft":
 		return e.getDraft(ctx, params)
 	case "save_draft":
@@ -168,7 +153,8 @@ func (e *AgentToolExecutor) Execute(ctx context.Context, toolName string, params
 	}
 }
 
-// getProjectAssets queries all assets belonging to a project.
+// getProjectAssets queries all assets belonging to a project and returns
+// a text summary with full asset details including parsed content for notes.
 func (e *AgentToolExecutor) getProjectAssets(ctx context.Context, params map[string]interface{}) (string, error) {
 	projectID, err := getIntParam(params, "project_id")
 	if err != nil {
@@ -180,37 +166,51 @@ func (e *AgentToolExecutor) getProjectAssets(ctx context.Context, params map[str
 		return "", fmt.Errorf("query assets: %w", err)
 	}
 
-	result := make([]map[string]interface{}, 0, len(assets))
-	for _, a := range assets {
-		result = append(result, map[string]interface{}{
-			"id":         a.ID,
-			"project_id": a.ProjectID,
-			"type":       a.Type,
-			"uri":        a.URI,
-			"content":    a.Content,
-			"label":      a.Label,
-			"created_at": a.CreatedAt,
-		})
+	if len(assets) == 0 {
+		return "该项目暂无资产。", nil
 	}
 
-	b, err := json.Marshal(result)
-	if err != nil {
-		return "", fmt.Errorf("marshal result: %w", err)
-	}
-	return string(b), nil
-}
+	var sb strings.Builder
+	sb.WriteString("项目资产列表：\n")
+	for i, a := range assets {
+		label := ""
+		if a.Label != nil {
+			label = *a.Label
+		}
+		idStr := fmt.Sprintf(" (ID:%d)", a.ID)
+		timeStr := a.CreatedAt.Format("2006-01-02T15:04:05Z07:00")
 
-// parseProjectAssets calls the parsing module to extract text from project assets.
-func (e *AgentToolExecutor) parseProjectAssets(ctx context.Context, params map[string]interface{}) (string, error) {
-	projectID, err := getIntParam(params, "project_id")
-	if err != nil {
-		return "", err
+		line := fmt.Sprintf("%d. [%s]%s", i+1, a.Type, idStr)
+		if label != "" {
+			line += " " + label
+		}
+
+		switch a.Type {
+		case "note":
+			content := ""
+			if a.Content != nil {
+				content = *a.Content
+			}
+			line += " - 内容: " + content
+		case "resume_pdf", "resume_docx":
+			if a.URI != nil && *a.URI != "" {
+				line += " - 路径: " + *a.URI
+			}
+		default:
+			if a.URI != nil && *a.URI != "" {
+				line += " - 路径: " + *a.URI
+			}
+			if a.Content != nil && *a.Content != "" {
+				line += " - 内容: " + *a.Content
+			}
+		}
+
+		line += " - 创建时间: " + timeStr
+		sb.WriteString(line)
+		sb.WriteString("\n")
 	}
 
-	body := map[string]interface{}{
-		"project_id": projectID,
-	}
-	return e.httpPost(ctx, "/api/v1/parsing/parse", body)
+	return sb.String(), nil
 }
 
 // getDraft retrieves a draft by ID and returns its HTML content.

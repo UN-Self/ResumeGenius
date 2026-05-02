@@ -374,9 +374,9 @@ func (a *MockAdapter) StreamChatReAct(
 		return err
 	}
 
-	// Step 2: tool call — parse_project_assets
+	// Step 2: tool call — get_project_assets
 	if err := onToolCall(ToolCallRequest{
-		Name: "parse_project_assets",
+		Name: "get_project_assets",
 		Params: map[string]interface{}{
 			"project_id": float64(1),
 		},

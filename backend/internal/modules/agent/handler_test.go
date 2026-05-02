@@ -281,7 +281,7 @@ type mockToolExecutor struct {
 
 func (m *mockToolExecutor) Tools() []ToolDef {
 	return []ToolDef{
-		{Name: "parse_project_assets", Description: "Parse project assets", Parameters: map[string]interface{}{"type": "object"}},
+		{Name: "get_project_assets", Description: "Parse project assets", Parameters: map[string]interface{}{"type": "object"}},
 		{Name: "save_draft", Description: "Save draft HTML", Parameters: map[string]interface{}{"type": "object"}},
 	}
 }
@@ -338,7 +338,7 @@ func (a *fullPipelineMockAdapter) StreamChatReAct(
 		return err
 	}
 	if err := onToolCall(ToolCallRequest{
-		Name:   "parse_project_assets",
+		Name:   "get_project_assets",
 		Params: map[string]interface{}{"project_id": a.projectID},
 	}); err != nil {
 		return err
@@ -420,7 +420,7 @@ func TestHandler_Chat_FullPipeline(t *testing.T) {
 	executor := &mockToolExecutor{
 		db: db,
 		results: map[string]string{
-			"parse_project_assets": `{"assets":[{"id":1,"content":"test resume content"}]}`,
+			"get_project_assets": `{"assets":[{"id":1,"content":"test resume content"}]}`,
 		},
 	}
 
@@ -463,7 +463,7 @@ func TestHandler_Chat_FullPipeline(t *testing.T) {
 	assert.Equal(t, "tool_result", types[5], "event 5 should be tool_result")
 
 	// Verify tool_call names
-	assert.Equal(t, "parse_project_assets", events[1]["name"])
+	assert.Equal(t, "get_project_assets", events[1]["name"])
 	assert.Equal(t, "save_draft", events[4]["name"])
 
 	// Verify tool_result statuses
@@ -508,7 +508,7 @@ func TestHandler_Chat_ToolExecutionError(t *testing.T) {
 	// Combined with an executor that always errors, the ReAct loop hits maxIterations.
 	executor := &mockToolExecutor{
 		errors: map[string]error{
-			"parse_project_assets": fmt.Errorf("database connection failed"),
+			"get_project_assets": fmt.Errorf("database connection failed"),
 			"save_draft":          fmt.Errorf("permission denied"),
 		},
 	}
