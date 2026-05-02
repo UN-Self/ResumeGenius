@@ -82,4 +82,54 @@ describe('ChatPanel', () => {
     const sendButton = screen.getByRole('button', { name: /发送/i })
     expect(sendButton).toBeEnabled()
   })
+
+  it('extracts HTML from RESUME_HTML markers in text events and shows preview', async () => {
+    renderChatPanel()
+    const input = screen.getByPlaceholderText('输入你的需求...')
+    await waitFor(() => {
+      expect(input).toBeEnabled()
+    })
+
+    await userEvent.type(input, '优化简历')
+    const sendButton = screen.getByRole('button', { name: /发送/i })
+    await userEvent.click(sendButton)
+
+    // Wait for HTML preview to appear (HTML提取成功)
+    await waitFor(() => {
+      expect(screen.getByText('HTML 预览')).toBeInTheDocument()
+    })
+    expect(screen.getByText('应用到简历')).toBeInTheDocument()
+    // Verify HtmlPreview iframe is rendered with extracted HTML
+    const iframe = screen.getByTitle('AI 生成的简历 HTML 预览')
+    expect(iframe).toBeInTheDocument()
+    expect(iframe.tagName).toBe('IFRAME')
+  })
+
+  it('calls onApplyHTML when apply button is clicked', async () => {
+    const onApplyHTML = vi.fn()
+    renderChatPanel(1, onApplyHTML)
+    const input = screen.getByPlaceholderText('输入你的需求...')
+    await waitFor(() => {
+      expect(input).toBeEnabled()
+    })
+
+    await userEvent.type(input, '优化简历')
+    const sendButton = screen.getByRole('button', { name: /发送/i })
+    await userEvent.click(sendButton)
+
+    // Wait for apply button to appear
+    await waitFor(() => {
+      expect(screen.getByText('应用到简历')).toBeInTheDocument()
+    })
+
+    await userEvent.click(screen.getByText('应用到简历'))
+
+    // Verify onApplyHTML was called with extracted HTML
+    expect(onApplyHTML).toHaveBeenCalledTimes(1)
+    const appliedHTML = onApplyHTML.mock.calls[0][0] as string
+    expect(appliedHTML).toContain('<html>')
+    expect(appliedHTML).toContain('Mock优化简历')
+    expect(appliedHTML).not.toContain('<!--RESUME_HTML_START-->')
+    expect(appliedHTML).not.toContain('<!--RESUME_HTML_END-->')
+  })
 })
