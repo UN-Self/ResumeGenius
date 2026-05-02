@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type JSONB map[string]interface{}
@@ -83,16 +85,39 @@ type Version struct {
 type AISession struct {
 	ID        uint        `gorm:"primaryKey" json:"id"`
 	DraftID   uint        `gorm:"not null;index" json:"draft_id"`
+	ProjectID *uint       `gorm:"index" json:"project_id"`
 	Draft     Draft       `gorm:"foreignKey:DraftID" json:"draft,omitempty"`
+	Status    string      `gorm:"size:20;not null;default:'active'" json:"status"`
 	Messages  []AIMessage `gorm:"foreignKey:SessionID" json:"messages,omitempty"`
+	ToolCalls []AIToolCall `gorm:"foreignKey:SessionID" json:"tool_calls,omitempty"`
 	CreatedAt time.Time   `json:"created_at"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
+func (s *AISession) BeforeDelete(tx *gorm.DB) error {
+	return tx.Where("session_id = ?", s.ID).Delete(&AIToolCall{}).Error
 }
 
 type AIMessage struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	SessionID uint      `gorm:"not null;index" json:"session_id"`
-	Session   AISession `gorm:"foreignKey:SessionID" json:"session,omitempty"`
-	Role      string    `gorm:"size:20;not null" json:"role"`
-	Content   string    `gorm:"type:text;not null" json:"content"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	SessionID  uint      `gorm:"not null;index" json:"session_id"`
+	Session    AISession `gorm:"foreignKey:SessionID" json:"session,omitempty"`
+	Role       string    `gorm:"size:20;not null" json:"role"`
+	Content    string    `gorm:"type:text;not null" json:"content"`
+	Thinking   *string   `gorm:"type:text" json:"thinking,omitempty"`
+	ToolCallID *uint     `gorm:"index" json:"tool_call_id,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+type AIToolCall struct {
+	ID          uint       `gorm:"primaryKey" json:"id"`
+	SessionID   uint       `gorm:"not null;index" json:"session_id"`
+	ToolName    string     `gorm:"size:100;not null" json:"tool_name"`
+	Params      JSONB      `gorm:"type:jsonb;not null" json:"params"`
+	Result      *JSONB     `gorm:"type:jsonb" json:"result,omitempty"`
+	Status      string     `gorm:"size:20;not null;default:'pending'" json:"status"`
+	Error       *string    `gorm:"type:text" json:"error,omitempty"`
+	StartedAt   *time.Time `json:"started_at,omitempty"`
+	CompletedAt *time.Time `json:"completed_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }

@@ -49,6 +49,7 @@ func Migrate(db *gorm.DB) {
 		&models.Version{},
 		&models.AISession{},
 		&models.AIMessage{},
+		&models.AIToolCall{},
 	)
 	if err != nil {
 		log.Fatalf("failed to migrate: %v", err)
