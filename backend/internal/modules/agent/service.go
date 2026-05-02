@@ -241,7 +241,8 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 
 	for iteration := 0; iteration < s.maxIterations; iteration++ {
 		// a. Build messages array: system + history + pending tool results
-		apiMessages := []Message{{Role: "system", Content: systemPromptReAct}}
+		sysPrompt := systemPromptReAct + fmt.Sprintf("\n\n## 当前会话\n- draft_id: %d\n- project_id: %d\n请在所有工具调用中使用这些 ID。", session.DraftID, session.ProjectID)
+			apiMessages := []Message{{Role: "system", Content: sysPrompt}}
 		for _, m := range history {
 			apiMessages = append(apiMessages, Message{Role: m.Role, Content: m.Content})
 		}
