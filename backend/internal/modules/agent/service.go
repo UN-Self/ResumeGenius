@@ -17,6 +17,7 @@ var (
 	ErrDraftNotFound   = errors.New("draft not found")
 	ErrModelTimeout    = errors.New("model call timeout")
 	ErrModelFormat     = errors.New("model returned invalid format")
+	ErrMaxIterations   = errors.New("max tool-calling iterations exceeded")
 )
 
 type SessionService struct {
@@ -373,7 +374,7 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 	}
 
 	// 5. Loop exceeded maxIterations
-	return fmt.Errorf("max tool-calling iterations exceeded")
+	return ErrMaxIterations
 }
 
 func (s *ChatService) loadMessages(sessionID uint) ([]models.AIMessage, error) {

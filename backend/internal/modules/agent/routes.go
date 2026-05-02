@@ -2,6 +2,7 @@ package agent
 
 import (
 	"os"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -22,7 +23,13 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 	}
 
 	toolExecutor := NewAgentToolExecutor(db, "http://127.0.0.1:8080")
-	chatSvc := NewChatService(db, provider, toolExecutor, 3)
+	maxIterations := 3
+	if v := os.Getenv("AGENT_MAX_ITERATIONS"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			maxIterations = parsed
+		}
+	}
+	chatSvc := NewChatService(db, provider, toolExecutor, maxIterations)
 	h := NewHandler(sessionSvc, chatSvc)
 
 	rg.POST("/ai/sessions", h.CreateSession)
