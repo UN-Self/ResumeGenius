@@ -476,7 +476,13 @@ git commit -m "feat(parsing): 持久化清洗后的素材正文"
 git commit -m "feat(parsing): 持久化解析出的素材图片"
 ```
 
-### Step 5：在持久化成功后安全删除原始文件
+### Step 5：在持久化成功后安全删除原始文件（已完成）
+
+完成情况：
+
+- `resume_pdf` / `resume_docx` 在正文持久化成功后会删除原始上传文件
+- 删除后主资产会清空 `uri`，并在 `metadata.parsing` 中记录 `source_deleted`、`original_filename`、`original_asset_type`
+- 为避免删源文件后打断现有链路，PDF / DOCX 会在源文件已删除时回退使用 `assets.content` 继续提供解析正文
 
 目标：
 

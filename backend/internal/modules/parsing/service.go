@@ -100,8 +100,10 @@ func (s *ParsingService) Parse(projectID uint) ([]ParsedContent, error) {
 			return nil, err
 		}
 		if parsed != nil {
-			if err := s.persistParsedAsset(asset, parsed); err != nil {
-				return nil, err
+			if !shouldUsePersistedTextFallback(asset) {
+				if err := s.persistParsedAsset(asset, parsed); err != nil {
+					return nil, err
+				}
 			}
 			parsedContents = append(parsedContents, *parsed)
 		}
@@ -282,6 +284,9 @@ func (s *ParsingService) parseAsset(asset models.Asset) (*ParsedContent, error) 
 }
 
 func (s *ParsingService) parsePDFAsset(asset models.Asset) (*ParsedContent, error) {
+	if shouldUsePersistedTextFallback(asset) {
+		return buildParsedContentFromPersistedText(asset)
+	}
 	if s.pdfParser == nil {
 		return nil, ErrPDFParserNotConfigured
 	}
@@ -298,6 +303,9 @@ func (s *ParsingService) parsePDFAsset(asset models.Asset) (*ParsedContent, erro
 }
 
 func (s *ParsingService) parseDOCXAsset(asset models.Asset) (*ParsedContent, error) {
+	if shouldUsePersistedTextFallback(asset) {
+		return buildParsedContentFromPersistedText(asset)
+	}
 	if s.docxParser == nil {
 		return nil, ErrDOCXParserNotConfigured
 	}
@@ -382,6 +390,38 @@ func requireNoteContent(asset models.Asset) (string, error) {
 	return label + "\n" + content, nil
 }
 
+func shouldUsePersistedTextFallback(asset models.Asset) bool {
+	if !isSourceBackedFileAsset(asset.Type) || !isSourceDeleted(asset.Metadata) {
+		return false
+	}
+	if asset.Content == nil {
+		return false
+	}
+	return strings.TrimSpace(*asset.Content) != ""
+}
+
+func buildParsedContentFromPersistedText(asset models.Asset) (*ParsedContent, error) {
+	content, err := requirePersistedAssetContent(asset)
+	if err != nil {
+		return nil, err
+	}
+	return cleanParsedContentText(attachAssetMetadata(asset, &ParsedContent{
+		Text:   content,
+		Images: nil,
+	})), nil
+}
+
+func requirePersistedAssetContent(asset models.Asset) (string, error) {
+	if asset.Content == nil {
+		return "", ErrAssetContentMissing
+	}
+	content := strings.TrimSpace(*asset.Content)
+	if content == "" {
+		return "", ErrAssetContentMissing
+	}
+	return content, nil
+}
+
 func attachAssetMetadata(asset models.Asset, parsed *ParsedContent) *ParsedContent {
 	if parsed == nil {
 		return nil
@@ -399,12 +439,15 @@ func (s *ParsingService) persistParsedAsset(asset models.Asset, parsed *ParsedCo
 		return nil
 	}
 
+	contentToPersist, contentPersisted := parsedAssetContentForPersistence(asset, parsed)
 	var oldDerivedAssets []models.Asset
 	if s.storage != nil {
 		oldDerivedAssets = loadDerivedImageAssetsByIDs(s.db, asset.ProjectID, derivedImageAssetIDsFromMetadata(asset.Metadata))
 	}
 	savedKeys := make([]string, 0, len(parsed.Images))
 	newDerivedImageAssetIDs := make([]uint, 0, len(parsed.Images))
+	var persistedMetadata models.JSONB
+	imagesPersisted := false
 
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		if s.storage != nil {
@@ -422,20 +465,22 @@ func (s *ParsingService) persistParsedAsset(asset models.Asset, parsed *ParsedCo
 		if s.storage != nil {
 			derivedImageIDsForMetadata = newDerivedImageAssetIDs
 		}
-		imagesPersisted := s.storage != nil && len(parsed.Images) > 0
+		imagesPersisted = s.storage != nil && len(parsed.Images) > 0
+		metadataAfterPersist := withAssetParsingMetadata(
+			asset.Metadata,
+			"success",
+			parsed,
+			contentPersisted,
+			derivedImageIDsForMetadata,
+			imagesPersisted,
+		)
+		persistedMetadata = metadataAfterPersist
 
 		updates := map[string]interface{}{
-			"metadata": withAssetParsingMetadata(
-				asset.Metadata,
-				"success",
-				parsed,
-				shouldPersistParsedText(asset),
-				derivedImageIDsForMetadata,
-				imagesPersisted,
-			),
+			"metadata": metadataAfterPersist,
 		}
-		if content, ok := parsedAssetContentForPersistence(asset, parsed); ok {
-			updates["content"] = content
+		if contentPersisted {
+			updates["content"] = contentToPersist
 		}
 		if err := tx.Model(&models.Asset{}).Where("id = ?", asset.ID).Updates(updates).Error; err != nil {
 			return err
@@ -461,6 +506,10 @@ func (s *ParsingService) persistParsedAsset(asset models.Asset, parsed *ParsedCo
 		if oldAsset.URI != nil {
 			_ = s.storage.Delete(*oldAsset.URI)
 		}
+	}
+
+	if err := s.deleteOriginalSourceAfterPersistence(asset, persistedMetadata, parsed, contentPersisted, imagesPersisted); err != nil {
+		return err
 	}
 
 	return nil
@@ -523,6 +572,21 @@ func withAssetParsingMetadata(
 	return metadata
 }
 
+func withSourceDeletionMetadata(existing models.JSONB, asset models.Asset) models.JSONB {
+	metadata := cloneJSONB(existing)
+	parsing := cloneJSONMap(metadata["parsing"])
+	parsing["source_deleted"] = true
+	parsing["original_asset_type"] = asset.Type
+	if asset.URI != nil && *asset.URI != "" {
+		parsing["original_uri"] = *asset.URI
+	}
+	if filename := sourceFilenameForDeletedAsset(asset); filename != "" {
+		parsing["original_filename"] = filename
+	}
+	metadata["parsing"] = parsing
+	return metadata
+}
+
 func cloneJSONB(input models.JSONB) models.JSONB {
 	if input == nil {
 		return models.JSONB{}
@@ -559,6 +623,84 @@ func parsedImageCount(parsed *ParsedContent) int {
 		return 0
 	}
 	return len(parsed.Images)
+}
+
+func (s *ParsingService) deleteOriginalSourceAfterPersistence(
+	asset models.Asset,
+	persistedMetadata models.JSONB,
+	parsed *ParsedContent,
+	contentPersisted bool,
+	imagesPersisted bool,
+) error {
+	if !shouldDeleteOriginalSource(asset, contentPersisted, s.storage != nil) {
+		return nil
+	}
+
+	originalKey := *asset.URI
+	if err := s.storage.Delete(originalKey); err != nil {
+		return fmt.Errorf("delete original source file: %w", err)
+	}
+
+	if persistedMetadata == nil {
+		persistedMetadata = withAssetParsingMetadata(
+			asset.Metadata,
+			"success",
+			parsed,
+			contentPersisted,
+			derivedImageAssetIDsFromMetadata(asset.Metadata),
+			imagesPersisted,
+		)
+	}
+	metadata := withSourceDeletionMetadata(persistedMetadata, asset)
+	updates := map[string]interface{}{
+		"uri":      nil,
+		"metadata": metadata,
+	}
+	if err := s.db.Model(&models.Asset{}).Where("id = ?", asset.ID).Updates(updates).Error; err != nil {
+		return fmt.Errorf("mark original source deleted: %w", err)
+	}
+
+	return nil
+}
+
+func shouldDeleteOriginalSource(asset models.Asset, contentPersisted bool, storageReady bool) bool {
+	if !storageReady || asset.URI == nil || *asset.URI == "" {
+		return false
+	}
+	if !isSourceBackedFileAsset(asset.Type) || isSourceDeleted(asset.Metadata) {
+		return false
+	}
+	if !contentPersisted {
+		return false
+	}
+	return true
+}
+
+func isSourceBackedFileAsset(assetType string) bool {
+	switch assetType {
+	case AssetTypeResumePDF, AssetTypeResumeDOCX:
+		return true
+	default:
+		return false
+	}
+}
+
+func isSourceDeleted(metadata models.JSONB) bool {
+	parsing := cloneJSONMap(metadata["parsing"])
+	deleted, _ := parsing["source_deleted"].(bool)
+	return deleted
+}
+
+func sourceFilenameForDeletedAsset(asset models.Asset) string {
+	if asset.URI == nil || *asset.URI == "" {
+		return ""
+	}
+	normalized := strings.ReplaceAll(*asset.URI, "\\", "/")
+	base := normalized[strings.LastIndex(normalized, "/")+1:]
+	if underscore := strings.Index(base, "_"); underscore >= 0 && underscore < len(base)-1 {
+		return base[underscore+1:]
+	}
+	return base
 }
 
 func (s *ParsingService) createDerivedImageAsset(tx *gorm.DB, sourceAsset models.Asset, image ParsedImage, index int) (string, uint, error) {
