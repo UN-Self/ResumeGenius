@@ -1,8 +1,8 @@
 package intake
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
+	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
@@ -23,6 +23,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, uploadDir string) {
 	rg.POST("/assets/git", h.CreateGitRepo)
 	rg.GET("/assets", h.ListAssets)
 	rg.DELETE("/assets/:asset_id", h.DeleteAsset)
+	rg.PATCH("/assets/:asset_id", h.UpdateAsset)
 
 	// Notes
 	rg.POST("/assets/notes", h.CreateNote)

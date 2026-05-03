@@ -288,6 +288,83 @@ func TestAssetService_UpdateNote_WrongUser(t *testing.T) {
 	assert.ErrorIs(t, err, ErrProjectNotFound)
 }
 
+func TestAssetService_UpdateAsset_UpdatesPersistedFileContentAndLabel(t *testing.T) {
+	db := SetupTestDB(t)
+	storage := NewLocalStorage(t.TempDir())
+	svc := NewAssetService(db, storage)
+
+	projSvc := NewProjectService(db)
+	proj, err := projSvc.Create("user-1", "Test Project")
+	require.NoError(t, err)
+
+	content := "Original parsed text"
+	label := "Original label"
+	metadata := models.JSONB{
+		"parsing": map[string]interface{}{
+			"status": "success",
+		},
+	}
+	asset := models.Asset{
+		ProjectID: proj.ID,
+		Type:      "resume_pdf",
+		Content:   &content,
+		Label:     &label,
+		Metadata:  metadata,
+	}
+	require.NoError(t, db.Create(&asset).Error)
+
+	newContent := "Updated parsed text"
+	newLabel := "Updated label"
+	updated, err := svc.UpdateAsset("user-1", asset.ID, &newContent, &newLabel)
+	assert.NoError(t, err)
+	require.NotNil(t, updated)
+	assert.Equal(t, "Updated parsed text", *updated.Content)
+	assert.Equal(t, "Updated label", *updated.Label)
+	assert.Equal(t, "resume_pdf", updated.Type)
+	assert.Equal(t, metadata, updated.Metadata)
+}
+
+func TestAssetService_UpdateAsset_PartialUpdateKeepsExistingFields(t *testing.T) {
+	db := SetupTestDB(t)
+	storage := NewLocalStorage(t.TempDir())
+	svc := NewAssetService(db, storage)
+
+	projSvc := NewProjectService(db)
+	proj, err := projSvc.Create("user-1", "Test Project")
+	require.NoError(t, err)
+
+	content := "Keep this content"
+	label := "Original label"
+	asset, err := svc.CreateNote("user-1", proj.ID, content, label)
+	require.NoError(t, err)
+
+	newLabel := "Only label changed"
+	updated, err := svc.UpdateAsset("user-1", asset.ID, nil, &newLabel)
+	assert.NoError(t, err)
+	require.NotNil(t, updated)
+	assert.NotNil(t, updated.Content)
+	assert.Equal(t, content, *updated.Content)
+	assert.NotNil(t, updated.Label)
+	assert.Equal(t, newLabel, *updated.Label)
+}
+
+func TestAssetService_UpdateAsset_WrongUser(t *testing.T) {
+	db := SetupTestDB(t)
+	storage := NewLocalStorage(t.TempDir())
+	svc := NewAssetService(db, storage)
+
+	projSvc := NewProjectService(db)
+	proj, err := projSvc.Create("user-1", "Test Project")
+	require.NoError(t, err)
+
+	asset, err := svc.CreateNote("user-1", proj.ID, "Original note", "Label1")
+	require.NoError(t, err)
+
+	newContent := "Hacked"
+	_, err = svc.UpdateAsset("user-2", asset.ID, &newContent, nil)
+	assert.ErrorIs(t, err, ErrProjectNotFound)
+}
+
 func TestAssetService_ListByProject(t *testing.T) {
 	db := SetupTestDB(t)
 	storage := NewLocalStorage(t.TempDir())

@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/middleware"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 )
 
 // --- Test helpers ---
@@ -292,6 +293,46 @@ func TestHandler_DeleteAsset(t *testing.T) {
 	w2 := doJSON(t, r, "DELETE", "/assets/"+strconv.Itoa(int(asset.ID)), nil)
 	assert.Equal(t, http.StatusBadRequest, w2.Code)
 	assert.Equal(t, CodeAssetNotFound, parseResponse(t, w2).Code)
+}
+
+func TestHandler_UpdateAsset(t *testing.T) {
+	h, r := setupTestHandler(t)
+	r.PATCH("/assets/:asset_id", h.UpdateAsset)
+
+	projID := createTestProject(t, h, "Update Asset Project")
+
+	content := "Original parsed text"
+	label := "Original label"
+	asset := models.Asset{
+		ProjectID: projID,
+		Type:      "resume_pdf",
+		Content:   &content,
+		Label:     &label,
+	}
+	require.NoError(t, h.assetSvc.db.Create(&asset).Error)
+
+	w := doJSON(t, r, "PATCH", "/assets/"+strconv.Itoa(int(asset.ID)), map[string]interface{}{
+		"content": "Updated parsed text",
+		"label":   "Updated label",
+	})
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	resp := parseResponse(t, w)
+	assert.Equal(t, 0, resp.Code)
+
+	data := parseDataMap(t, resp.Data)
+	assert.Equal(t, "Updated parsed text", data["content"])
+	assert.Equal(t, "Updated label", data["label"])
+	assert.Equal(t, "resume_pdf", data["type"])
+}
+
+func TestHandler_UpdateAsset_RequiresEditableFields(t *testing.T) {
+	h, r := setupTestHandler(t)
+	r.PATCH("/assets/:asset_id", h.UpdateAsset)
+
+	w := doJSON(t, r, "PATCH", "/assets/1", map[string]interface{}{})
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, CodeParamInvalid, parseResponse(t, w).Code)
 }
 
 func TestHandler_CreateNote(t *testing.T) {
