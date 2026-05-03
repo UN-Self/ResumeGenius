@@ -2,11 +2,12 @@ package intake
 
 import (
 	"fmt"
-	"os"
+	"strings"
 	"testing"
 
-	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 )
@@ -14,35 +15,16 @@ import (
 func SetupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	host := os.Getenv("DB_HOST")
-	if host == "" {
-		host = "172.29.26.38"
-	}
-	port := os.Getenv("DB_PORT")
-	if port == "" {
-		port = "45432"
-	}
-	user := os.Getenv("DB_USER")
-	if user == "" {
-		user = "unself"
-	}
-	password := os.Getenv("DB_PASSWORD")
-	if password == "" {
-		password = "unself"
-	}
-	dbname := os.Getenv("DB_NAME")
-	if dbname == "" {
-		dbname = "resume_genius"
-	}
-
-	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		host, port, user, password, dbname)
-
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		DisableForeignKeyConstraintWhenMigrating: true,
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", strings.ReplaceAll(t.Name(), "/", "_"))
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
 		t.Fatalf("connect test db: %v", err)
+	}
+
+	if err := db.Exec("PRAGMA foreign_keys = ON").Error; err != nil {
+		t.Fatalf("enable sqlite foreign keys: %v", err)
 	}
 
 	tx := db.Begin()
@@ -50,8 +32,16 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		tx.Rollback()
 	})
 
-	// Migrate all tables (disable FK constraint creation to avoid conflicts with existing constraints)
-	tx.AutoMigrate(&models.Project{}, &models.Asset{}, &models.Draft{}, &models.Version{}, &models.AISession{}, &models.AIMessage{})
+	if err := tx.AutoMigrate(
+		&models.Project{},
+		&models.Asset{},
+		&models.Draft{},
+		&models.Version{},
+		&models.AISession{},
+		&models.AIMessage{},
+	); err != nil {
+		t.Fatalf("migrate test db: %v", err)
+	}
 
 	return tx
 }

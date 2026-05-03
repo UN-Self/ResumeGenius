@@ -556,7 +556,13 @@ git commit -m "feat(parsing): 解析入库后删除原始文件"
 git commit -m "feat(parsing): 让生成链路优先消费持久化正文"
 ```
 
-### Step 7：补一个通用资产正文更新接口
+### Step 7：补一个通用资产正文更新接口（已完成）
+
+完成情况：
+
+- 新增 `PATCH /api/v1/assets/:asset_id`
+- 支持对 `label` 和 `content` 做通用更新，不再局限于 note
+- 旧的 note 更新入口复用同一套后端更新逻辑，保持兼容
 
 目标：
 

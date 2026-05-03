@@ -55,6 +55,11 @@ type updateNoteReq struct {
 	Label   string `json:"label"`
 }
 
+type updateAssetReq struct {
+	Content *string `json:"content"`
+	Label   *string `json:"label"`
+}
+
 // --- Handlers ---
 
 // CreateProject handles POST /projects
@@ -250,6 +255,40 @@ func (h *Handler) DeleteAsset(c *gin.Context) {
 	response.Success(c, nil)
 }
 
+// UpdateAsset handles PATCH /assets/:asset_id
+func (h *Handler) UpdateAsset(c *gin.Context) {
+	assetID, err := strconv.ParseUint(c.Param("asset_id"), 10, 64)
+	if err != nil {
+		response.Error(c, CodeParamInvalid, "invalid asset_id")
+		return
+	}
+
+	var req updateAssetReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, CodeParamInvalid, "invalid request body")
+		return
+	}
+	if req.Content == nil && req.Label == nil {
+		response.Error(c, CodeParamInvalid, "content or label is required")
+		return
+	}
+
+	asset, err := h.assetSvc.UpdateAsset(userID(c), uint(assetID), req.Content, req.Label)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrAssetNotFound):
+			response.Error(c, CodeAssetNotFound, "asset not found")
+		case errors.Is(err, ErrProjectNotFound):
+			response.Error(c, CodeProjectNotFound, "project not found")
+		default:
+			response.Error(c, CodeInternalError, "failed to update asset")
+		}
+		return
+	}
+
+	response.Success(c, asset)
+}
+
 // CreateNote handles POST /assets/notes
 func (h *Handler) CreateNote(c *gin.Context) {
 	var req createNoteReq
@@ -286,7 +325,9 @@ func (h *Handler) UpdateNote(c *gin.Context) {
 		return
 	}
 
-	asset, err := h.assetSvc.UpdateNote(userID(c), uint(noteID), req.Content, req.Label)
+	content := req.Content
+	label := req.Label
+	asset, err := h.assetSvc.UpdateAsset(userID(c), uint(noteID), &content, &label)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrAssetNotFound):

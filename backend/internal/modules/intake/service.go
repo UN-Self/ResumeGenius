@@ -221,8 +221,12 @@ func (s *AssetService) CreateNote(userID string, projectID uint, content, label 
 }
 
 func (s *AssetService) UpdateNote(userID string, noteID uint, content, label string) (*models.Asset, error) {
+	return s.UpdateAsset(userID, noteID, &content, &label)
+}
+
+func (s *AssetService) UpdateAsset(userID string, assetID uint, content, label *string) (*models.Asset, error) {
 	var asset models.Asset
-	if err := s.db.First(&asset, noteID).Error; err != nil {
+	if err := s.db.First(&asset, assetID).Error; err != nil {
 		return nil, ErrAssetNotFound
 	}
 
@@ -230,10 +234,14 @@ func (s *AssetService) UpdateNote(userID string, noteID uint, content, label str
 		return nil, err
 	}
 
-	asset.Content = &content
-	asset.Label = &label
+	if content != nil {
+		asset.Content = cloneOptionalString(content)
+	}
+	if label != nil {
+		asset.Label = cloneOptionalLabel(label)
+	}
 	if err := s.db.Save(&asset).Error; err != nil {
-		return nil, fmt.Errorf("update note: %w", err)
+		return nil, fmt.Errorf("update asset: %w", err)
 	}
 
 	return &asset, nil
@@ -294,4 +302,23 @@ func (s *AssetService) DeleteProjectAssets(userID string, projectID uint) error 
 	}
 
 	return nil
+}
+
+func cloneOptionalString(input *string) *string {
+	if input == nil {
+		return nil
+	}
+	value := *input
+	return &value
+}
+
+func cloneOptionalLabel(input *string) *string {
+	if input == nil {
+		return nil
+	}
+	if *input == "" {
+		return nil
+	}
+	value := *input
+	return &value
 }
