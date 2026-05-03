@@ -142,7 +142,7 @@ func (s *ParsingService) Generate(projectID uint) (*GenerateResult, error) {
 		return nil, ErrDraftGeneratorNotConfigured
 	}
 
-	parsedContents, err := s.Parse(projectID)
+	parsedContents, err := s.loadParsedContentsForGenerate(projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -198,6 +198,76 @@ func (s *ParsingService) Generate(projectID uint) (*GenerateResult, error) {
 	}
 
 	return result, nil
+}
+
+func (s *ParsingService) loadParsedContentsForGenerate(projectID uint) ([]ParsedContent, error) {
+	exists, err := s.projectExists(projectID)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, ErrProjectNotFound
+	}
+
+	assets, err := s.listProjectAssets(projectID)
+	if err != nil {
+		return nil, err
+	}
+
+	parsedContents := make([]ParsedContent, 0, len(assets))
+	var firstRecoverableErr error
+	for _, asset := range assets {
+		parsed, err := s.loadAssetParsedContentForGenerate(asset)
+		if err != nil {
+			if isRecoverableAssetError(err) {
+				if firstRecoverableErr == nil {
+					firstRecoverableErr = err
+				}
+				continue
+			}
+			return nil, err
+		}
+		if parsed != nil {
+			parsedContents = append(parsedContents, *parsed)
+		}
+	}
+
+	if len(parsedContents) == 0 {
+		if firstRecoverableErr != nil {
+			return nil, firstRecoverableErr
+		}
+		return nil, ErrNoUsableAssets
+	}
+
+	return parsedContents, nil
+}
+
+func (s *ParsingService) loadAssetParsedContentForGenerate(asset models.Asset) (*ParsedContent, error) {
+	switch asset.Type {
+	case AssetTypeResumeImage:
+		return nil, ErrAssetTypeSkipped
+	case AssetTypeNote:
+		return s.parseNoteAsset(asset)
+	case AssetTypeResumePDF, AssetTypeResumeDOCX, AssetTypeGitRepo:
+		if hasPersistedAssetContent(asset) {
+			return buildParsedContentFromPersistedText(asset)
+		}
+		if s.shouldSkipAssetInParseFlow(asset) {
+			return nil, ErrAssetTypeSkipped
+		}
+		parsed, err := s.parseAsset(asset)
+		if err != nil {
+			return nil, err
+		}
+		if parsed != nil && !shouldUsePersistedTextFallback(asset) {
+			if err := s.persistParsedAsset(asset, parsed); err != nil {
+				return nil, err
+			}
+		}
+		return parsed, nil
+	default:
+		return nil, fmt.Errorf("%w: %s", ErrUnsupportedAssetType, asset.Type)
+	}
 }
 
 func (s *ParsingService) ensureOwnedProject(userID string, projectID uint) error {
@@ -420,6 +490,13 @@ func requirePersistedAssetContent(asset models.Asset) (string, error) {
 		return "", ErrAssetContentMissing
 	}
 	return content, nil
+}
+
+func hasPersistedAssetContent(asset models.Asset) bool {
+	if asset.Content == nil {
+		return false
+	}
+	return strings.TrimSpace(*asset.Content) != ""
 }
 
 func attachAssetMetadata(asset models.Asset, parsed *ParsedContent) *ParsedContent {
