@@ -535,7 +535,7 @@ func TestParsePersistsDerivedImageAssetsForParsedImages(t *testing.T) {
 	assertPersistedAssetContent(t, db, pdfAsset.ID, "- React engineering", "success", true, 2)
 }
 
-func TestParseReplacesDerivedImageAssetsOnReparse(t *testing.T) {
+func TestParseRetainsDerivedImageAssetsAfterSourceDeletionFallback(t *testing.T) {
 	db := setupParsingTestDB(t)
 	store := newTestStorage(t)
 	project := models.Project{
@@ -609,8 +609,8 @@ func TestParseReplacesDerivedImageAssetsOnReparse(t *testing.T) {
 	if len(secondIDs) != 1 {
 		t.Fatalf("expected 1 second derived image id, got %+v", secondIDs)
 	}
-	if secondIDs[0] == firstIDs[0] {
-		t.Fatalf("expected derived image id to change after reparse, still got %d", secondIDs[0])
+	if secondIDs[0] != firstIDs[0] {
+		t.Fatalf("expected derived image id to stay stable after persisted-text fallback, first=%d second=%d", firstIDs[0], secondIDs[0])
 	}
 
 	var derivedCount int64
@@ -618,16 +618,7 @@ func TestParseReplacesDerivedImageAssetsOnReparse(t *testing.T) {
 		t.Fatalf("count derived assets: %v", err)
 	}
 	if derivedCount != 1 {
-		t.Fatalf("expected 1 derived image asset after replacement, got %d", derivedCount)
-	}
-
-	var stale models.Asset
-	err := db.First(&stale, firstIDs[0]).Error
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		t.Fatalf("expected old derived asset to be deleted, got %v", err)
-	}
-	if store.Exists(firstKey) {
-		t.Fatalf("expected old derived image file %q to be deleted", firstKey)
+		t.Fatalf("expected 1 derived image asset after fallback parse, got %d", derivedCount)
 	}
 
 	var secondDerived models.Asset
@@ -635,7 +626,161 @@ func TestParseReplacesDerivedImageAssetsOnReparse(t *testing.T) {
 		t.Fatalf("fetch second derived asset: %v", err)
 	}
 	if secondDerived.URI == nil || !store.Exists(*secondDerived.URI) {
-		t.Fatalf("expected new derived image file to exist, got %+v", secondDerived.URI)
+		t.Fatalf("expected existing derived image file to remain available, got %+v", secondDerived.URI)
+	}
+	if secondDerived.URI == nil || *secondDerived.URI != firstKey {
+		t.Fatalf("expected derived image file key to stay stable, first=%q second=%+v", firstKey, secondDerived.URI)
+	}
+}
+
+func TestParseDeletesOriginalSourceFileAfterPersistence(t *testing.T) {
+	db := setupParsingTestDB(t)
+	store := newTestStorage(t)
+	project := models.Project{
+		UserID: "test-user-1",
+		Title:  "Delete original source",
+		Status: "active",
+	}
+	if err := db.Create(&project).Error; err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	originalKey, err := store.Save(project.ID, "resume.pdf", []byte("pdf-bytes"))
+	if err != nil {
+		t.Fatalf("save original source file: %v", err)
+	}
+
+	pdfAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeResumePDF, URI: &originalKey}
+	if err := db.Create(&pdfAsset).Error; err != nil {
+		t.Fatalf("create pdf asset: %v", err)
+	}
+
+	pdfParser := &stubPdfParser{
+		result: &ParsedContent{
+			Text: "Page 1 of 1\n* React   engineering",
+			Images: []ParsedImage{
+				{Description: "avatar", DataBase64: base64.StdEncoding.EncodeToString([]byte("avatar-bytes"))},
+			},
+		},
+	}
+
+	svc := NewParsingServiceWithGeneratorAndStorage(db, pdfParser, nil, nil, nil, store)
+
+	parsedContents, err := svc.Parse(project.ID)
+	if err != nil {
+		t.Fatalf("parse project: %v", err)
+	}
+	if len(parsedContents) != 1 {
+		t.Fatalf("expected 1 parsed content, got %d", len(parsedContents))
+	}
+	if store.Exists(originalKey) {
+		t.Fatalf("expected original source file %q to be deleted", originalKey)
+	}
+
+	var storedPDF models.Asset
+	if err := db.First(&storedPDF, pdfAsset.ID).Error; err != nil {
+		t.Fatalf("fetch stored pdf asset: %v", err)
+	}
+	if storedPDF.URI != nil {
+		t.Fatalf("expected source asset uri to be cleared after deletion, got %+v", storedPDF.URI)
+	}
+
+	parsing := getParsingMetadataMap(t, storedPDF.Metadata)
+	if got := parsing["source_deleted"]; got != true {
+		t.Fatalf("expected source_deleted true, got %+v", got)
+	}
+	if got := parsing["original_asset_type"]; got != AssetTypeResumePDF {
+		t.Fatalf("expected original_asset_type %s, got %+v", AssetTypeResumePDF, got)
+	}
+	if got := parsing["original_filename"]; got != "resume.pdf" {
+		t.Fatalf("expected original_filename resume.pdf, got %+v", got)
+	}
+	if got := parsing["original_uri"]; got != originalKey {
+		t.Fatalf("expected original_uri %q, got %+v", originalKey, got)
+	}
+
+	derivedIDs := derivedImageAssetIDsFromMetadata(storedPDF.Metadata)
+	if len(derivedIDs) != 1 {
+		t.Fatalf("expected 1 derived image asset id, got %+v", derivedIDs)
+	}
+
+	var derivedAsset models.Asset
+	if err := db.First(&derivedAsset, derivedIDs[0]).Error; err != nil {
+		t.Fatalf("fetch derived image asset: %v", err)
+	}
+	if derivedAsset.URI == nil || !store.Exists(*derivedAsset.URI) {
+		t.Fatalf("expected derived image file to remain available, got %+v", derivedAsset.URI)
+	}
+
+	pdfParser.calledWith = ""
+	parsedContents, err = svc.Parse(project.ID)
+	if err != nil {
+		t.Fatalf("parse deleted-source project via persisted fallback: %v", err)
+	}
+	if len(parsedContents) != 1 {
+		t.Fatalf("expected 1 parsed content after fallback, got %d", len(parsedContents))
+	}
+	if pdfParser.calledWith != "" {
+		t.Fatalf("expected parser not to be called after source deletion, got %q", pdfParser.calledWith)
+	}
+	if parsedContents[0].Text != "- React engineering" {
+		t.Fatalf("expected persisted cleaned text, got %q", parsedContents[0].Text)
+	}
+}
+
+func TestParseKeepsOriginalSourceFileWhenImagePersistenceFails(t *testing.T) {
+	db := setupParsingTestDB(t)
+	store := newTestStorage(t)
+	project := models.Project{
+		UserID: "test-user-1",
+		Title:  "Keep original source on image persistence failure",
+		Status: "active",
+	}
+	if err := db.Create(&project).Error; err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	originalKey, err := store.Save(project.ID, "resume.pdf", []byte("pdf-bytes"))
+	if err != nil {
+		t.Fatalf("save original source file: %v", err)
+	}
+
+	pdfAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeResumePDF, URI: &originalKey}
+	if err := db.Create(&pdfAsset).Error; err != nil {
+		t.Fatalf("create pdf asset: %v", err)
+	}
+
+	pdfParser := &stubPdfParser{
+		result: &ParsedContent{
+			Text: "React engineering",
+			Images: []ParsedImage{
+				{Description: "broken", DataBase64: "not-base64"},
+			},
+		},
+	}
+
+	svc := NewParsingServiceWithGeneratorAndStorage(db, pdfParser, nil, nil, nil, store)
+
+	_, err = svc.Parse(project.ID)
+	if err == nil {
+		t.Fatal("expected parse to fail when derived image persistence fails")
+	}
+	if !store.Exists(originalKey) {
+		t.Fatalf("expected original source file %q to remain when persistence fails", originalKey)
+	}
+
+	var storedPDF models.Asset
+	if err := db.First(&storedPDF, pdfAsset.ID).Error; err != nil {
+		t.Fatalf("fetch stored pdf asset: %v", err)
+	}
+	if storedPDF.URI == nil || *storedPDF.URI != originalKey {
+		t.Fatalf("expected source asset uri to remain %q, got %+v", originalKey, storedPDF.URI)
+	}
+	if storedPDF.Content != nil {
+		t.Fatalf("expected content not to be persisted on failure, got %+v", storedPDF.Content)
+	}
+	if storedPDF.Metadata != nil {
+		t.Fatalf("expected metadata to remain unchanged on failure, got %+v", storedPDF.Metadata)
 	}
 }
 
