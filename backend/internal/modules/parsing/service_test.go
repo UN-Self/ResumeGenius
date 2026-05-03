@@ -929,6 +929,142 @@ func TestGenerateAggregatesGitAssetTextWhenExtractorConfigured(t *testing.T) {
 	}
 }
 
+func TestGeneratePrefersPersistedFileContentWithoutInvokingParser(t *testing.T) {
+	db := setupParsingTestDB(t)
+	project := models.Project{
+		UserID: "test-user-1",
+		Title:  "Persisted file content project",
+		Status: "active",
+	}
+	if err := db.Create(&project).Error; err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	persistedText := "- React engineering\n\nBuilt scalable UI systems"
+	metadata := models.JSONB{
+		"parsing": map[string]interface{}{
+			"status":            "success",
+			"content_persisted": true,
+			"source_deleted":    true,
+		},
+	}
+	pdfAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeResumePDF, Content: &persistedText, Metadata: metadata}
+	if err := db.Create(&pdfAsset).Error; err != nil {
+		t.Fatalf("create pdf asset: %v", err)
+	}
+
+	pdfParser := &stubPdfParser{err: errors.New("parser should not be called")}
+	generator := &stubDraftGenerator{result: "<!DOCTYPE html><html><body>mock resume</body></html>"}
+	svc := NewParsingServiceWithGenerator(db, pdfParser, nil, nil, generator)
+
+	result, err := svc.Generate(project.ID)
+	if err != nil {
+		t.Fatalf("generate with persisted content: %v", err)
+	}
+	if result == nil || result.DraftID == 0 {
+		t.Fatalf("expected generated draft result, got %+v", result)
+	}
+	if pdfParser.calledWith != "" {
+		t.Fatalf("expected pdf parser not to be called, got %q", pdfParser.calledWith)
+	}
+	if generator.calledWith != persistedText {
+		t.Fatalf("expected generator to use persisted file content, got %q", generator.calledWith)
+	}
+}
+
+func TestGenerateUsesPersistedGitContentWithoutExtractor(t *testing.T) {
+	db := setupParsingTestDB(t)
+	project := models.Project{
+		UserID: "test-user-1",
+		Title:  "Persisted git content project",
+		Status: "active",
+	}
+	if err := db.Create(&project).Error; err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	gitURL := "https://github.com/example/project"
+	persistedText := "Repository: project\n\nREADME:\nResume generator"
+	gitAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeGitRepo, URI: &gitURL, Content: &persistedText}
+	if err := db.Create(&gitAsset).Error; err != nil {
+		t.Fatalf("create git asset: %v", err)
+	}
+
+	generator := &stubDraftGenerator{result: "<!DOCTYPE html><html><body>mock resume</body></html>"}
+	svc := NewParsingServiceWithGenerator(db, nil, nil, nil, generator)
+
+	result, err := svc.Generate(project.ID)
+	if err != nil {
+		t.Fatalf("generate with persisted git content: %v", err)
+	}
+	if result == nil || result.DraftID == 0 {
+		t.Fatalf("expected generated draft result, got %+v", result)
+	}
+	if !strings.Contains(generator.calledWith, "Repository: project") {
+		t.Fatalf("expected generator input to include persisted git content, got %q", generator.calledWith)
+	}
+}
+
+func TestGenerateFallsBackToParseAndPersistsMissingFileContent(t *testing.T) {
+	db := setupParsingTestDB(t)
+	store := newTestStorage(t)
+	project := models.Project{
+		UserID: "test-user-1",
+		Title:  "Fallback parse project",
+		Status: "active",
+	}
+	if err := db.Create(&project).Error; err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	originalKey, err := store.Save(project.ID, "resume.pdf", []byte("pdf-bytes"))
+	if err != nil {
+		t.Fatalf("save original file: %v", err)
+	}
+
+	pdfAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeResumePDF, URI: &originalKey}
+	if err := db.Create(&pdfAsset).Error; err != nil {
+		t.Fatalf("create pdf asset: %v", err)
+	}
+
+	pdfParser := &stubPdfParser{
+		result: &ParsedContent{
+			Text: "Page 1 of 1\n* React   engineering",
+		},
+	}
+	generator := &stubDraftGenerator{result: "<!DOCTYPE html><html><body>mock resume</body></html>"}
+	svc := NewParsingServiceWithGeneratorAndStorage(db, pdfParser, nil, nil, generator, store)
+
+	result, err := svc.Generate(project.ID)
+	if err != nil {
+		t.Fatalf("generate with parse fallback: %v", err)
+	}
+	if result == nil || result.DraftID == 0 {
+		t.Fatalf("expected generated draft result, got %+v", result)
+	}
+	if pdfParser.calledWith == "" {
+		t.Fatal("expected pdf parser to be called for missing persisted content")
+	}
+	if generator.calledWith != "- React engineering" {
+		t.Fatalf("expected generator to receive cleaned parsed text, got %q", generator.calledWith)
+	}
+
+	var storedPDF models.Asset
+	if err := db.First(&storedPDF, pdfAsset.ID).Error; err != nil {
+		t.Fatalf("fetch stored pdf asset: %v", err)
+	}
+	if storedPDF.Content == nil || *storedPDF.Content != "- React engineering" {
+		t.Fatalf("expected parsed content to be persisted after fallback, got %+v", storedPDF.Content)
+	}
+	parsing := getParsingMetadataMap(t, storedPDF.Metadata)
+	if got := parsing["source_deleted"]; got != true {
+		t.Fatalf("expected source_deleted true after fallback persistence, got %+v", got)
+	}
+	if store.Exists(originalKey) {
+		t.Fatalf("expected original source file %q to be deleted after fallback persistence", originalKey)
+	}
+}
+
 func TestGenerateRollsBackWhenVersionCreationFails(t *testing.T) {
 	db := setupParsingTestDB(t)
 	project := models.Project{

@@ -517,7 +517,13 @@ git commit -m "feat(parsing): 持久化解析出的素材图片"
 git commit -m "feat(parsing): 解析入库后删除原始文件"
 ```
 
-### Step 6：让 generate 优先消费持久化正文
+### Step 6：让 generate 优先消费持久化正文（已完成）
+
+完成情况：
+
+- `generate` 现在优先消费 `assets.content`
+- 对 PDF / DOCX / Git，如果正文已入库，则不会重新触发文件解析或仓库提取
+- 仅在正文缺失时，才会回退触发一次 parse，并把结果补持久化后继续生成
 
 目标：
 
