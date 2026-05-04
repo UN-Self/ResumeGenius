@@ -62,7 +62,7 @@
 | `card-foreground` | `#1a1815` | 卡片内文字 |
 | `popover` | `#ffffff` | 弹出菜单背景 |
 | `popover-foreground` | `#1a1815` | 弹出菜单文字 |
-| `primary` | `#c4956a` | 主色（= primary-400） |
+| `primary` | `#9c6b3a` | 主色（= primary-600，白字可达 AA） |
 | `primary-foreground` | `#ffffff` | 主色上的文字 |
 | `secondary` | `#e8d5c4` | 次级背景 |
 | `secondary-foreground` | `#5c4a3a` | 次级文字（暖深棕） |
@@ -90,6 +90,7 @@
 | 组合 | 对比度 | WCAG |
 |------|--------|------|
 | `foreground` on `background` | ≈18:1 | AAA |
+| `#ffffff` on `primary-600` | ≈4.6:1 | AA |
 | `primary-600` on `#ffffff` | ≈4.6:1 | AA |
 | `muted-foreground` on `background` | ≈4.7:1 | AA |
 | `destructive` on `#ffffff` | ≈4.8:1 | AA |
@@ -255,7 +256,7 @@
 
 | 变体 | Tailwind 类 |
 |------|-------------|
-| Primary | `bg-primary-400 text-white h-10 px-5 rounded-md hover:bg-primary-500 active:bg-primary-600 transition-colors` |
+| Primary | `bg-primary-600 text-white h-10 px-5 rounded-md hover:bg-primary-700 active:bg-primary-800 transition-colors` |
 | Secondary | `bg-secondary text-secondary-foreground hover:bg-primary-100 border border-border` |
 | Ghost | `bg-transparent text-muted-foreground hover:bg-surface-hover hover:text-foreground` |
 | Destructive | `bg-destructive text-white hover:brightness-110` |

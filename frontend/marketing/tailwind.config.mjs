@@ -44,7 +44,7 @@ export default {
         ring: '#c4956a',
       },
       fontFamily: {
-        serif: ['Playfair Display', 'serif'],
+        serif: ['Playfair Display', 'Noto Serif SC', 'STSong', 'serif'],
         sans: ['Inter', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
