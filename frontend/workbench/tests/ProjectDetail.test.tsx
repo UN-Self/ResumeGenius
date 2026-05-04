@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { intakeApi, parsingApi, workbenchApi } from '@/lib/api-client'
+import { intakeApi, parsingApi } from '@/lib/api-client'
 import ProjectDetail from '@/pages/ProjectDetail'
 
 vi.mock('@/lib/api-client', () => ({
@@ -18,9 +18,7 @@ vi.mock('@/lib/api-client', () => ({
   },
   parsingApi: {
     parseProject: vi.fn(),
-  },
-  workbenchApi: {
-    createDraft: vi.fn(),
+    generateProject: vi.fn(),
   },
   request: vi.fn(),
   ApiError: class extends Error {
@@ -58,6 +56,7 @@ describe('ProjectDetail', () => {
       <MemoryRouter initialEntries={['/projects/1']}>
         <Routes>
           <Route path="/projects/:projectId" element={<ProjectDetail />} />
+          <Route path="/projects/:projectId/edit" element={<div>Editor Page</div>} />
         </Routes>
       </MemoryRouter>,
     )
@@ -76,6 +75,7 @@ describe('ProjectDetail', () => {
       <MemoryRouter initialEntries={['/projects/1']}>
         <Routes>
           <Route path="/projects/:projectId" element={<ProjectDetail />} />
+          <Route path="/projects/:projectId/edit" element={<div>Editor Page</div>} />
         </Routes>
       </MemoryRouter>,
     )
@@ -94,6 +94,7 @@ describe('ProjectDetail', () => {
       <MemoryRouter initialEntries={['/projects/1']}>
         <Routes>
           <Route path="/projects/:projectId" element={<ProjectDetail />} />
+          <Route path="/projects/:projectId/edit" element={<div>Editor Page</div>} />
         </Routes>
       </MemoryRouter>,
     )
@@ -114,21 +115,21 @@ describe('ProjectDetail', () => {
     })
   })
 
-  it('calls parseProject and createDraft on parse click', async () => {
+  it('calls generateProject and navigates to edit page when no draft exists', async () => {
     const user = userEvent.setup()
-    vi.mocked(intakeApi.getProject)
-      .mockResolvedValueOnce(mockProject)           // initial load
-      .mockResolvedValueOnce({ ...mockProject })     // parse checks for draft
+    vi.mocked(intakeApi.getProject).mockResolvedValue(mockProject)
     vi.mocked(intakeApi.listAssets).mockResolvedValue(mockAssets)
-    vi.mocked(parsingApi.parseProject).mockResolvedValue({ parsed_contents: [] })
-    vi.mocked(workbenchApi.createDraft).mockResolvedValue({
-      id: 99, project_id: 1, html_content: '', updated_at: '2026-04-28T00:00:00Z',
+    vi.mocked(parsingApi.generateProject).mockResolvedValue({
+      draft_id: 99,
+      version_id: 101,
+      html_content: '<p>Generated</p>',
     })
 
     render(
       <MemoryRouter initialEntries={['/projects/1']}>
         <Routes>
           <Route path="/projects/:projectId" element={<ProjectDetail />} />
+          <Route path="/projects/:projectId/edit" element={<div>Editor Page</div>} />
         </Routes>
       </MemoryRouter>,
     )
@@ -137,12 +138,38 @@ describe('ProjectDetail', () => {
       expect(screen.getByText('前端工程师简历')).toBeInTheDocument()
     })
 
-    const parseBtn = screen.getByText('下一步：开始解析')
+    const parseBtn = screen.getByText('下一步：生成初稿')
     await user.click(parseBtn)
 
     await waitFor(() => {
-      expect(parsingApi.parseProject).toHaveBeenCalledWith(1)
-      expect(workbenchApi.createDraft).toHaveBeenCalledWith(1)
+      expect(parsingApi.generateProject).toHaveBeenCalledWith(1)
+      expect(screen.getByText('Editor Page')).toBeInTheDocument()
+    })
+  })
+
+  it('navigates directly to edit page when current draft already exists', async () => {
+    const user = userEvent.setup()
+    vi.mocked(intakeApi.getProject).mockResolvedValue({ ...mockProject, current_draft_id: 88 })
+    vi.mocked(intakeApi.listAssets).mockResolvedValue(mockAssets)
+
+    render(
+      <MemoryRouter initialEntries={['/projects/1']}>
+        <Routes>
+          <Route path="/projects/:projectId" element={<ProjectDetail />} />
+          <Route path="/projects/:projectId/edit" element={<div>Editor Page</div>} />
+        </Routes>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('进入编辑页')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByText('进入编辑页'))
+
+    await waitFor(() => {
+      expect(parsingApi.generateProject).not.toHaveBeenCalled()
+      expect(screen.getByText('Editor Page')).toBeInTheDocument()
     })
   })
 })

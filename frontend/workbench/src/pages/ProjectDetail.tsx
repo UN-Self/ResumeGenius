@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  intakeApi, parsingApi, workbenchApi,
+  intakeApi, parsingApi,
   ApiError, type Asset,
 } from '@/lib/api-client'
 import AssetList from '@/components/intake/AssetList'
@@ -86,22 +86,20 @@ export default function ProjectDetail() {
     setNoteOpen(true)
   }
 
-  // --- Parse handler ---
+  // --- Primary action handler ---
   const handleParse = async () => {
+    if (project?.current_draft_id) {
+      navigate(`/projects/${pid}/edit`)
+      return
+    }
+
     try {
       setParseLoading(true)
       setParseError('')
-      await parsingApi.parseProject(pid)
-
-      // Ensure a draft exists for editing
-      const proj = await intakeApi.getProject(pid)
-      if (!proj.current_draft_id) {
-        await workbenchApi.createDraft(pid)
-      }
-
+      await parsingApi.generateProject(pid)
       navigate(`/projects/${pid}/edit`)
     } catch (err) {
-      setParseError(err instanceof ApiError ? err.message : '解析失败')
+      setParseError(err instanceof ApiError ? err.message : '生成初稿失败')
     } finally {
       setParseLoading(false)
     }
@@ -145,7 +143,7 @@ export default function ProjectDetail() {
         <Alert className="mb-4">{error}</Alert>
       )}
       {parseError && (
-        <Alert className="mb-4">解析失败：{parseError}</Alert>
+        <Alert className="mb-4">生成初稿失败：{parseError}</Alert>
       )}
       {deleteError && (
         <Alert className="mb-4">删除失败：{deleteError}</Alert>
@@ -184,14 +182,18 @@ export default function ProjectDetail() {
         canEditAsset={(asset) => asset.type === 'note'}
       />
 
-      {assets.length > 0 && (
+      {(assets.length > 0 || project.current_draft_id) && (
         <Button
           size="lg"
           className="mt-6 w-full h-11"
           onClick={handleParse}
           disabled={parseLoading}
         >
-          {parseLoading ? '解析中...' : '下一步：开始解析'}
+          {parseLoading
+            ? '生成中...'
+            : project.current_draft_id
+              ? '进入编辑页'
+              : '下一步：生成初稿'}
         </Button>
       )}
 
