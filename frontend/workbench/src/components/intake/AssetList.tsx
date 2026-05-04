@@ -3,14 +3,32 @@ import { getAssetVisual } from './fileVisuals'
 
 type AssetItem = Asset & { label?: string; content?: string; uri?: string }
 
+interface AssetStatusMeta {
+  text: string
+  tone?: 'muted' | 'warning'
+}
+
 interface AssetListProps {
   assets: AssetItem[]
   onDelete: (id: number) => void
   onEditAsset?: (asset: AssetItem) => void
   canEditAsset?: (asset: AssetItem) => boolean
+  onReparseAsset?: (asset: AssetItem) => void
+  canReparseAsset?: (asset: AssetItem) => boolean
+  getAssetStatusMeta?: (asset: AssetItem) => AssetStatusMeta | null
+  reparseLoadingAssetId?: number | null
 }
 
-export default function AssetList({ assets, onDelete, onEditAsset, canEditAsset }: AssetListProps) {
+export default function AssetList({
+  assets,
+  onDelete,
+  onEditAsset,
+  canEditAsset,
+  onReparseAsset,
+  canReparseAsset,
+  getAssetStatusMeta,
+  reparseLoadingAssetId,
+}: AssetListProps) {
   if (assets.length === 0) {
     return (
       <div className="py-12 text-center text-muted-foreground">
@@ -27,6 +45,8 @@ export default function AssetList({ assets, onDelete, onEditAsset, canEditAsset 
         const Icon = visual.icon
         const contentPreview = asset.content?.replace(/\s+/g, ' ').trim() ?? ''
         const editable = onEditAsset !== undefined && (canEditAsset ? canEditAsset(asset) : asset.type === 'note')
+        const reparsable = onReparseAsset !== undefined && (canReparseAsset ? canReparseAsset(asset) : false)
+        const statusMeta = getAssetStatusMeta?.(asset) ?? null
 
         return (
           <div key={asset.id} className="flex items-start justify-between gap-3 px-5 py-3.5">
@@ -54,6 +74,16 @@ export default function AssetList({ assets, onDelete, onEditAsset, canEditAsset 
                   </p>
                 )}
 
+                {statusMeta && (
+                  <p
+                    className={`mt-1 text-[11px] ${
+                      statusMeta.tone === 'warning' ? 'text-amber-700' : 'text-muted-foreground'
+                    }`}
+                  >
+                    {statusMeta.text}
+                  </p>
+                )}
+
                 {asset.uri && asset.type === 'git_repo' && (
                   <p className="mt-1 text-xs text-muted-foreground truncate">{asset.uri}</p>
                 )}
@@ -65,6 +95,16 @@ export default function AssetList({ assets, onDelete, onEditAsset, canEditAsset 
             </div>
 
             <div className="flex shrink-0 items-center gap-1">
+              {reparsable && (
+                <button
+                  onClick={() => onReparseAsset?.(asset)}
+                  disabled={reparseLoadingAssetId === asset.id}
+                  className="rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-primary-50 hover:text-foreground disabled:opacity-50"
+                >
+                  {reparseLoadingAssetId === asset.id ? '解析中...' : '重新解析'}
+                </button>
+              )}
+
               {editable && (
                 <button
                   onClick={() => onEditAsset?.(asset)}

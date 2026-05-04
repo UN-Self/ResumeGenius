@@ -321,7 +321,10 @@ func TestAssetService_UpdateAsset_UpdatesPersistedFileContentAndLabel(t *testing
 	assert.Equal(t, "Updated parsed text", *updated.Content)
 	assert.Equal(t, "Updated label", *updated.Label)
 	assert.Equal(t, "resume_pdf", updated.Type)
-	assert.Equal(t, metadata, updated.Metadata)
+
+	parsing := getAssetParsingMetadata(t, updated.Metadata)
+	assert.Equal(t, "success", parsing["status"])
+	assert.Equal(t, true, parsing["updated_by_user"])
 }
 
 func TestAssetService_UpdateAsset_PartialUpdateKeepsExistingFields(t *testing.T) {
@@ -346,6 +349,39 @@ func TestAssetService_UpdateAsset_PartialUpdateKeepsExistingFields(t *testing.T)
 	assert.Equal(t, content, *updated.Content)
 	assert.NotNil(t, updated.Label)
 	assert.Equal(t, newLabel, *updated.Label)
+	assert.Nil(t, updated.Metadata)
+}
+
+func TestAssetService_UpdateAsset_LeavesParsingMetadataCleanWhenOnlyLabelChanges(t *testing.T) {
+	db := SetupTestDB(t)
+	storage := NewLocalStorage(t.TempDir())
+	svc := NewAssetService(db, storage)
+
+	projSvc := NewProjectService(db)
+	proj, err := projSvc.Create("user-1", "Test Project")
+	require.NoError(t, err)
+
+	content := "Original parsed text"
+	label := "Original label"
+	metadata := models.JSONB{
+		"parsing": map[string]interface{}{
+			"status": "success",
+		},
+	}
+	asset := models.Asset{
+		ProjectID: proj.ID,
+		Type:      "resume_pdf",
+		Content:   &content,
+		Label:     &label,
+		Metadata:  metadata,
+	}
+	require.NoError(t, db.Create(&asset).Error)
+
+	newLabel := "Only label changed"
+	updated, err := svc.UpdateAsset("user-1", asset.ID, nil, &newLabel)
+	require.NoError(t, err)
+	require.NotNil(t, updated)
+	assert.Equal(t, metadata, updated.Metadata)
 }
 
 func TestAssetService_UpdateAsset_WrongUser(t *testing.T) {
@@ -363,6 +399,18 @@ func TestAssetService_UpdateAsset_WrongUser(t *testing.T) {
 	newContent := "Hacked"
 	_, err = svc.UpdateAsset("user-2", asset.ID, &newContent, nil)
 	assert.ErrorIs(t, err, ErrProjectNotFound)
+}
+
+func getAssetParsingMetadata(t *testing.T, metadata models.JSONB) map[string]interface{} {
+	t.Helper()
+
+	require.NotNil(t, metadata)
+	rawParsing, ok := metadata["parsing"]
+	require.True(t, ok)
+
+	parsing, ok := rawParsing.(map[string]interface{})
+	require.True(t, ok)
+	return parsing
 }
 
 func TestAssetService_ListByProject(t *testing.T) {

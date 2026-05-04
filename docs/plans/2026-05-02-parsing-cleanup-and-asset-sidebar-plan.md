@@ -644,7 +644,7 @@ git commit -m "feat(intake): 支持通用资产正文编辑"
 git commit -m "feat(workbench): 将编辑页左侧栏升级为素材管理区"
 ```
 
-### Step 9：补“重新解析”与脏状态提示
+### Step 9：补“重新解析”与脏状态提示（已完成）
 
 目标：
 
@@ -660,6 +660,15 @@ git commit -m "feat(workbench): 将编辑页左侧栏升级为素材管理区"
 验收：
 
 - 用户能区分“AI 可读正文是解析生成的”还是“我手改过的”
+
+完成情况：
+
+- 左栏素材区已增加“重新解析”动作，当前针对 PDF / DOCX / Git 素材可触发项目级 `parseProject` 刷新解析结果
+- 当项目中存在 `metadata.parsing.updated_by_user = true` 的素材时，重新解析前会给覆盖确认提示，避免手改正文被静默覆盖
+- 左栏会对手动修改过的素材显示“已手动修改，重新解析将覆盖当前正文”，对未手改素材显示“最近解析”时间
+- `UpdateAsset(...)` 现在会在用户手动修改 PDF / DOCX / Git 正文时写入 `metadata.parsing.updated_by_user = true`
+- `parse` 成功后会将 `updated_by_user` 重置为 `false`，并写入 `metadata.parsing.last_parsed_at`
+- 已补齐 intake / parsing / workbench 对应测试，覆盖手改标记、重新解析覆盖提示和解析后状态重置
 
 建议提交备注：
 

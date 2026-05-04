@@ -15,25 +15,59 @@ interface AssetSidebarProps {
   onReload: () => Promise<void>
 }
 
+interface ParsingMetadata {
+  updated_by_user?: boolean
+  derived?: boolean
+  last_parsed_at?: string
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function isDerivedImageAsset(asset: Asset) {
-  if (asset.type !== 'resume_image' || !isRecord(asset.metadata)) {
-    return false
+function getParsingMetadata(asset: Asset): ParsingMetadata | null {
+  if (!isRecord(asset.metadata)) {
+    return null
   }
-
   const parsing = asset.metadata.parsing
   if (!isRecord(parsing)) {
-    return false
+    return null
   }
+  return parsing as ParsingMetadata
+}
 
-  return parsing.derived === true
+function isDerivedImageAsset(asset: Asset) {
+  return asset.type === 'resume_image' && getParsingMetadata(asset)?.derived === true
 }
 
 function canEditAsset(asset: Asset) {
   return asset.type !== 'resume_image'
+}
+
+function canReparseAsset(asset: Asset) {
+  return asset.type === 'resume_pdf' || asset.type === 'resume_docx' || asset.type === 'git_repo'
+}
+
+function hasUserEditedContent(asset: Asset) {
+  return getParsingMetadata(asset)?.updated_by_user === true
+}
+
+function formatParsedAt(value?: string) {
+  if (!value) return ''
+
+  const parsedDate = new Date(value)
+  if (Number.isNaN(parsedDate.getTime())) {
+    return ''
+  }
+
+  return parsedDate.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 }
 
 export default function AssetSidebar({ projectId, assets, onReload }: AssetSidebarProps) {
@@ -44,10 +78,21 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [reparseLoadingAssetId, setReparseLoadingAssetId] = useState<number | null>(null)
 
   const visibleAssets = useMemo(
     () => assets.filter((asset) => !isDerivedImageAsset(asset)),
     [assets]
+  )
+
+  const reparsableAssets = useMemo(
+    () => visibleAssets.filter(canReparseAsset),
+    [visibleAssets]
+  )
+
+  const dirtyReparseAssets = useMemo(
+    () => reparsableAssets.filter(hasUserEditedContent),
+    [reparsableAssets]
   )
 
   const refreshAssets = async () => {
@@ -96,10 +141,35 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
       await intakeApi.deleteAsset(deleteTarget.id)
       await refreshAssets()
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : '\u5220\u9664\u5931\u8d25')
+      setError(deleteError instanceof Error ? deleteError.message : '删除失败')
     } finally {
       setDeleting(false)
       setDeleteTarget(null)
+    }
+  }
+
+  const handleReparseAsset = async (asset: Asset) => {
+    const dirtyCount = dirtyReparseAssets.length
+    if (dirtyCount > 0) {
+      const confirmed = window.confirm(
+        dirtyCount === 1
+          ? '重新解析会覆盖当前已手动修改的素材正文，是否继续？'
+          : `重新解析会刷新项目中所有可解析素材，并覆盖 ${dirtyCount} 项已手动修改的正文，是否继续？`
+      )
+      if (!confirmed) {
+        return
+      }
+    }
+
+    try {
+      setReparseLoadingAssetId(asset.id)
+      setError('')
+      await parsingApi.parseProject(projectId)
+      await refreshAssets()
+    } catch (reparseError) {
+      setError(reparseError instanceof Error ? reparseError.message : '重新解析失败')
+    } finally {
+      setReparseLoadingAssetId(null)
     }
   }
 
@@ -107,15 +177,23 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
     <div className="h-full overflow-y-auto p-4">
       <div className="flex flex-wrap gap-2">
         <Button size="sm" onClick={() => setUploadOpen(true)}>
-          {'\u4e0a\u4f20\u6587\u4ef6'}
+          上传文件
         </Button>
         <Button size="sm" variant="secondary" onClick={() => setGitOpen(true)}>
-          {'\u63a5\u5165 Git'}
+          接入 Git
         </Button>
         <Button size="sm" variant="secondary" onClick={() => setNoteOpen(true)}>
-          {'\u6dfb\u52a0\u5907\u6ce8'}
+          添加备注
         </Button>
       </div>
+
+      {dirtyReparseAssets.length > 0 && (
+        <Alert className="mt-3">
+          {dirtyReparseAssets.length === 1
+            ? '有 1 项素材已手动修改，重新解析会覆盖当前正文。'
+            : `有 ${dirtyReparseAssets.length} 项素材已手动修改，重新解析会覆盖这些正文。`}
+        </Alert>
+      )}
 
       {error && (
         <Alert className="mt-3">{error}</Alert>
@@ -130,6 +208,27 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
           }}
           onEditAsset={(asset) => setEditingAsset(asset)}
           canEditAsset={canEditAsset}
+          onReparseAsset={handleReparseAsset}
+          canReparseAsset={canReparseAsset}
+          reparseLoadingAssetId={reparseLoadingAssetId}
+          getAssetStatusMeta={(asset) => {
+            if (hasUserEditedContent(asset)) {
+              return {
+                text: '已手动修改，重新解析将覆盖当前正文',
+                tone: 'warning',
+              }
+            }
+
+            const formatted = formatParsedAt(getParsingMetadata(asset)?.last_parsed_at)
+            if (formatted) {
+              return {
+                text: `最近解析：${formatted}`,
+                tone: 'muted',
+              }
+            }
+
+            return null
+          }}
         />
       </div>
 
