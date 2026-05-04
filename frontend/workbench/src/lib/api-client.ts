@@ -154,6 +154,12 @@ export interface ParsedContent {
   images?: ParsedImage[]
 }
 
+export interface GenerateResult {
+  draft_id: number
+  version_id: number
+  html_content: string
+}
+
 // --- Agent API ---
 
 export interface AISession {
@@ -184,6 +190,11 @@ export const agentApi = {
 export const parsingApi = {
   parseProject: (projectId: number) =>
     request<{ parsed_contents: ParsedContent[] }>('/parsing/parse', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId }),
+    }),
+  generateProject: (projectId: number) =>
+    request<GenerateResult>('/parsing/generate', {
       method: 'POST',
       body: JSON.stringify({ project_id: projectId }),
     }),

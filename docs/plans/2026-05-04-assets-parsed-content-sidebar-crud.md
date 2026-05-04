@@ -20,8 +20,8 @@
 
 **当前实现状态：**
 
-- Step 1 ~ Step 12 已完成
-- Step 13 ~ Step 14 是 code review 后新增的收口项，后续逐个处理
+- Step 1 ~ Step 13 已完成
+- Step 14 是 code review 后新增的最后收口项，后续处理
 
 ---
 
@@ -430,7 +430,7 @@ git commit -m "fix(intake): 删除主素材时级联清理派生图片"
 git commit -m "fix(intake): 收紧素材删除链路的存储错误处理"
 ```
 
-### Step 13：前端入口切到真正的 `/parsing/generate`
+### Step 13：前端入口切到真正的 `/parsing/generate`（已完成）
 
 问题：
 
@@ -440,6 +440,14 @@ git commit -m "fix(intake): 收紧素材删除链路的存储错误处理"
 目标：
 
 - 点击“开始解析”后直接生成带 HTML 的初稿并跳编辑页
+
+完成情况：
+
+- `ProjectDetail` 的主按钮入口已经从 `parseProject() + createDraft()` 切换到 `/parsing/generate`
+- 当前没有草稿时，点击按钮会直接生成 AI 初稿并跳转编辑页
+- 当前已有 `current_draft_id` 时，不会重复生成新 draft，而是直接进入编辑页
+- 项目详情页按钮文案也已收口为“生成初稿 / 进入编辑页”两种状态
+- 已补前端测试，覆盖“无 draft 走 generate”和“有 draft 直接进入编辑页”两条分支
 
 建议提交备注：
 
