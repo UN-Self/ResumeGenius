@@ -1,0 +1,30 @@
+---
+export interface Props {
+  title?: string
+  description?: string
+  buttonText?: string
+  buttonHref?: string
+}
+
+const {
+  title = '准备好让你的简历脱颖而出了吗？',
+  description = '免费开始使用，AI 帮你生成一份高质量的简历。',
+  buttonText = '免费开始使用',
+  buttonHref = '/app',
+} = Astro.props
+---
+
+<section class="py-16 md:py-24 bg-gradient-to-b from-primary-50 to-background">
+  <div class="max-w-2xl mx-auto px-6 text-center">
+    <h2 class="font-serif font-semibold text-3xl md:text-4xl text-foreground mb-4">
+      {title}
+    </h2>
+    <p class="text-lg text-muted-foreground mb-8">
+      {description}
+    </p>
+    <a href={buttonHref}
+      class="inline-flex items-center justify-center h-12 px-8 text-base font-medium text-white bg-primary-400 rounded-md hover:bg-primary-500 active:bg-primary-600 transition-colors duration-150 no-underline">
+      {buttonText}
+    </a>
+  </div>
+</section>

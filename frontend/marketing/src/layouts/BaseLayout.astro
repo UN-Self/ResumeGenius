@@ -1,9 +1,14 @@
 ---
+import '../styles/global.css'
+import Nav from '../components/Nav.astro'
+import Footer from '../components/Footer.astro'
+
 export interface Props {
   title: string
+  description?: string
 }
 
-const { title } = Astro.props
+const { title, description = 'ResumeGenius - AI 辅助简历生成与优化平台' } = Astro.props
 ---
 
 <!doctype html>
@@ -11,11 +16,16 @@ const { title } = Astro.props
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="ResumeGenius - AI 辅助简历编辑器" />
+    <meta name="description" content={description} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet" />
     <title>{title} | ResumeGenius</title>
   </head>
-  <body>
+  <body class="bg-background text-foreground font-sans antialiased">
+    <Nav />
     <slot />
+    <Footer />
   </body>
 </html>

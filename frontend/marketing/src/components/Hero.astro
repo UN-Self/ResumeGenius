@@ -1,0 +1,48 @@
+---
+const features = [
+  {
+    title: 'AI 写内容',
+    description: '融合行业最佳实践，不是简单润色，而是重构结构与表达',
+  },
+  {
+    title: '自由编辑',
+    description: 'TipTap 所见即所得编辑器，像编辑 Word 一样无表单约束',
+  },
+  {
+    title: '所见即所得',
+    description: 'chromedp 服务端渲染，导出 PDF 与屏幕完全一致',
+  },
+]
+---
+
+<section class="pt-12 pb-16 md:pt-20 md:pb-24 bg-gradient-to-b from-primary-50 to-background">
+  <div class="max-w-4xl mx-auto px-6 text-center">
+    <h1 class="font-serif font-semibold text-4xl md:text-5xl lg:text-[3.5rem] leading-tight text-foreground mb-6">
+      有简历？上传优化。<br class="md:hidden" />没简历？AI 帮你从零生成。
+    </h1>
+    <p class="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-10 leading-relaxed">
+      ResumeGenius 融合行业前辈的面试经验与简历最佳实践，AI 不再只是润色文字 ——
+      它会重构结构、组织表达、主动搜集你的 GitHub / 文件 / 经历，直接生成可用简历。
+    </p>
+    <div class="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+      <a href="/app"
+        class="inline-flex items-center justify-center h-12 px-8 text-base font-medium text-white bg-primary-400 rounded-md hover:bg-primary-500 active:bg-primary-600 transition-colors duration-150 no-underline">
+        免费开始使用
+      </a>
+      <a href="#features"
+        class="inline-flex items-center justify-center h-12 px-8 text-base font-medium text-primary-600 border border-primary-300 rounded-md hover:bg-primary-50 transition-colors duration-150 no-underline">
+        了解更多
+      </a>
+    </div>
+
+    <!-- Mini feature cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
+      {features.map(f => (
+        <div class="bg-card border border-border rounded-lg px-6 py-5 text-left">
+          <h3 class="font-sans font-semibold text-foreground mb-2">{f.title}</h3>
+          <p class="text-sm text-muted-foreground leading-relaxed">{f.description}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

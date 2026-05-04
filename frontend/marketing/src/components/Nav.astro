@@ -1,0 +1,59 @@
+---
+const navLinks = [
+  { href: '/features', label: '功能介绍' },
+  { href: '/pricing', label: '定价' },
+  { href: '/help', label: '帮助文档' },
+]
+---
+
+<nav class="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border">
+  <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+    <a href="/" class="flex items-center gap-2 no-underline">
+      <span class="text-xl font-serif font-semibold text-foreground">ResumeGenius</span>
+    </a>
+
+    <!-- Desktop nav -->
+    <div class="hidden md:flex items-center gap-8">
+      {navLinks.map(link => (
+        <a href={link.href} class="text-sm text-muted-foreground hover:text-foreground transition-colors duration-150">
+          {link.label}
+        </a>
+      ))}
+      <a href="/app"
+        class="inline-flex items-center justify-center h-10 px-5 text-sm font-medium text-white bg-primary-400 rounded-md hover:bg-primary-500 active:bg-primary-600 transition-colors duration-150 no-underline">
+        开始使用
+      </a>
+    </div>
+
+    <!-- Mobile hamburger -->
+    <button id="menu-toggle" class="md:hidden flex items-center justify-center w-10 h-10 rounded-md hover:bg-muted transition-colors duration-150" aria-label="菜单" aria-expanded="false">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+  </div>
+
+  <!-- Mobile menu (hidden by default) -->
+  <div id="mobile-menu" class="hidden md:hidden border-t border-border bg-background px-6 py-4 flex flex-col gap-3">
+    {navLinks.map(link => (
+      <a href={link.href} class="text-sm text-muted-foreground hover:text-foreground transition-colors duration-150 no-underline py-1">
+        {link.label}
+      </a>
+    ))}
+    <a href="/app"
+      class="inline-flex items-center justify-center h-10 px-5 text-sm font-medium text-white bg-primary-400 rounded-md hover:bg-primary-500 transition-colors duration-150 no-underline mt-2">
+      开始使用
+    </a>
+  </div>
+</nav>
+
+<!-- Spacer for fixed nav -->
+<div class="h-16"></div>
+
+<script>
+  const toggle = document.getElementById('menu-toggle');
+  const menu = document.getElementById('mobile-menu');
+  toggle?.addEventListener('click', () => {
+    const expanded = toggle.getAttribute('aria-expanded') === 'true' ? 'false' : 'true';
+    toggle.setAttribute('aria-expanded', expanded);
+    menu?.classList.toggle('hidden');
+  });
+</script>
