@@ -180,7 +180,8 @@ export default function ProjectDetail() {
       <AssetList
         assets={assets}
         onDelete={(id) => setDeleteTarget({ type: 'asset', id })}
-        onEditNote={handleEditNote}
+        onEditAsset={handleEditNote}
+        canEditAsset={(asset) => asset.type === 'note'}
       />
 
       {assets.length > 0 && (

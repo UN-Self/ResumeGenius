@@ -601,7 +601,15 @@ git commit -m "feat(parsing): 让生成链路优先消费持久化正文"
 git commit -m "feat(intake): 支持通用资产正文编辑"
 ```
 
-### Step 8：把 Editor 左侧栏从 ParsedContent 改成 Asset 驱动
+### Step 8：把 Editor 左侧栏从 ParsedContent 改成 Asset 驱动（已完成）
+
+完成情况：
+
+- `EditorPage` 首屏改为加载持久化 `assets`，不再默认调用 `/parsing/parse`
+- 新增 `AssetSidebar` 与 `AssetEditorDialog`，支持上传文件、接入 Git、添加备注、删除素材、编辑素材正文
+- 左侧栏现在展示 `assets.content` 预览，并过滤 parsing 衍生的 `resume_image`，避免把派生图误当作普通素材编辑
+- 前端补充 `intakeApi.updateAsset(...)`，并将 `AssetList` 升级为可配置的通用编辑入口
+- `EditorPage` 测试已切到 `GET /assets` 链路，验证页面刷新后仍可直接消费持久化素材正文
 
 目标：
 
@@ -621,8 +629,9 @@ git commit -m "feat(intake): 支持通用资产正文编辑"
 
 - `frontend/workbench/src/lib/api-client.ts`
 - `frontend/workbench/src/pages/EditorPage.tsx`
-- `frontend/workbench/src/components/intake/ParsedSidebar.tsx`
-- 可视情况拆新组件，如 `AssetSidebar.tsx` / `AssetEditorDialog.tsx`
+- `frontend/workbench/src/components/intake/AssetSidebar.tsx`
+- `frontend/workbench/src/components/intake/AssetEditorDialog.tsx`
+- `frontend/workbench/src/components/intake/AssetList.tsx`
 
 验收：
 
