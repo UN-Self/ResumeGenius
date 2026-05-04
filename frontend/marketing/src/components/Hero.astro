@@ -17,8 +17,10 @@ const features = [
 
 <section class="pt-12 pb-16 md:pt-20 md:pb-24 bg-gradient-to-b from-primary-50 to-background">
   <div class="max-w-4xl mx-auto px-6 text-center">
-    <h1 class="font-serif font-semibold text-4xl md:text-5xl lg:text-[3.5rem] leading-tight text-foreground mb-6">
-      有简历？上传优化。<br class="md:hidden" />没简历？AI 帮你从零生成。
+    <h1 class="hero-title font-serif font-semibold text-4xl md:text-5xl lg:text-[3.5rem] leading-tight text-foreground mb-6">
+      <span class="handwriting-text" data-index="0">ResumeGenius</span>
+      <span class="handwriting-text hidden" data-index="1">有简历？AI 帮你优化细节。</span>
+      <span class="handwriting-text hidden" data-index="2">没简历？AI 帮你从零生成。</span>
     </h1>
     <p class="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-10 leading-relaxed">
       ResumeGenius 融合行业前辈的面试经验与简历最佳实践，AI 不再只是润色文字 ——
@@ -46,3 +48,104 @@ const features = [
     </div>
   </div>
 </section>
+
+<script>
+  const texts = document.querySelectorAll<HTMLElement>('.handwriting-text')
+  if (texts.length > 0) {
+    let currentIndex = 0
+
+    function animateText(index: number) {
+      const el = texts[index]
+      if (!el) return
+
+      // Show this text, hide others
+      texts.forEach(t => t.classList.add('hidden'))
+      el.classList.remove('hidden', 'fading')
+      el.style.setProperty('--reveal', '0%')
+
+      const WRITING_DURATION = 1600
+      const HOLD_DURATION = 1200
+      const FADE_DURATION = 300
+      const GAP_DURATION = 200
+
+      function ease(progress: number): number {
+        if(progress < 0) return 0
+        if(progress > 1) return 1
+        if(progress < 0.5) {
+          return 4 * progress ** 3
+        } else {
+          const f = (progress - 1)
+          return 1 + 4 * f ** 3
+        }
+      }
+
+      // WRITING phase
+      const startTime = performance.now()
+
+      function writeFrame(now: number) {
+        const elapsed = now - startTime
+        const progress = Math.min(elapsed / WRITING_DURATION, 1)
+        const eased = ease(progress)
+        el.style.setProperty('--reveal', `${eased * 100}%`)
+
+        if (progress < 1) {
+          requestAnimationFrame(writeFrame)
+        } else {
+          // HOLDING phase
+          setTimeout(() => {
+            // FADING phase
+            el.classList.add('fading')
+            setTimeout(() => {
+              el.classList.add('hidden')
+              el.classList.remove('fading')
+              el.style.setProperty('--reveal', '0%')
+              currentIndex = (currentIndex + 1) % texts.length
+              setTimeout(() => animateText(currentIndex), GAP_DURATION)
+            }, FADE_DURATION)
+          }, HOLD_DURATION)
+        }
+      }
+
+      requestAnimationFrame(writeFrame)
+    }
+
+    // Check prefers-reduced-motion
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+    if (motionQuery.matches) {
+      texts.forEach(t => {
+        t.classList.remove('hidden')
+        t.style.setProperty('--reveal', '100%')
+      })
+    } else {
+      animateText(0)
+    }
+  }
+</script>
+
+<style>
+  .hero-title {
+    min-height: 2.5em;
+  }
+
+  .handwriting-text {
+    display: inline-block;
+    -webkit-mask-image: linear-gradient(to right, black var(--reveal, 100%), transparent var(--reveal, 100%));
+    mask-image: linear-gradient(to right, black var(--reveal, 100%), transparent var(--reveal, 100%));
+    transition: opacity 0.5s ease;
+  }
+
+  .handwriting-text.hidden {
+    display: none;
+  }
+
+  .handwriting-text.fading {
+    opacity: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .handwriting-text {
+      -webkit-mask-image: none !important;
+      mask-image: none !important;
+    }
+  }
+</style>
