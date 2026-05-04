@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -437,6 +438,61 @@ func TestParseMarksFailedAndSkippedAssetsInMetadata(t *testing.T) {
 		t.Fatalf("fetch image asset: %v", err)
 	}
 	assertParsingStatus(t, storedImage.Metadata, "skipped")
+}
+
+func TestParseClearsUpdatedByUserAfterSuccessfulReparse(t *testing.T) {
+	db := setupParsingTestDB(t)
+	project := models.Project{
+		UserID: "test-user-1",
+		Title:  "Reparse dirty asset",
+		Status: "active",
+	}
+	if err := db.Create(&project).Error; err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	pdfURI := "fixtures/sample_resume.pdf"
+	existingContent := "Manual override"
+	metadata := models.JSONB{
+		"parsing": map[string]interface{}{
+			"status":          "success",
+			"updated_by_user": true,
+		},
+	}
+	pdfAsset := models.Asset{
+		ProjectID: project.ID,
+		Type:      AssetTypeResumePDF,
+		URI:       &pdfURI,
+		Content:   &existingContent,
+		Metadata:  metadata,
+	}
+	if err := db.Create(&pdfAsset).Error; err != nil {
+		t.Fatalf("create pdf asset: %v", err)
+	}
+
+	pdfParser := &stubPdfParser{
+		result: &ParsedContent{Text: "Refreshed parsed text"},
+	}
+	svc := NewParsingService(db, pdfParser, nil, nil)
+
+	parsedContents, err := svc.Parse(project.ID)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(parsedContents) != 1 {
+		t.Fatalf("expected 1 parsed content, got %d", len(parsedContents))
+	}
+
+	var storedPDF models.Asset
+	if err := db.First(&storedPDF, pdfAsset.ID).Error; err != nil {
+		t.Fatalf("fetch stored pdf asset: %v", err)
+	}
+
+	parsing := getParsingMetadataMap(t, storedPDF.Metadata)
+	if got := parsing["updated_by_user"]; got != false {
+		t.Fatalf("expected updated_by_user to reset to false, got %+v", got)
+	}
+	assertLastParsedAtPresent(t, parsing)
 }
 
 func TestParsePersistsDerivedImageAssetsForParsedImages(t *testing.T) {
@@ -1630,6 +1686,10 @@ func assertPersistedAssetContent(t *testing.T, db *gorm.DB, assetID uint, wantCo
 	if got := parsing["image_count"]; got != float64(wantImageCount) {
 		t.Fatalf("expected asset %d image_count %d, got %+v", assetID, wantImageCount, got)
 	}
+	if got := parsing["updated_by_user"]; got != false {
+		t.Fatalf("expected asset %d updated_by_user false, got %+v", assetID, got)
+	}
+	assertLastParsedAtPresent(t, parsing)
 }
 
 func assertParsingStatus(t *testing.T, metadata models.JSONB, want string) {
@@ -1638,6 +1698,23 @@ func assertParsingStatus(t *testing.T, metadata models.JSONB, want string) {
 	parsing := getParsingMetadataMap(t, metadata)
 	if got := parsing["status"]; got != want {
 		t.Fatalf("expected parsing.status %q, got %+v", want, got)
+	}
+}
+
+func assertLastParsedAtPresent(t *testing.T, parsing map[string]interface{}) {
+	t.Helper()
+
+	raw, ok := parsing["last_parsed_at"]
+	if !ok {
+		t.Fatal("expected parsing.last_parsed_at to be present")
+	}
+
+	value, ok := raw.(string)
+	if !ok || strings.TrimSpace(value) == "" {
+		t.Fatalf("expected parsing.last_parsed_at to be a non-empty string, got %+v", raw)
+	}
+	if _, err := time.Parse(time.RFC3339, value); err != nil {
+		t.Fatalf("expected parsing.last_parsed_at to be RFC3339, got %q (%v)", value, err)
 	}
 }
 

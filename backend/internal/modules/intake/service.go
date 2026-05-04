@@ -235,7 +235,11 @@ func (s *AssetService) UpdateAsset(userID string, assetID uint, content, label *
 	}
 
 	if content != nil {
+		originalContent := cloneOptionalString(asset.Content)
 		asset.Content = cloneOptionalString(content)
+		if shouldTrackManualAssetContentEdit(asset.Type) && assetContentChanged(originalContent, content) {
+			asset.Metadata = withAssetUserEditMetadata(asset.Metadata)
+		}
 	}
 	if label != nil {
 		asset.Label = cloneOptionalLabel(label)
@@ -321,4 +325,62 @@ func cloneOptionalLabel(input *string) *string {
 	}
 	value := *input
 	return &value
+}
+
+func shouldTrackManualAssetContentEdit(assetType string) bool {
+	switch assetType {
+	case "resume_pdf", "resume_docx", "git_repo":
+		return true
+	default:
+		return false
+	}
+}
+
+func assetContentChanged(existing, incoming *string) bool {
+	if incoming == nil {
+		return false
+	}
+	if existing == nil {
+		return true
+	}
+	return *existing != *incoming
+}
+
+func withAssetUserEditMetadata(existing models.JSONB) models.JSONB {
+	metadata := cloneAssetJSONB(existing)
+	parsing := cloneAssetJSONMap(metadata["parsing"])
+	parsing["updated_by_user"] = true
+	metadata["parsing"] = parsing
+	return metadata
+}
+
+func cloneAssetJSONB(input models.JSONB) models.JSONB {
+	if input == nil {
+		return models.JSONB{}
+	}
+
+	cloned := make(models.JSONB, len(input))
+	for key, value := range input {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func cloneAssetJSONMap(input interface{}) map[string]interface{} {
+	switch typed := input.(type) {
+	case map[string]interface{}:
+		cloned := make(map[string]interface{}, len(typed))
+		for key, value := range typed {
+			cloned[key] = value
+		}
+		return cloned
+	case models.JSONB:
+		cloned := make(map[string]interface{}, len(typed))
+		for key, value := range typed {
+			cloned[key] = value
+		}
+		return cloned
+	default:
+		return map[string]interface{}{}
+	}
 }

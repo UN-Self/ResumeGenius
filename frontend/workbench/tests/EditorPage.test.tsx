@@ -142,5 +142,34 @@ describe('EditorPage', () => {
 
       expect(screen.getByText('\u4e0a\u4f20\u6587\u4ef6')).toBeInTheDocument()
     })
+
+    it('shows dirty-state hint and reparse action for parsed assets', async () => {
+      mockEditorLoad({
+        assets: [
+          {
+            id: 11,
+            project_id: 1,
+            type: 'resume_pdf',
+            label: 'Resume.pdf',
+            content: 'Parsed content',
+            metadata: {
+              parsing: {
+                updated_by_user: true,
+                last_parsed_at: '2026-05-04T06:00:00Z',
+              },
+            },
+            created_at: '2026-05-04T06:00:00Z',
+          },
+        ],
+      })
+
+      renderWithRouter()
+      await waitFor(() => {
+        expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
+      })
+
+      expect(screen.getByText('已手动修改，重新解析将覆盖当前正文')).toBeInTheDocument()
+      expect(screen.getByText('重新解析')).toBeInTheDocument()
+    })
   })
 })

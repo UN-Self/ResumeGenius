@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -634,6 +635,8 @@ func withAssetParsingMetadata(
 	if status == "success" {
 		parsing["cleaned"] = true
 		parsing["image_count"] = parsedImageCount(parsed)
+		parsing["updated_by_user"] = false
+		parsing["last_parsed_at"] = time.Now().UTC().Format(time.RFC3339)
 		if contentPersisted {
 			parsing["content_persisted"] = true
 		}
