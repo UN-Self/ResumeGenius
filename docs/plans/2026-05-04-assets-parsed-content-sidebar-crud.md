@@ -20,8 +20,8 @@
 
 **当前实现状态：**
 
-- Step 1 ~ Step 11 已完成
-- Step 12 ~ Step 14 是 code review 后新增的收口项，后续逐个处理
+- Step 1 ~ Step 12 已完成
+- Step 13 ~ Step 14 是 code review 后新增的收口项，后续逐个处理
 
 ---
 
@@ -406,7 +406,7 @@
 git commit -m "fix(intake): 删除主素材时级联清理派生图片"
 ```
 
-### Step 12：收紧删除链路错误处理
+### Step 12：收紧删除链路错误处理（已完成）
 
 问题：
 
@@ -415,6 +415,14 @@ git commit -m "fix(intake): 删除主素材时级联清理派生图片"
 目标：
 
 - 不再出现“DB 删了但文件还在”的静默半成功状态
+
+完成情况：
+
+- intake 的 `DeleteAsset(...)` 现在会在删除数据库记录前先删除文件
+- 文件删除失败时会直接返回错误，不再继续删除资产记录
+- `DeleteProjectAssets(...)` 也改成同样的“先删文件，失败即中断”策略
+- `DeleteProject(...)` handler 不再忽略 `DeleteProjectAssets(...)` 错误，文件删除失败时会直接返回 500
+- 已补服务层与 handler 层失败路径测试，覆盖“文件删除失败时保留项目/资产记录”的场景
 
 建议提交备注：
 
