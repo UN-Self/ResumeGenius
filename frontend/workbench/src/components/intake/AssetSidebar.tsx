@@ -19,6 +19,8 @@ interface ParsingMetadata {
   updated_by_user?: boolean
   derived?: boolean
   last_parsed_at?: string
+  source_deleted?: boolean
+  original_filename?: string
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -45,29 +47,19 @@ function canEditAsset(asset: Asset) {
 }
 
 function canReparseAsset(asset: Asset) {
-  return asset.type === 'resume_pdf' || asset.type === 'resume_docx' || asset.type === 'git_repo'
+  if (asset.type === 'git_repo') {
+    return true
+  }
+
+  if (asset.type === 'resume_pdf' || asset.type === 'resume_docx') {
+    return getParsingMetadata(asset)?.source_deleted !== true
+  }
+
+  return false
 }
 
 function hasUserEditedContent(asset: Asset) {
   return getParsingMetadata(asset)?.updated_by_user === true
-}
-
-function formatParsedAt(value?: string) {
-  if (!value) return ''
-
-  const parsedDate = new Date(value)
-  if (Number.isNaN(parsedDate.getTime())) {
-    return ''
-  }
-
-  return parsedDate.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
 }
 
 export default function AssetSidebar({ projectId, assets, onReload }: AssetSidebarProps) {
@@ -81,7 +73,14 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
   const [reparseLoadingAssetId, setReparseLoadingAssetId] = useState<number | null>(null)
 
   const visibleAssets = useMemo(
-    () => assets.filter((asset) => !isDerivedImageAsset(asset)),
+    () =>
+      [...assets]
+        .filter((asset) => !isDerivedImageAsset(asset))
+        .sort((left, right) => {
+          const leftTime = new Date(left.created_at).getTime()
+          const rightTime = new Date(right.created_at).getTime()
+          return rightTime - leftTime
+        }),
     [assets]
   )
 
@@ -211,24 +210,6 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
           onReparseAsset={handleReparseAsset}
           canReparseAsset={canReparseAsset}
           reparseLoadingAssetId={reparseLoadingAssetId}
-          getAssetStatusMeta={(asset) => {
-            if (hasUserEditedContent(asset)) {
-              return {
-                text: '已手动修改，重新解析将覆盖当前正文',
-                tone: 'warning',
-              }
-            }
-
-            const formatted = formatParsedAt(getParsingMetadata(asset)?.last_parsed_at)
-            if (formatted) {
-              return {
-                text: `最近解析：${formatted}`,
-                tone: 'muted',
-              }
-            }
-
-            return null
-          }}
         />
       </div>
 
