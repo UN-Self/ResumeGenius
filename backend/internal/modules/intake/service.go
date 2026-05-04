@@ -274,11 +274,18 @@ func (s *AssetService) DeleteAsset(userID string, assetID uint) error {
 		return err
 	}
 
-	if asset.URI != nil && *asset.URI != "" {
-		_ = s.storage.Delete(*asset.URI)
+	assetsToDelete, err := s.collectAssetsForDelete(asset)
+	if err != nil {
+		return err
 	}
 
-	if err := s.db.Delete(&asset).Error; err != nil {
+	for _, target := range assetsToDelete {
+		if target.URI != nil && *target.URI != "" {
+			_ = s.storage.Delete(*target.URI)
+		}
+	}
+
+	if err := s.db.Where("project_id = ? AND id IN ?", asset.ProjectID, assetIDsForDelete(assetsToDelete)).Delete(&models.Asset{}).Error; err != nil {
 		return fmt.Errorf("delete asset: %w", err)
 	}
 
@@ -383,4 +390,63 @@ func cloneAssetJSONMap(input interface{}) map[string]interface{} {
 	default:
 		return map[string]interface{}{}
 	}
+}
+
+func (s *AssetService) collectAssetsForDelete(asset models.Asset) ([]models.Asset, error) {
+	assets := []models.Asset{asset}
+	derivedIDs := derivedImageAssetIDsFromAssetMetadata(asset.Metadata)
+	if len(derivedIDs) == 0 {
+		return assets, nil
+	}
+
+	var derivedAssets []models.Asset
+	if err := s.db.
+		Where("project_id = ? AND type = ? AND id IN ?", asset.ProjectID, "resume_image", derivedIDs).
+		Find(&derivedAssets).Error; err != nil {
+		return nil, fmt.Errorf("find derived image assets: %w", err)
+	}
+
+	return append(assets, derivedAssets...), nil
+}
+
+func derivedImageAssetIDsFromAssetMetadata(metadata models.JSONB) []uint {
+	parsing := cloneAssetJSONMap(metadata["parsing"])
+	rawIDs, ok := parsing["derived_image_asset_ids"]
+	if !ok {
+		return nil
+	}
+
+	items, ok := rawIDs.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	ids := make([]uint, 0, len(items))
+	for _, item := range items {
+		switch typed := item.(type) {
+		case float64:
+			ids = append(ids, uint(typed))
+		case int:
+			ids = append(ids, uint(typed))
+		case uint:
+			ids = append(ids, typed)
+		}
+	}
+	return ids
+}
+
+func assetIDsForDelete(assets []models.Asset) []uint {
+	ids := make([]uint, 0, len(assets))
+	seen := make(map[uint]struct{}, len(assets))
+	for _, asset := range assets {
+		if asset.ID == 0 {
+			continue
+		}
+		if _, ok := seen[asset.ID]; ok {
+			continue
+		}
+		seen[asset.ID] = struct{}{}
+		ids = append(ids, asset.ID)
+	}
+	return ids
 }
