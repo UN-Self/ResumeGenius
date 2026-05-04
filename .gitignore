@@ -72,6 +72,11 @@ dist-ssr/
 *.local
 
 # ===========================
+# Framework cache
+# ===========================
+.astro/
+
+# ===========================
 # shadcn/ui cache (regenerate via `bunx shadcn add`)
 # ===========================
 frontend/workbench/@/
