@@ -245,6 +245,36 @@ func TestHandler_UploadFile(t *testing.T) {
 	assert.Equal(t, "resume_pdf", data["type"])
 }
 
+func TestHandler_UploadFile_ReplacesSameNameAssetInProject(t *testing.T) {
+	h, r := setupTestHandler(t)
+	r.POST("/assets/upload", h.UploadFile)
+
+	projID := createTestProject(t, h, "Upload Replace Project")
+	oldAsset, err := h.assetSvc.UploadFile("test-user-1", projID, "resume.pdf", []byte("%PDF old"), 8)
+	require.NoError(t, err)
+
+	body, ct := createMultipartForm(t, "file", "resume.pdf", []byte("%PDF new"), map[string]string{
+		"project_id":       strconv.Itoa(int(projID)),
+		"replace_asset_id": strconv.Itoa(int(oldAsset.ID)),
+	})
+
+	req, err := http.NewRequest("POST", "/assets/upload", body)
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", ct)
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	resp := parseResponse(t, w)
+	assert.Equal(t, 0, resp.Code)
+
+	var assets []models.Asset
+	require.NoError(t, h.assetSvc.db.Where("project_id = ?", projID).Find(&assets).Error)
+	require.Len(t, assets, 1)
+	assert.NotEqual(t, oldAsset.ID, assets[0].ID)
+}
+
 func TestHandler_UploadFile_UnsupportedFormat(t *testing.T) {
 	h, r := setupTestHandler(t)
 	r.POST("/assets/upload", h.UploadFile)

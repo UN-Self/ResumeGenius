@@ -125,6 +125,23 @@ describe('apiClient', () => {
     expect(body.get('file')).toBe(file)
   })
 
+  it('uploadFile includes replace_asset_id when replacing a same-name file', async () => {
+    const mock = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ code: 0, data: { id: 2, type: 'resume_docx' } }),
+    })
+    vi.stubGlobal('fetch', mock)
+
+    const file = new File(['docx-content'], 'sample_resume.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+    await intakeApi.uploadFile(3, file, 9)
+
+    const body = mock.mock.calls[0][1].body as FormData
+    expect(body.get('project_id')).toBe('3')
+    expect(body.get('replace_asset_id')).toBe('9')
+    expect(body.get('file')).toBe(file)
+  })
+
   it('createGitRepo calls POST /assets/git', async () => {
     const mock = vi.fn().mockResolvedValue({
       json: () => Promise.resolve({ code: 0, data: { id: 1, type: 'git_repo' } }),

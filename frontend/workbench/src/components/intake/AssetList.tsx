@@ -1,6 +1,6 @@
 import { PencilLine, RefreshCcw, Trash2 } from 'lucide-react'
 import type { Asset } from '@/lib/api-client'
-import { getAssetVisual, getDisplayAssetTitle, getDisplayFileName } from './fileVisuals'
+import { getAssetVisual, getDisplayAssetTitle, getDisplayFileName, getOriginalFilenameFromAsset } from './fileVisuals'
 
 type AssetItem = Asset & { label?: string; content?: string; uri?: string }
 
@@ -49,7 +49,7 @@ function AssetActionButton({
 }
 
 function getDisplayTitle(asset: AssetItem, fallbackLabel: string) {
-  const originalFilename = getOriginalFilenameFromMetadata(asset)
+  const originalFilename = getOriginalFilenameFromAsset(asset)
   if (isFileAsset(asset.type) && originalFilename) {
     return getDisplayFileName(originalFilename) || originalFilename
   }
@@ -83,20 +83,6 @@ function isGenericAssetLabel(asset: AssetItem, label: string) {
   const visual = getAssetVisual(asset.type, asset.uri)
   const normalized = label.trim().toLowerCase()
   return normalized === visual.chipLabel.toLowerCase() || normalized === visual.typeLabel.toLowerCase()
-}
-
-function getOriginalFilenameFromMetadata(asset: AssetItem) {
-  if (!asset.metadata || typeof asset.metadata !== 'object') {
-    return ''
-  }
-
-  const parsing = (asset.metadata as Record<string, unknown>).parsing
-  if (!parsing || typeof parsing !== 'object') {
-    return ''
-  }
-
-  const originalFilename = (parsing as Record<string, unknown>).original_filename
-  return typeof originalFilename === 'string' ? originalFilename.trim() : ''
 }
 
 function getContentPreview(asset: AssetItem) {

@@ -2,7 +2,15 @@ import { useCallback, useRef, useState } from 'react'
 import { Upload } from 'lucide-react'
 import { Modal, ModalFooter, ModalHeader } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
-import { formatFileSize, getDisplayFileName, getExt, getUploadFileVisual } from './fileVisuals'
+import type { Asset } from '@/lib/api-client'
+import {
+  formatFileSize,
+  getDisplayFileName,
+  getExt,
+  getOriginalFilenameFromAsset,
+  getUploadAssetType,
+  getUploadFileVisual,
+} from './fileVisuals'
 
 const MAX_SIZE = 20 * 1024 * 1024
 const ALLOWED = ['.pdf', '.docx', '.png', '.jpg', '.jpeg']
@@ -10,14 +18,48 @@ const ALLOWED = ['.pdf', '.docx', '.png', '.jpg', '.jpeg']
 interface UploadDialogProps {
   open: boolean
   onClose: () => void
-  onUpload: (file: File) => Promise<void>
+  onUpload: (file: File, replaceAssetId?: number) => Promise<void>
+  existingAssets?: Asset[]
 }
 
-export default function UploadDialog({ open, onClose, onUpload }: UploadDialogProps) {
+function isDerivedImageAsset(asset: Asset) {
+  if (asset.type !== 'resume_image' || !asset.metadata || typeof asset.metadata !== 'object') {
+    return false
+  }
+
+  const parsing = (asset.metadata as Record<string, unknown>).parsing
+  if (!parsing || typeof parsing !== 'object') {
+    return false
+  }
+
+  return (parsing as Record<string, unknown>).derived === true
+}
+
+function findDuplicateAsset(assets: Asset[], file: File) {
+  const uploadType = getUploadAssetType(file.name)
+  if (!uploadType) {
+    return null
+  }
+
+  const normalizedFilename = file.name.trim().toLowerCase()
+  return (
+    assets.find((asset) => {
+      if (asset.type !== uploadType || isDerivedImageAsset(asset)) {
+        return false
+      }
+
+      const originalFilename = getOriginalFilenameFromAsset(asset)
+      return originalFilename.trim().toLowerCase() === normalizedFilename
+    }) ?? null
+  )
+}
+
+export default function UploadDialog({ open, onClose, onUpload, existingAssets = [] }: UploadDialogProps) {
   const [dragging, setDragging] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [replacementTarget, setReplacementTarget] = useState<Asset | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const validate = useCallback((nextFile: File) => {
@@ -37,11 +79,13 @@ export default function UploadDialog({ open, onClose, onUpload }: UploadDialogPr
     if (nextError) {
       setFile(null)
       setError(nextError)
+      setReplacementTarget(null)
       return
     }
 
     setError('')
     setFile(nextFile)
+    setReplacementTarget(null)
   }, [validate])
 
   const handleDrop = useCallback((event: React.DragEvent) => {
@@ -75,14 +119,15 @@ export default function UploadDialog({ open, onClose, onUpload }: UploadDialogPr
     inputRef.current.click()
   }
 
-  const handleSubmit = async () => {
+  const performUpload = async (replaceAssetId?: number) => {
     if (!file) return
 
     try {
       setUploading(true)
       setError('')
-      await onUpload(file)
+      await onUpload(file, replaceAssetId)
       setFile(null)
+      setReplacementTarget(null)
       onClose()
     } catch (eventError) {
       setError(eventError instanceof Error ? eventError.message : '\u4e0a\u4f20\u5931\u8d25')
@@ -91,15 +136,81 @@ export default function UploadDialog({ open, onClose, onUpload }: UploadDialogPr
     }
   }
 
+  const handleSubmit = async () => {
+    if (!file) return
+
+    const duplicateAsset = findDuplicateAsset(existingAssets, file)
+    if (duplicateAsset) {
+      setReplacementTarget(duplicateAsset)
+      return
+    }
+
+    await performUpload()
+  }
+
   const handleClose = () => {
     setDragging(false)
     setFile(null)
     setError('')
+    setReplacementTarget(null)
     onClose()
   }
 
   const selectedVisual = file ? getUploadFileVisual(file.name) : null
   const SelectedIcon = selectedVisual?.icon
+  const replacementFilename = replacementTarget ? getOriginalFilenameFromAsset(replacementTarget) : ''
+
+  if (replacementTarget && file) {
+    return (
+      <Modal open={open} onClose={handleClose}>
+        <ModalHeader>{'\u66ff\u6362\u540c\u540d\u6587\u4ef6'}</ModalHeader>
+        <div className="mt-3 rounded-2xl border border-primary-200 bg-primary-50/70 px-4 py-3">
+          <p className="text-sm font-medium text-foreground">
+            {`\u5f53\u524d\u7b80\u5386\u4e2d\u5df2\u5b58\u5728\u540c\u540d\u6587\u4ef6 “${replacementFilename || file.name}”`}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+            {'\u786e\u8ba4\u540e\u4f1a\u7528\u65b0\u4e0a\u4f20\u7684\u6587\u4ef6\u66ff\u6362\u65e7\u7d20\u6750\uff0c\u5e76\u8986\u76d6\u8fd9\u4e2a\u7b80\u5386\u4e0b\u7684\u65e7\u89e3\u6790\u7ed3\u679c\u3002\u6b64\u64cd\u4f5c\u53ea\u5f71\u54cd\u5f53\u524d\u9879\u76ee\u3002'}
+          </p>
+        </div>
+
+        <div className="mt-4 rounded-2xl border border-border bg-background px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            {'\u5c06\u8981\u66ff\u6362'}
+          </p>
+          <div className="mt-2 flex items-center gap-3">
+            {SelectedIcon && (
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border ${selectedVisual?.iconWrapperClassName}`}>
+                <SelectedIcon className={`h-5 w-5 ${selectedVisual?.iconClassName}`} />
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="break-all text-sm font-semibold text-foreground">{file.name}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+            </div>
+          </div>
+        </div>
+
+        {error && (
+          <p className="mt-3 text-xs text-destructive">{error}</p>
+        )}
+
+        <ModalFooter>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setReplacementTarget(null)
+              setError('')
+            }}
+          >
+            {'\u8fd4\u56de'}
+          </Button>
+          <Button onClick={() => void performUpload(replacementTarget.id)} disabled={uploading}>
+            {uploading ? '\u66ff\u6362\u4e2d...' : '\u786e\u8ba4\u66ff\u6362'}
+          </Button>
+        </ModalFooter>
+      </Modal>
+    )
+  }
 
   return (
     <Modal open={open} onClose={handleClose}>

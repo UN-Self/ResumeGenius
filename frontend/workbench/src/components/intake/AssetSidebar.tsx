@@ -98,10 +98,10 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
     await onReload()
   }
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (file: File, replaceAssetId?: number) => {
     setError('')
     try {
-      await intakeApi.uploadFile(projectId, file)
+      await intakeApi.uploadFile(projectId, file, replaceAssetId)
       await parsingApi.parseProject(projectId)
     } finally {
       await refreshAssets()
@@ -217,6 +217,7 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
         open={uploadOpen}
         onClose={() => setUploadOpen(false)}
         onUpload={handleUpload}
+        existingAssets={visibleAssets}
       />
       <GitRepoDialog
         open={gitOpen}

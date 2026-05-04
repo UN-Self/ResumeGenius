@@ -1,4 +1,5 @@
 import { FileImage, FileText, GitBranch, type LucideIcon } from 'lucide-react'
+import type { Asset } from '@/lib/api-client'
 
 type FileVisualKey = 'pdf' | 'docx' | 'png' | 'jpg' | 'jpeg' | 'git' | 'note' | 'generic'
 
@@ -108,6 +109,15 @@ export function getDisplayFileName(name: string) {
   return cleanedName.substring(0, extIndex)
 }
 
+export function getStoredFileName(reference?: string | null) {
+  if (!reference) {
+    return ''
+  }
+
+  const fileName = reference.split('/').pop() ?? reference
+  return stripStoredFilePrefix(fileName.trim())
+}
+
 export function getUploadFileVisual(name: string) {
   switch (getExt(name)) {
     case '.pdf':
@@ -186,6 +196,35 @@ export function getDisplayAssetTitle(type: string, label: string) {
     }
     default:
       return trimmedLabel
+  }
+}
+
+export function getOriginalFilenameFromAsset(asset: Pick<Asset, 'metadata' | 'uri'>) {
+  if (asset.metadata && typeof asset.metadata === 'object') {
+    const parsing = (asset.metadata as Record<string, unknown>).parsing
+    if (parsing && typeof parsing === 'object') {
+      const originalFilename = (parsing as Record<string, unknown>).original_filename
+      if (typeof originalFilename === 'string' && originalFilename.trim()) {
+        return originalFilename.trim()
+      }
+    }
+  }
+
+  return getStoredFileName(asset.uri)
+}
+
+export function getUploadAssetType(name: string) {
+  switch (getExt(name)) {
+    case '.pdf':
+      return 'resume_pdf'
+    case '.docx':
+      return 'resume_docx'
+    case '.png':
+    case '.jpg':
+    case '.jpeg':
+      return 'resume_image'
+    default:
+      return ''
   }
 }
 
