@@ -1,8 +1,8 @@
-import { describe, it, expect } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { MemoryRouter, Routes, Route } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import EditorPage from '@/pages/EditorPage'
 import { server } from './setup'
 
@@ -17,24 +17,55 @@ function renderWithRouter(initialEntry = '/projects/1/edit') {
   )
 }
 
+function mockEditorLoad(overrides?: {
+  currentDraftId?: number | null
+  assets?: Array<Record<string, unknown>>
+  htmlContent?: string
+}) {
+  const currentDraftId = overrides?.currentDraftId !== undefined ? overrides.currentDraftId : 1
+  const assets = overrides?.assets ?? []
+  const htmlContent = overrides?.htmlContent ?? '<p>Hello</p>'
+
+  server.use(
+    http.get('/api/v1/projects/:projectId', () => {
+      return HttpResponse.json({
+        code: 0,
+        data: {
+          id: 1,
+          title: 'Test Project',
+          status: 'active',
+          current_draft_id: currentDraftId,
+          created_at: '2026-04-28T12:00:00Z',
+        },
+        message: 'ok',
+      })
+    }),
+    http.get('/api/v1/assets', () => {
+      return HttpResponse.json({
+        code: 0,
+        data: assets,
+        message: 'ok',
+      })
+    }),
+    http.get('/api/v1/drafts/1', () => {
+      return HttpResponse.json({
+        code: 0,
+        data: {
+          id: 1,
+          project_id: 1,
+          html_content: htmlContent,
+          updated_at: '2026-04-28T12:00:00Z',
+        },
+        message: 'ok',
+      })
+    })
+  )
+}
+
 describe('EditorPage', () => {
   describe('Route guard', () => {
     it('redirects to project detail when no current_draft_id', async () => {
-      server.use(
-        http.get('/api/v1/projects/:projectId', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: {
-              id: 1,
-              title: 'Test Project',
-              status: 'active',
-              current_draft_id: null,
-              created_at: '2026-04-28T12:00:00Z',
-            },
-            message: 'ok',
-          })
-        })
-      )
+      mockEditorLoad({ currentDraftId: null })
 
       renderWithRouter()
       await waitFor(() => {
@@ -45,40 +76,7 @@ describe('EditorPage', () => {
 
   describe('Editor loads', () => {
     it('renders editor when project has current_draft_id', async () => {
-      server.use(
-        http.get('/api/v1/projects/:projectId', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: {
-              id: 1,
-              title: 'Test Project',
-              status: 'active',
-              current_draft_id: 1,
-              created_at: '2026-04-28T12:00:00Z',
-            },
-            message: 'ok',
-          })
-        }),
-        http.get('/api/v1/drafts/1', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: {
-              id: 1,
-              project_id: 1,
-              html_content: '<p>Hello</p>',
-              updated_at: '2026-04-28T12:00:00Z',
-            },
-            message: 'ok',
-          })
-        }),
-        http.post('/api/v1/parsing/parse', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: { parsed_contents: [{ asset_id: 1, type: 'text', label: 'test', text: 'content' }] },
-            message: 'ok',
-          })
-        })
-      )
+      mockEditorLoad()
 
       renderWithRouter()
       await waitFor(() => {
@@ -89,47 +87,14 @@ describe('EditorPage', () => {
 
   describe('Export button', () => {
     it('renders export button that is not disabled when editor is loaded', async () => {
-      server.use(
-        http.get('/api/v1/projects/:projectId', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: {
-              id: 1,
-              title: 'Test Project',
-              status: 'active',
-              current_draft_id: 1,
-              created_at: '2026-04-28T12:00:00Z',
-            },
-            message: 'ok',
-          })
-        }),
-        http.get('/api/v1/drafts/1', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: {
-              id: 1,
-              project_id: 1,
-              html_content: '<p>Hello</p>',
-              updated_at: '2026-04-28T12:00:00Z',
-            },
-            message: 'ok',
-          })
-        }),
-        http.post('/api/v1/parsing/parse', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: { parsed_contents: [] },
-            message: 'ok',
-          })
-        })
-      )
+      mockEditorLoad({ htmlContent: '<p>Hello</p>' })
 
       renderWithRouter()
       await waitFor(() => {
         expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
       })
 
-      const exportBtn = screen.getByText('导出 PDF')
+      const exportBtn = screen.getByText('\u5bfc\u51fa PDF')
       expect(exportBtn).toBeInTheDocument()
       expect(exportBtn).not.toBeDisabled()
     })
@@ -137,85 +102,19 @@ describe('EditorPage', () => {
 
   describe('Panel collapse', () => {
     it('renders collapse buttons for left and right panels', async () => {
-      server.use(
-        http.get('/api/v1/projects/:projectId', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: {
-              id: 1,
-              title: 'Test Project',
-              status: 'active',
-              current_draft_id: 1,
-              created_at: '2026-04-28T12:00:00Z',
-            },
-            message: 'ok',
-          })
-        }),
-        http.get('/api/v1/drafts/1', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: {
-              id: 1,
-              project_id: 1,
-              html_content: '',
-              updated_at: '2026-04-28T12:00:00Z',
-            },
-            message: 'ok',
-          })
-        }),
-        http.post('/api/v1/parsing/parse', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: { parsed_contents: [] },
-            message: 'ok',
-          })
-        })
-      )
+      mockEditorLoad()
 
       renderWithRouter()
       await waitFor(() => {
         expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
       })
 
-      expect(screen.getByLabelText('收起左面板')).toBeInTheDocument()
-      expect(screen.getByLabelText('收起右面板')).toBeInTheDocument()
+      expect(screen.getByLabelText('\u6536\u8d77\u5de6\u4fa7\u680f')).toBeInTheDocument()
+      expect(screen.getByLabelText('\u6536\u8d77\u53f3\u4fa7\u680f')).toBeInTheDocument()
     })
 
     it('collapses and expands left panel on button click', async () => {
-      server.use(
-        http.get('/api/v1/projects/:projectId', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: {
-              id: 1,
-              title: 'Test Project',
-              status: 'active',
-              current_draft_id: 1,
-              created_at: '2026-04-28T12:00:00Z',
-            },
-            message: 'ok',
-          })
-        }),
-        http.get('/api/v1/drafts/1', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: {
-              id: 1,
-              project_id: 1,
-              html_content: '',
-              updated_at: '2026-04-28T12:00:00Z',
-            },
-            message: 'ok',
-          })
-        }),
-        http.post('/api/v1/parsing/parse', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: { parsed_contents: [] },
-            message: 'ok',
-          })
-        })
-      )
+      mockEditorLoad()
 
       const user = userEvent.setup()
       renderWithRouter()
@@ -224,59 +123,24 @@ describe('EditorPage', () => {
         expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
       })
 
-      // Collapse left panel
-      await user.click(screen.getByLabelText('收起左面板'))
-      expect(screen.getByLabelText('展开左面板')).toBeInTheDocument()
+      await user.click(screen.getByLabelText('\u6536\u8d77\u5de6\u4fa7\u680f'))
+      expect(screen.getByLabelText('\u5c55\u5f00\u5de6\u4fa7\u680f')).toBeInTheDocument()
 
-      // Expand left panel
-      await user.click(screen.getByLabelText('展开左面板'))
-      expect(screen.getByLabelText('收起左面板')).toBeInTheDocument()
+      await user.click(screen.getByLabelText('\u5c55\u5f00\u5de6\u4fa7\u680f'))
+      expect(screen.getByLabelText('\u6536\u8d77\u5de6\u4fa7\u680f')).toBeInTheDocument()
     })
   })
 
-  describe('Upload button in sidebar', () => {
+  describe('Sidebar actions', () => {
     it('renders upload button in left panel', async () => {
-      server.use(
-        http.get('/api/v1/projects/:projectId', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: {
-              id: 1,
-              title: 'Test Project',
-              status: 'active',
-              current_draft_id: 1,
-              created_at: '2026-04-28T12:00:00Z',
-            },
-            message: 'ok',
-          })
-        }),
-        http.get('/api/v1/drafts/1', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: {
-              id: 1,
-              project_id: 1,
-              html_content: '',
-              updated_at: '2026-04-28T12:00:00Z',
-            },
-            message: 'ok',
-          })
-        }),
-        http.post('/api/v1/parsing/parse', () => {
-          return HttpResponse.json({
-            code: 0,
-            data: { parsed_contents: [] },
-            message: 'ok',
-          })
-        })
-      )
+      mockEditorLoad()
 
       renderWithRouter()
       await waitFor(() => {
         expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
       })
 
-      expect(screen.getByText('上传文件')).toBeInTheDocument()
+      expect(screen.getByText('\u4e0a\u4f20\u6587\u4ef6')).toBeInTheDocument()
     })
   })
 })

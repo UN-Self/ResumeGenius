@@ -6,10 +6,11 @@ type AssetItem = Asset & { label?: string; content?: string; uri?: string }
 interface AssetListProps {
   assets: AssetItem[]
   onDelete: (id: number) => void
-  onEditNote: (asset: AssetItem) => void
+  onEditAsset?: (asset: AssetItem) => void
+  canEditAsset?: (asset: AssetItem) => boolean
 }
 
-export default function AssetList({ assets, onDelete, onEditNote }: AssetListProps) {
+export default function AssetList({ assets, onDelete, onEditAsset, canEditAsset }: AssetListProps) {
   if (assets.length === 0) {
     return (
       <div className="py-12 text-center text-muted-foreground">
@@ -24,6 +25,8 @@ export default function AssetList({ assets, onDelete, onEditNote }: AssetListPro
       {assets.map((asset) => {
         const visual = getAssetVisual(asset.type, asset.uri)
         const Icon = visual.icon
+        const contentPreview = asset.content?.replace(/\s+/g, ' ').trim() ?? ''
+        const editable = onEditAsset !== undefined && (canEditAsset ? canEditAsset(asset) : asset.type === 'note')
 
         return (
           <div key={asset.id} className="flex items-start justify-between gap-3 px-5 py-3.5">
@@ -41,8 +44,14 @@ export default function AssetList({ assets, onDelete, onEditNote }: AssetListPro
                   <p className="mt-1 text-sm text-foreground truncate">{asset.label}</p>
                 )}
 
-                {asset.content && !asset.label && (
-                  <p className="mt-1 text-sm text-foreground truncate">{asset.content}</p>
+                {!asset.label && contentPreview && (
+                  <p className="mt-1 text-sm text-foreground truncate">{contentPreview}</p>
+                )}
+
+                {asset.label && contentPreview && (
+                  <p className="mt-1 max-h-10 overflow-hidden text-xs text-muted-foreground break-words">
+                    {contentPreview}
+                  </p>
                 )}
 
                 {asset.uri && asset.type === 'git_repo' && (
@@ -56,9 +65,9 @@ export default function AssetList({ assets, onDelete, onEditNote }: AssetListPro
             </div>
 
             <div className="flex shrink-0 items-center gap-1">
-              {asset.type === 'note' && (
+              {editable && (
                 <button
-                  onClick={() => onEditNote(asset)}
+                  onClick={() => onEditAsset?.(asset)}
                   className="rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-primary-50 hover:text-foreground"
                 >
                   {'\u7f16\u8f91'}

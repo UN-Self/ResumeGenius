@@ -102,6 +102,11 @@ export const intakeApi = {
       method: 'POST',
       body: JSON.stringify({ project_id: projectId, repo_url: repoUrl }),
     }),
+  updateAsset: (id: number, payload: { content?: string; label?: string }) =>
+    request<Asset>(`/assets/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
   deleteAsset: (id: number) =>
     request<null>(`/assets/${id}`, { method: 'DELETE' }),
 
