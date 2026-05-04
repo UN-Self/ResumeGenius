@@ -460,6 +460,91 @@ func TestAssetService_DeleteAsset(t *testing.T) {
 	assert.Error(t, result.Error)
 }
 
+func TestAssetService_DeleteAsset_RemovesDerivedImageAssets(t *testing.T) {
+	db := SetupTestDB(t)
+	storage := NewLocalStorage(t.TempDir())
+	svc := NewAssetService(db, storage)
+
+	projSvc := NewProjectService(db)
+	proj, err := projSvc.Create("user-1", "测试项目")
+	require.NoError(t, err)
+
+	sourceAsset, err := svc.UploadFile("user-1", proj.ID, "resume.pdf", []byte("%PDF fake"), 10)
+	require.NoError(t, err)
+
+	derivedKey1, err := storage.Save(proj.ID, "derived-1.png", []byte("img-1"))
+	require.NoError(t, err)
+	derivedLabel1 := "简历图片 1"
+	derivedAsset1 := models.Asset{
+		ProjectID: proj.ID,
+		Type:      "resume_image",
+		URI:       &derivedKey1,
+		Label:     &derivedLabel1,
+		Metadata: models.JSONB{
+			"parsing": map[string]interface{}{
+				"derived":         true,
+				"source_asset_id": sourceAsset.ID,
+			},
+		},
+	}
+	require.NoError(t, db.Create(&derivedAsset1).Error)
+
+	derivedKey2, err := storage.Save(proj.ID, "derived-2.png", []byte("img-2"))
+	require.NoError(t, err)
+	derivedLabel2 := "简历图片 2"
+	derivedAsset2 := models.Asset{
+		ProjectID: proj.ID,
+		Type:      "resume_image",
+		URI:       &derivedKey2,
+		Label:     &derivedLabel2,
+		Metadata: models.JSONB{
+			"parsing": map[string]interface{}{
+				"derived":         true,
+				"source_asset_id": sourceAsset.ID,
+			},
+		},
+	}
+	require.NoError(t, db.Create(&derivedAsset2).Error)
+
+	unrelatedKey, err := storage.Save(proj.ID, "standalone.png", []byte("standalone"))
+	require.NoError(t, err)
+	unrelatedLabel := "独立图片"
+	unrelatedAsset := models.Asset{
+		ProjectID: proj.ID,
+		Type:      "resume_image",
+		URI:       &unrelatedKey,
+		Label:     &unrelatedLabel,
+	}
+	require.NoError(t, db.Create(&unrelatedAsset).Error)
+
+	require.NoError(t, db.Model(&models.Asset{}).Where("id = ?", sourceAsset.ID).Update("metadata", models.JSONB{
+		"parsing": map[string]interface{}{
+			"derived_image_asset_ids": []interface{}{derivedAsset1.ID, derivedAsset2.ID},
+		},
+	}).Error)
+
+	require.True(t, storage.Exists(*sourceAsset.URI))
+	require.True(t, storage.Exists(derivedKey1))
+	require.True(t, storage.Exists(derivedKey2))
+	require.True(t, storage.Exists(unrelatedKey))
+
+	err = svc.DeleteAsset("user-1", sourceAsset.ID)
+	assert.NoError(t, err)
+
+	assert.False(t, storage.Exists(*sourceAsset.URI))
+	assert.False(t, storage.Exists(derivedKey1))
+	assert.False(t, storage.Exists(derivedKey2))
+	assert.True(t, storage.Exists(unrelatedKey))
+
+	var deletedCount int64
+	db.Model(&models.Asset{}).Where("id IN ?", []uint{sourceAsset.ID, derivedAsset1.ID, derivedAsset2.ID}).Count(&deletedCount)
+	assert.Zero(t, deletedCount)
+
+	var kept models.Asset
+	require.NoError(t, db.First(&kept, unrelatedAsset.ID).Error)
+	assert.Equal(t, unrelatedAsset.ID, kept.ID)
+}
+
 func TestAssetService_DeleteAsset_WrongUser(t *testing.T) {
 	db := SetupTestDB(t)
 	storage := NewLocalStorage(t.TempDir())
