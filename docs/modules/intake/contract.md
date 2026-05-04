@@ -1,6 +1,6 @@
 # 模块 intake 契约：项目管理与资料接入
 
-更新时间：2026-05-03
+更新时间：2026-05-04
 
 ## 1. 角色定义
 
@@ -42,14 +42,14 @@
 
 ### assets 字段语义
 
-`assets` 在本轮收口后的目标语义如下：
+`assets` 在当前分支中的统一语义如下：
 
 | 字段 | 含义 |
 |---|---|
 | `uri` | 原始来源。文件资产保存上传路径，Git 资产保存仓库 URL，note 可为空 |
 | `content` | 素材正文。note 为用户原文；PDF / DOCX / Git 在 parsing 清洗后写回这里 |
 | `label` | 展示标题，可供前端展示或后续人工调整 |
-| `metadata` | 上传信息、解析状态、派生图片信息等附加元数据 |
+| `metadata` | 上传信息、解析状态、派生图片信息、人工修改状态、原件删除信息等附加元数据 |
 
 说明：
 
@@ -57,6 +57,7 @@
 - 文件型资产在刚上传完成时，`content` 可以暂时为空
 - parsing 成功后会将清洗后的正文写回 `assets.content`
 - 当正文和需要保留的图片都已完成持久化后，原始文件可以进入删除流程
+- 用户通过通用资产编辑接口修改文件 / Git 正文时，会在 `metadata.parsing.updated_by_user` 中留下人工修改标记
 
 ## 4. API 端点
 
@@ -78,6 +79,7 @@
 | POST | `/api/v1/assets/upload` | 上传文件（multipart） |
 | POST | `/api/v1/assets/git` | 接入 Git 仓库 |
 | GET | `/api/v1/assets?project_id={project_id}` | 资产列表 |
+| PATCH | `/api/v1/assets/{asset_id}` | 通用更新资产正文 / 标题 |
 | DELETE | `/api/v1/assets/{asset_id}` | 删除资产 |
 
 ### 4.3 补充文本
@@ -138,8 +140,41 @@ Response:
 ```
 
 Notes:
-- `resume_pdf` / `resume_docx` / `git_repo` 在 intake 阶段只先保存原始来源，`content` 由 parsing 在后续步骤中回填。
+- `resume_pdf` / `resume_docx` / `git_repo` 在 intake 阶段只先保存原始来源，`content` 由 parsing 回填。
 - `resume_image` 类型的资产仅存储，parsing 模块解析时跳过。图片可用于前端手动引用（如头像），暂不支持 OCR 识别。
+
+#### PATCH /api/v1/assets/{asset_id}
+
+```
+Request:
+{
+  "content": "清洗后的简历正文，可人工微调",
+  "label": "后端简历"
+}
+
+Response:
+{
+  "code": 0,
+  "data": {
+    "id": 1,
+    "project_id": 1,
+    "type": "resume_pdf",
+    "content": "清洗后的简历正文，可人工微调",
+    "label": "后端简历",
+    "metadata": {
+      "parsing": {
+        "status": "success",
+        "updated_by_user": true
+      }
+    }
+  }
+}
+```
+
+Notes:
+- 该接口可统一编辑 `note / resume_pdf / resume_docx / git_repo` 的标题与正文。
+- 仅修改标题时，不会把 `updated_by_user` 误标为 `true`。
+- 旧的 `PUT /api/v1/assets/notes/{note_id}` 仍保留，内部复用同一套更新逻辑。
 
 #### POST /api/v1/assets/notes
 
@@ -174,7 +209,7 @@ Response:
 ### 下游
 
 - 模块 parsing（解析与初稿生成）消费 assets 中的原始来源，并负责将清洗后的正文回写到 `assets.content`
-- 模块 workbench / agent 后续统一消费 `assets.content` 作为素材正文
+- 模块 workbench 当前以 `assets.content` 驱动素材左栏；模块 agent 在素材读取链路中应统一消费 `assets.content`
 
 ### 可 mock 的边界
 

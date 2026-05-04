@@ -676,7 +676,7 @@ git commit -m "feat(workbench): 将编辑页左侧栏升级为素材管理区"
 git commit -m "feat(workbench): 增加素材重新解析与覆盖确认"
 ```
 
-### Step 10：文档、联调口径、回归测试收口
+### Step 10：文档、联调口径、回归测试收口（已完成）
 
 目标：
 
@@ -695,6 +695,18 @@ git commit -m "feat(workbench): 增加素材重新解析与覆盖确认"
 - `generate` 能直接消费持久化正文
 - 左栏编辑后刷新页面不丢
 - note / PDF / DOCX / Git 行为一致
+
+完成情况：
+
+- 已更新 `docs/modules/parsing/contract.md`，将“正文回写、派生图片落库、源文件删除、生成优先消费持久化正文”统一为当前行为
+- 已更新 `docs/modules/intake/contract.md`，补齐 `PATCH /api/v1/assets/{asset_id}`、`assets.content` 字段语义和人工修改标记
+- 已更新 `docs/modules/agent/contract.md`，明确当前主对话仍以 `drafts.html_content` 为主，但项目素材正文统一以 `assets.content` 为来源
+- 已补一份本轮分支的 PR log，便于后续提交 PR 和阶段总结复用
+- 已完成回归验证：
+  - `go test ./internal/modules/intake/...`
+  - `go test ./internal/modules/parsing/...`
+  - `npm exec vitest run tests/EditorPage.test.tsx`
+  - `node_modules\\.bin\\tsc.exe --noEmit --pretty false -p tsconfig.app.json`
 
 建议提交备注：
 
@@ -763,5 +775,3 @@ git commit -m "docs: 收口 parsing 素材正文链路契约"
 
 1. 统一契约：明确 `assets.content` 是所有素材的正文落点
 2. 抽共享清洗器：先把文本质量收口
-
-这样后面的“落库”和“左侧栏编辑”就会顺很多，也最符合你同事现在强调的方向。
