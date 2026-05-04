@@ -123,7 +123,14 @@ func (h *Handler) DeleteProject(c *gin.Context) {
 	projectID := uint(id)
 
 	// Step 1: Delete asset files + DB records (DeleteProjectAssets handles both)
-	_ = h.assetSvc.DeleteProjectAssets(uid, projectID)
+	if err := h.assetSvc.DeleteProjectAssets(uid, projectID); err != nil {
+		if errors.Is(err, ErrProjectNotFound) {
+			response.Error(c, CodeProjectNotFound, "project not found")
+		} else {
+			response.Error(c, CodeInternalError, "failed to delete project assets")
+		}
+		return
+	}
 
 	// Step 2: Cascade delete remaining DB records in a single transaction
 	// (includes assets as safety net in case step 1 partially failed)

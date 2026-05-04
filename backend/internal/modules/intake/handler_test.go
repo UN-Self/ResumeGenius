@@ -3,6 +3,7 @@ package intake
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -17,17 +18,24 @@ import (
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/middleware"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
+	sharedstorage "github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
 )
 
 // --- Test helpers ---
 
 func setupTestHandler(t *testing.T) (*Handler, *gin.Engine) {
 	t.Helper()
+	return setupTestHandlerWithStorage(t, nil)
+}
+
+func setupTestHandlerWithStorage(t *testing.T, store sharedstorage.FileStorage) (*Handler, *gin.Engine) {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := SetupTestDB(t)
-	dir := t.TempDir()
-	storage := NewLocalStorage(dir)
-	h := NewHandler(NewProjectService(db), NewAssetService(db, storage))
+	if store == nil {
+		store = NewLocalStorage(t.TempDir())
+	}
+	h := NewHandler(NewProjectService(db), NewAssetService(db, store))
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set(middleware.ContextUserID, "test-user-1"); c.Next() })
 	return h, r
@@ -186,6 +194,30 @@ func TestHandler_DeleteProject(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w2.Code)
 	resp := parseResponse(t, w2)
 	assert.Equal(t, CodeProjectNotFound, resp.Code)
+}
+
+func TestHandler_DeleteProject_ReturnsErrorWhenDeleteProjectAssetsFails(t *testing.T) {
+	h, r := setupTestHandlerWithStorage(t, newFailingDeleteStorage(errors.New("disk busy")))
+	r.DELETE("/projects/:project_id", h.DeleteProject)
+
+	projID := createTestProject(t, h, "Delete Fails")
+	_, err := h.assetSvc.UploadFile("test-user-1", projID, "resume.pdf", []byte("%PDF-1.4 fake content"), 10)
+	require.NoError(t, err)
+
+	w := doJSON(t, r, "DELETE", "/projects/"+strconv.Itoa(int(projID)), nil)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+
+	resp := parseResponse(t, w)
+	assert.Equal(t, CodeInternalError, resp.Code)
+	assert.Equal(t, "failed to delete project assets", resp.Message)
+
+	proj, err := h.projectSvc.GetByID("test-user-1", projID)
+	require.NoError(t, err)
+	assert.Equal(t, projID, proj.ID)
+
+	assets, err := h.assetSvc.ListByProject("test-user-1", projID)
+	require.NoError(t, err)
+	assert.Len(t, assets, 1)
 }
 
 func TestHandler_UploadFile(t *testing.T) {

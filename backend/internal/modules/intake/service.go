@@ -279,10 +279,8 @@ func (s *AssetService) DeleteAsset(userID string, assetID uint) error {
 		return err
 	}
 
-	for _, target := range assetsToDelete {
-		if target.URI != nil && *target.URI != "" {
-			_ = s.storage.Delete(*target.URI)
-		}
+	if err := s.deleteStoredAssetFiles(assetsToDelete); err != nil {
+		return err
 	}
 
 	if err := s.db.Where("project_id = ? AND id IN ?", asset.ProjectID, assetIDsForDelete(assetsToDelete)).Delete(&models.Asset{}).Error; err != nil {
@@ -302,10 +300,8 @@ func (s *AssetService) DeleteProjectAssets(userID string, projectID uint) error 
 		return fmt.Errorf("find project assets: %w", err)
 	}
 
-	for _, asset := range assets {
-		if asset.URI != nil && *asset.URI != "" {
-			_ = s.storage.Delete(*asset.URI)
-		}
+	if err := s.deleteStoredAssetFiles(assets); err != nil {
+		return err
 	}
 
 	if err := s.db.Where("project_id = ?", projectID).Delete(&models.Asset{}).Error; err != nil {
@@ -449,4 +445,24 @@ func assetIDsForDelete(assets []models.Asset) []uint {
 		ids = append(ids, asset.ID)
 	}
 	return ids
+}
+
+func (s *AssetService) deleteStoredAssetFiles(assets []models.Asset) error {
+	for _, asset := range assets {
+		if err := s.deleteStoredAssetFile(asset); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *AssetService) deleteStoredAssetFile(asset models.Asset) error {
+	if s.storage == nil || asset.URI == nil || *asset.URI == "" {
+		return nil
+	}
+
+	if err := s.storage.Delete(*asset.URI); err != nil {
+		return fmt.Errorf("delete stored file for asset %d: %w", asset.ID, err)
+	}
+	return nil
 }

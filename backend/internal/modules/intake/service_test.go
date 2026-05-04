@@ -1,6 +1,7 @@
 package intake
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -561,6 +562,27 @@ func TestAssetService_DeleteAsset_WrongUser(t *testing.T) {
 	assert.ErrorIs(t, err, ErrProjectNotFound)
 }
 
+func TestAssetService_DeleteAsset_ReturnsErrorWhenStorageDeleteFails(t *testing.T) {
+	db := SetupTestDB(t)
+	storage := newFailingDeleteStorage(errors.New("disk busy"))
+	svc := NewAssetService(db, storage)
+
+	projSvc := NewProjectService(db)
+	proj, err := projSvc.Create("user-1", "Test Project")
+	require.NoError(t, err)
+
+	asset, err := svc.UploadFile("user-1", proj.ID, "resume.pdf", []byte("%PDF fake"), 10)
+	require.NoError(t, err)
+
+	err = svc.DeleteAsset("user-1", asset.ID)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "delete stored file")
+
+	var kept models.Asset
+	require.NoError(t, db.First(&kept, asset.ID).Error)
+	assert.Equal(t, asset.ID, kept.ID)
+}
+
 func TestAssetService_DeleteProjectAssets(t *testing.T) {
 	db := SetupTestDB(t)
 	storage := NewLocalStorage(t.TempDir())
@@ -586,4 +608,31 @@ func TestAssetService_DeleteProjectAssets(t *testing.T) {
 	var assets []models.Asset
 	db.Where("project_id = ?", proj.ID).Find(&assets)
 	assert.Len(t, assets, 0)
+}
+
+func TestAssetService_DeleteProjectAssets_ReturnsErrorWhenStorageDeleteFails(t *testing.T) {
+	db := SetupTestDB(t)
+	storage := newFailingDeleteStorage(errors.New("disk busy"))
+	svc := NewAssetService(db, storage)
+
+	projSvc := NewProjectService(db)
+	proj, err := projSvc.Create("user-1", "Test Project")
+	require.NoError(t, err)
+
+	fileAsset, err := svc.UploadFile("user-1", proj.ID, "doc.pdf", []byte("%PDF fake"), 10)
+	require.NoError(t, err)
+	_, err = svc.CreateNote("user-1", proj.ID, "Some note", "Note")
+	require.NoError(t, err)
+
+	err = svc.DeleteProjectAssets("user-1", proj.ID)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "delete stored file")
+
+	var keptAssets []models.Asset
+	require.NoError(t, db.Where("project_id = ?", proj.ID).Find(&keptAssets).Error)
+	assert.Len(t, keptAssets, 2)
+
+	var keptFile models.Asset
+	require.NoError(t, db.First(&keptFile, fileAsset.ID).Error)
+	assert.Equal(t, fileAsset.ID, keptFile.ID)
 }

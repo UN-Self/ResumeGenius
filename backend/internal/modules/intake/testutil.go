@@ -45,3 +45,40 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 
 	return tx
 }
+
+type failingDeleteStorage struct {
+	deleteErr error
+	saved     map[string][]byte
+	saveSeq   int
+}
+
+func newFailingDeleteStorage(deleteErr error) *failingDeleteStorage {
+	return &failingDeleteStorage{
+		deleteErr: deleteErr,
+		saved:     map[string][]byte{},
+	}
+}
+
+func (s *failingDeleteStorage) Save(projectID uint, filename string, data []byte) (string, error) {
+	s.saveSeq++
+	key := fmt.Sprintf("%d/test-%d-%s", projectID, s.saveSeq, filename)
+	s.saved[key] = append([]byte(nil), data...)
+	return key, nil
+}
+
+func (s *failingDeleteStorage) Delete(key string) error {
+	if s.deleteErr != nil {
+		return s.deleteErr
+	}
+	delete(s.saved, key)
+	return nil
+}
+
+func (s *failingDeleteStorage) Exists(key string) bool {
+	_, ok := s.saved[key]
+	return ok
+}
+
+func (s *failingDeleteStorage) Resolve(key string) (string, error) {
+	return key, nil
+}
