@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
@@ -105,11 +107,12 @@ func (s *ProjectService) Delete(userID string, id uint) error {
 // --- Error definitions ---
 
 var (
-	ErrUnsupportedFormat = errors.New("unsupported file format")
-	ErrFileTooLarge      = errors.New("file size exceeds 20MB limit")
-	ErrInvalidGitURL     = errors.New("invalid git repository URL")
-	ErrProjectNotFound   = errors.New("project not found")
-	ErrAssetNotFound     = errors.New("asset not found")
+	ErrUnsupportedFormat    = errors.New("unsupported file format")
+	ErrFileTooLarge         = errors.New("file size exceeds 20MB limit")
+	ErrInvalidGitURL        = errors.New("invalid git repository URL")
+	ErrProjectNotFound      = errors.New("project not found")
+	ErrAssetNotFound        = errors.New("asset not found")
+	ErrReplaceAssetMismatch = errors.New("replacement asset does not match uploaded filename")
 )
 
 var allowedExtensions = map[string]string{
@@ -145,11 +148,15 @@ func (s *AssetService) validateProject(userID string, projectID uint) error {
 }
 
 func (s *AssetService) UploadFile(userID string, projectID uint, filename string, data []byte, size int64) (*models.Asset, error) {
+	return s.UploadFileWithReplacement(userID, projectID, filename, data, size, nil)
+}
+
+func (s *AssetService) UploadFileWithReplacement(userID string, projectID uint, filename string, data []byte, size int64, replaceAssetID *uint) (*models.Asset, error) {
 	if err := s.validateProject(userID, projectID); err != nil {
 		return nil, err
 	}
 
-	ext := filepath.Ext(filename)
+	ext := strings.ToLower(filepath.Ext(filename))
 	assetType, ok := allowedExtensions[ext]
 	if !ok {
 		return nil, ErrUnsupportedFormat
@@ -157,6 +164,12 @@ func (s *AssetService) UploadFile(userID string, projectID uint, filename string
 
 	if size > int64(maxFileSize) {
 		return nil, ErrFileTooLarge
+	}
+
+	if replaceAssetID != nil {
+		if _, err := s.loadReplaceableAsset(userID, projectID, filename, assetType, *replaceAssetID); err != nil {
+			return nil, err
+		}
 	}
 
 	uri, err := s.storage.Save(projectID, filename, data)
@@ -173,6 +186,14 @@ func (s *AssetService) UploadFile(userID string, projectID uint, filename string
 		// Rollback: delete the file already saved
 		_ = s.storage.Delete(uri)
 		return nil, fmt.Errorf("create asset record: %w", err)
+	}
+
+	if replaceAssetID != nil {
+		if err := s.DeleteAsset(userID, *replaceAssetID); err != nil {
+			_ = s.db.Delete(&models.Asset{}, asset.ID).Error
+			_ = s.storage.Delete(uri)
+			return nil, err
+		}
 	}
 
 	return &asset, nil
@@ -388,6 +409,35 @@ func cloneAssetJSONMap(input interface{}) map[string]interface{} {
 	}
 }
 
+func (s *AssetService) loadReplaceableAsset(userID string, projectID uint, filename, assetType string, replaceAssetID uint) (*models.Asset, error) {
+	var asset models.Asset
+	if err := s.db.First(&asset, replaceAssetID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrAssetNotFound
+		}
+		return nil, fmt.Errorf("find replacement asset: %w", err)
+	}
+
+	if asset.ProjectID != projectID {
+		return nil, ErrReplaceAssetMismatch
+	}
+
+	if err := s.validateProject(userID, asset.ProjectID); err != nil {
+		return nil, err
+	}
+
+	if asset.Type != assetType {
+		return nil, ErrReplaceAssetMismatch
+	}
+
+	existingName := assetOriginalFilename(asset)
+	if existingName == "" || !sameAssetFilename(existingName, filename) {
+		return nil, ErrReplaceAssetMismatch
+	}
+
+	return &asset, nil
+}
+
 func (s *AssetService) collectAssetsForDelete(asset models.Asset) ([]models.Asset, error) {
 	assets := []models.Asset{asset}
 	derivedIDs := derivedImageAssetIDsFromAssetMetadata(asset.Metadata)
@@ -465,4 +515,28 @@ func (s *AssetService) deleteStoredAssetFile(asset models.Asset) error {
 		return fmt.Errorf("delete stored file for asset %d: %w", asset.ID, err)
 	}
 	return nil
+}
+
+var storedFilePrefixPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_`)
+
+func assetOriginalFilename(asset models.Asset) string {
+	parsing := cloneAssetJSONMap(asset.Metadata["parsing"])
+	if originalFilename, ok := parsing["original_filename"].(string); ok {
+		trimmed := strings.TrimSpace(originalFilename)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+
+	if asset.URI == nil || *asset.URI == "" {
+		return ""
+	}
+
+	base := path.Base(*asset.URI)
+	base = storedFilePrefixPattern.ReplaceAllString(base, "")
+	return strings.TrimSpace(base)
+}
+
+func sameAssetFilename(left, right string) bool {
+	return strings.EqualFold(strings.TrimSpace(left), strings.TrimSpace(right))
 }

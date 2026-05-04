@@ -209,6 +209,87 @@ func TestAssetService_UploadFile_ProjectNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, ErrProjectNotFound)
 }
 
+func TestAssetService_UploadFileWithReplacement_ReplacesSameNameAssetInProject(t *testing.T) {
+	db := SetupTestDB(t)
+	storage := NewLocalStorage(t.TempDir())
+	svc := NewAssetService(db, storage)
+
+	projSvc := NewProjectService(db)
+	proj, err := projSvc.Create("user-1", "Test Project")
+	require.NoError(t, err)
+
+	oldAsset, err := svc.UploadFile("user-1", proj.ID, "resume.pdf", []byte("%PDF old"), 8)
+	require.NoError(t, err)
+
+	derivedKey, err := storage.Save(proj.ID, "derived.png", []byte("img"))
+	require.NoError(t, err)
+	derivedLabel := "Derived image"
+	derivedAsset := models.Asset{
+		ProjectID: proj.ID,
+		Type:      "resume_image",
+		URI:       &derivedKey,
+		Label:     &derivedLabel,
+		Metadata: models.JSONB{
+			"parsing": map[string]interface{}{
+				"derived":         true,
+				"source_asset_id": oldAsset.ID,
+			},
+		},
+	}
+	require.NoError(t, db.Create(&derivedAsset).Error)
+	require.NoError(t, db.Model(&models.Asset{}).Where("id = ?", oldAsset.ID).Update("metadata", models.JSONB{
+		"parsing": map[string]interface{}{
+			"derived_image_asset_ids": []interface{}{derivedAsset.ID},
+		},
+	}).Error)
+
+	replaceID := oldAsset.ID
+	replacedAsset, err := svc.UploadFileWithReplacement("user-1", proj.ID, "resume.pdf", []byte("%PDF new"), 8, &replaceID)
+	require.NoError(t, err)
+	require.NotNil(t, replacedAsset)
+	assert.NotEqual(t, oldAsset.ID, replacedAsset.ID)
+	require.NotNil(t, replacedAsset.URI)
+	assert.True(t, storage.Exists(*replacedAsset.URI))
+	assert.False(t, storage.Exists(*oldAsset.URI))
+	assert.False(t, storage.Exists(derivedKey))
+
+	var deletedCount int64
+	db.Model(&models.Asset{}).Where("id IN ?", []uint{oldAsset.ID, derivedAsset.ID}).Count(&deletedCount)
+	assert.Zero(t, deletedCount)
+
+	var keptAssets []models.Asset
+	require.NoError(t, db.Where("project_id = ?", proj.ID).Find(&keptAssets).Error)
+	require.Len(t, keptAssets, 1)
+	assert.Equal(t, replacedAsset.ID, keptAssets[0].ID)
+}
+
+func TestAssetService_UploadFileWithReplacement_RejectsCrossProjectReplace(t *testing.T) {
+	db := SetupTestDB(t)
+	storage := NewLocalStorage(t.TempDir())
+	svc := NewAssetService(db, storage)
+
+	projSvc := NewProjectService(db)
+	projA, err := projSvc.Create("user-1", "Project A")
+	require.NoError(t, err)
+	projB, err := projSvc.Create("user-1", "Project B")
+	require.NoError(t, err)
+
+	oldAsset, err := svc.UploadFile("user-1", projA.ID, "resume.pdf", []byte("%PDF old"), 8)
+	require.NoError(t, err)
+
+	replaceID := oldAsset.ID
+	_, err = svc.UploadFileWithReplacement("user-1", projB.ID, "resume.pdf", []byte("%PDF new"), 8, &replaceID)
+	assert.ErrorIs(t, err, ErrReplaceAssetMismatch)
+
+	var assetsA []models.Asset
+	require.NoError(t, db.Where("project_id = ?", projA.ID).Find(&assetsA).Error)
+	assert.Len(t, assetsA, 1)
+
+	var assetsB []models.Asset
+	require.NoError(t, db.Where("project_id = ?", projB.ID).Find(&assetsB).Error)
+	assert.Len(t, assetsB, 0)
+}
+
 func TestAssetService_CreateGitRepo(t *testing.T) {
 	db := SetupTestDB(t)
 	storage := NewLocalStorage(t.TempDir())

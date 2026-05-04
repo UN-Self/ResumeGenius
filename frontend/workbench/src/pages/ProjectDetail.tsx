@@ -33,8 +33,9 @@ export default function ProjectDetail() {
   const [deleting, setDeleting] = useState(false)
 
   // --- Intake handlers ---
-  const handleUpload = async (file: File) => {
-    await intakeApi.uploadFile(pid, file)
+  const handleUpload = async (file: File, replaceAssetId?: number) => {
+    await intakeApi.uploadFile(pid, file, replaceAssetId)
+    await parsingApi.parseProject(pid)
     reload()
   }
 
@@ -197,7 +198,12 @@ export default function ProjectDetail() {
         </Button>
       )}
 
-      <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)} onUpload={handleUpload} />
+      <UploadDialog
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
+        onUpload={handleUpload}
+        existingAssets={assets}
+      />
       <GitRepoDialog open={gitOpen} onClose={() => setGitOpen(false)} onSubmit={handleCreateGit} />
       <NoteDialog
         open={noteOpen}

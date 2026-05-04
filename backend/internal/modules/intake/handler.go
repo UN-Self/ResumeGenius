@@ -2,6 +2,7 @@ package intake
 
 import (
 	"errors"
+	"io"
 	"strconv"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/middleware"
@@ -155,6 +156,18 @@ func (h *Handler) UploadFile(c *gin.Context) {
 		return
 	}
 
+	var replaceAssetID *uint
+	replaceAssetIDStr := c.PostForm("replace_asset_id")
+	if replaceAssetIDStr != "" {
+		parsedReplaceID, parseErr := strconv.ParseUint(replaceAssetIDStr, 10, 64)
+		if parseErr != nil {
+			response.Error(c, CodeParamInvalid, "invalid replace_asset_id")
+			return
+		}
+		typedReplaceID := uint(parsedReplaceID)
+		replaceAssetID = &typedReplaceID
+	}
+
 	file, err := c.FormFile("file")
 	if err != nil {
 		response.Error(c, CodeParamInvalid, "file is required")
@@ -168,13 +181,13 @@ func (h *Handler) UploadFile(c *gin.Context) {
 	}
 	defer src.Close()
 
-	data := make([]byte, file.Size)
-	if _, err := src.Read(data); err != nil {
+	data, err := io.ReadAll(src)
+	if err != nil {
 		response.Error(c, CodeInternalError, "failed to read file")
 		return
 	}
 
-	asset, err := h.assetSvc.UploadFile(userID(c), uint(projectID), file.Filename, data, file.Size)
+	asset, err := h.assetSvc.UploadFileWithReplacement(userID(c), uint(projectID), file.Filename, data, file.Size, replaceAssetID)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrUnsupportedFormat):
@@ -183,6 +196,8 @@ func (h *Handler) UploadFile(c *gin.Context) {
 			response.Error(c, CodeFileTooLarge, "file size exceeds 20MB limit")
 		case errors.Is(err, ErrProjectNotFound):
 			response.Error(c, CodeProjectNotFound, "project not found")
+		case errors.Is(err, ErrReplaceAssetMismatch), errors.Is(err, ErrAssetNotFound):
+			response.Error(c, CodeParamInvalid, "replacement asset does not match uploaded file")
 		default:
 			response.Error(c, CodeInternalError, "failed to upload file")
 		}

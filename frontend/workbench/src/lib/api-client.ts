@@ -91,10 +91,13 @@ export const intakeApi = {
   // Assets
   listAssets: (projectId: number) =>
     request<Asset[]>(`/assets?project_id=${projectId}`),
-  uploadFile: (projectId: number, file: File) => {
+  uploadFile: (projectId: number, file: File, replaceAssetId?: number) => {
     const fd = new FormData()
     fd.append('file', file)
     fd.append('project_id', String(projectId))
+    if (replaceAssetId !== undefined) {
+      fd.append('replace_asset_id', String(replaceAssetId))
+    }
     return upload<Asset>('/assets/upload', fd)
   },
   createGitRepo: (projectId: number, repoUrl: string) =>
