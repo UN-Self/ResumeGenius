@@ -1,10 +1,137 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
+import Section from '../components/Section.astro'
+import CTASection from '../components/CTASection.astro'
+
+const groups = [
+  {
+    id: 'quickstart',
+    title: '快速入门',
+    items: [
+      {
+        q: '如何创建第一个项目？',
+        a: '进入工作台后，点击"新建项目"，输入项目名称。你可以选择上传已有的简历文件（PDF 或 DOCX），或直接接入 GitHub 仓库让 AI 提取你的项目信息。',
+      },
+      {
+        q: '如何上传简历并生成初稿？',
+        a: '在项目中上传简历文件（支持 PDF 和 DOCX），系统会自动解析文本内容。AI 随即根据解析结果和行业最佳实践，生成一份完整的 HTML 简历初稿。',
+      },
+      {
+        q: '如何与 AI 对话修改简历？',
+        a: '在工作台右侧的 AI 对话面板中，用自然语言描述你想要的修改。AI 会流式返回修改后的 HTML。满意可以"应用到简历"，不满意可以继续对话调整。',
+      },
+      {
+        q: '如何导出 PDF？',
+        a: '在编辑器中满意后，点击顶部工具栏的"导出 PDF"。系统通过 chromedp 服务端渲染，生成与编辑器内完全一致的 PDF 文件。Free 用户每次导出消耗 10 积分。',
+      },
+    ],
+  },
+  {
+    id: 'ai-chat',
+    title: 'AI 对话',
+    items: [
+      {
+        q: 'AI 能帮我做什么？',
+        a: 'AI 可以：重构简历整体结构、优化措辞与表达、调整排版布局、根据目标职位定制内容重点、从 GitHub 等来源提取并组织你的项目经历。不是简单的文本润色，而是全链路操作 HTML。',
+      },
+      {
+        q: '如何写出有效的 AI 指令？',
+        a: '尽量具体。不好的指令："帮我把简历做好看点"。好的指令："把工作经历部分移到教育经历前面，用 STAR 原则重新描述最近两个项目，强调我的技术栈"。',
+      },
+      {
+        q: '积分消耗与 token 换算',
+        a: '1 积分 ≈ 1k token（输入输出同价）。一次简短的对话修正约 5-10 积分，一次完整的简历初稿生成约 30-50 积分。具体消耗取决于当前简历长度和修改复杂度。',
+      },
+      {
+        q: 'AI 修改不满意怎么办？',
+        a: 'AI 每次修改都返回独立的结果。你可以继续发送新的指令修正，也可以拒绝保留当前版本。所有修改都有版本快照，随时可以回退。',
+      },
+    ],
+  },
+  {
+    id: 'edit-export',
+    title: '编辑与导出',
+    items: [
+      {
+        q: 'TipTap 编辑器有哪些功能？',
+        a: '富文本格式（加粗、斜体、下划线）、字号与颜色调整、对齐方式、行距控制、有序/无序列表、Section 拖拽排序、原生 undo/redo。编辑器自动保存，无需手动操作。',
+      },
+      {
+        q: '如何使用版本历史回退？',
+        a: '点击顶部工具栏的"版本历史"，查看所有保存的快照（含时间与版本号）。点击任意历史版本可以预览，确认后可以回退——系统会基于回退的版本自动创建新快照。',
+      },
+      {
+        q: '导出的 PDF 和编辑器内看到的一样吗？',
+        a: '完全一致。ResumeGenius 使用 chromedp 在服务端以相同的 HTML 和 CSS 渲染 PDF，字体、排版、间距与编辑器内 A4 画布完全相同。',
+      },
+      {
+        q: '支持哪些简历模板风格？',
+        a: '目前 AI 会根据行业最佳实践自动选择适合的排版风格。你可以在 TipTap 编辑器中自由调整视觉风格（颜色、字号、间距、Section 顺序等）。后续版本将支持更多预设模板。',
+      },
+    ],
+  },
+  {
+    id: 'account',
+    title: '账号与付费',
+    items: [
+      {
+        q: 'Free 和 Pro 有什么区别？',
+        a: '两者所有功能完全开放。Free 注册送 100 积分（一次性），AI 对话和 PDF 导出均消耗积分。Pro（¥19/月）每月送 1,900 积分，PDF 导出无限次，积分充值享 9 折。',
+      },
+      {
+        q: '如何充值积分？',
+        a: '工作台中进入账号设置 → 积分充值，选择金额即可（1 元 = 100 积分）。Pro 用户自动享受充值 9 折。',
+      },
+      {
+        q: '积分会过期吗？',
+        a: '不会。所有积分永不过期。Pro 会员每月的赠送积分在当月有效期内不会清零，未用完的积分累积到下月。',
+      },
+    ],
+  },
+]
 ---
 
-<BaseLayout title="帮助文档">
-  <main>
-    <h1>帮助文档</h1>
-    <p>即将上线...</p>
-  </main>
+<BaseLayout title="帮助文档" description="ResumeGenius 使用指南——快速入门、AI 对话技巧、编辑与导出说明、账号与付费常见问题。">
+  <Section title="帮助文档">
+    <div class="flex flex-col md:flex-row gap-12 max-w-5xl mx-auto mt-8">
+      <!-- Sidebar nav (desktop sticky) -->
+      <aside class="md:w-48 flex-shrink-0 hidden md:block">
+        <nav class="sticky top-24 space-y-1">
+          {groups.map(g => (
+            <a href={`#${g.id}`} class="block text-sm text-muted-foreground hover:text-primary-600 transition-colors duration-150 no-underline py-1.5">
+              {g.title}
+            </a>
+          ))}
+        </nav>
+      </aside>
+
+      <!-- FAQ content -->
+      <div class="flex-1 min-w-0">
+        {groups.map(group => (
+          <div id={group.id} class="mb-10 scroll-mt-20">
+            <h3 class="font-serif font-semibold text-xl text-foreground mb-4">{group.title}</h3>
+            <div class="space-y-2">
+              {group.items.map(item => (
+                <details class="bg-card border border-border rounded-lg group">
+                  <summary class="px-5 py-4 cursor-pointer text-sm font-medium text-foreground hover:text-primary-600 transition-colors duration-150 list-none flex items-center justify-between">
+                    {item.q}
+                    <svg class="w-4 h-4 flex-shrink-0 ml-2 text-muted-foreground group-open:rotate-180 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                  </summary>
+                  <div class="px-5 pb-4 text-sm text-muted-foreground leading-relaxed">
+                    {item.a}
+                  </div>
+                </details>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </Section>
+
+  <CTASection
+    title="还没开始？"
+    description="免费注册，马上体验 AI 简历生成。"
+    buttonText="免费开始使用"
+  />
 </BaseLayout>

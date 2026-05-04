@@ -1,0 +1,24 @@
+---
+export interface Props {
+  title: string
+  subtitle: string
+  imagePosition: 'left' | 'right'
+  id?: string
+}
+
+const { title, subtitle, imagePosition, id } = Astro.props
+const isLeft = imagePosition === 'left'
+---
+
+<div {id} class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center py-8">
+  <!-- Image placeholder -->
+  <div class={`bg-muted border border-border rounded-lg h-64 flex items-center justify-center text-muted-foreground text-sm ${isLeft ? '' : 'md:order-2'}`} aria-hidden="true">
+    示意图
+  </div>
+
+  <!-- Text -->
+  <div class={isLeft ? 'md:order-2' : ''}>
+    <h3 class="font-serif font-semibold text-2xl text-foreground mb-3">{title}</h3>
+    <p class="text-base text-muted-foreground leading-relaxed">{subtitle}</p>
+  </div>
+</div>

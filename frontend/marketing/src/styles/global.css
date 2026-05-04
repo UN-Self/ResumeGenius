@@ -1,0 +1,14 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    @apply text-foreground bg-background;
+  }
+
+  body {
+    min-height: 100vh;
+  }
+}
