@@ -1,5 +1,5 @@
 # ResumeGenius Docker Compose
-# 统一编排 postgres + backend + workbench + marketing
+# 统一编排 postgres + backend + workbench + marketing + gateway
 
 networks:
   default:
@@ -55,12 +55,27 @@ services:
         condition: service_healthy
     restart: always
 
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    ports:
+      - "${HOST_GATEWAY_PORT:-80}:80"
+    depends_on:
+      marketing:
+        condition: service_started
+      workbench:
+        condition: service_started
+      backend:
+        condition: service_started
+    restart: always
+
   workbench:
     build:
       context: ./frontend/workbench
       dockerfile: Dockerfile
     ports:
-      - "${HOST_WORKBENCH_PORT:-3000}:80"
+      - "${HOST_WORKBENCH_PORT:-}:80"
     depends_on:
       backend:
         condition: service_started
@@ -71,5 +86,5 @@ services:
       context: ./frontend/marketing
       dockerfile: Dockerfile
     ports:
-      - "${HOST_MARKETING_PORT:-4321}:80"
+      - "${HOST_MARKETING_PORT:-}:80"
     restart: always
