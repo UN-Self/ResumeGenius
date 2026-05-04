@@ -520,7 +520,7 @@ func (s *ParsingService) persistParsedAsset(asset models.Asset, parsed *ParsedCo
 	contentToPersist, contentPersisted := parsedAssetContentForPersistence(asset, parsed)
 	var oldDerivedAssets []models.Asset
 	if s.storage != nil {
-		oldDerivedAssets = loadDerivedImageAssetsByIDs(s.db, asset.ProjectID, derivedImageAssetIDsFromMetadata(asset.Metadata))
+		oldDerivedAssets = loadDerivedImageAssetsForCleanup(s.db, asset.ProjectID, derivedImageAssetIDsFromMetadata(asset.Metadata))
 	}
 	savedKeys := make([]string, 0, len(parsed.Images))
 	newDerivedImageAssetIDs := make([]uint, 0, len(parsed.Images))
@@ -799,7 +799,7 @@ func (s *ParsingService) createDerivedImageAsset(tx *gorm.DB, sourceAsset models
 		return "", 0, fmt.Errorf("save parsed image: %w", err)
 	}
 
-	label := derivedPersistedImageLabel(sourceAsset, index)
+	label := derivedImageAssetLabel(sourceAsset, index)
 	metadata := models.JSONB{
 		"parsing": map[string]interface{}{
 			"derived":           true,
@@ -824,14 +824,6 @@ func (s *ParsingService) createDerivedImageAsset(tx *gorm.DB, sourceAsset models
 	}
 
 	return key, derivedAsset.ID, nil
-}
-
-func derivedImageLabel(sourceAsset models.Asset, index int) string {
-	base := strings.TrimSpace(AssetLabel(sourceAsset.Label, sourceAsset.URI))
-	if base == "" {
-		base = fmt.Sprintf("素材 %d", sourceAsset.ID)
-	}
-	return fmt.Sprintf("%s 图片 %d", base, index+1)
 }
 
 func derivedImageAssetIDsFromMetadata(metadata models.JSONB) []uint {
@@ -860,7 +852,7 @@ func derivedImageAssetIDsFromMetadata(metadata models.JSONB) []uint {
 	return ids
 }
 
-func loadDerivedImageKeysForCleanup(db *gorm.DB, projectID uint, ids []uint) []models.Asset {
+func loadDerivedImageAssetsForCleanup(db *gorm.DB, projectID uint, ids []uint) []models.Asset {
 	if db == nil || len(ids) == 0 {
 		return nil
 	}
@@ -880,16 +872,12 @@ func uintSliceToInterfaceSlice(ids []uint) []interface{} {
 	return values
 }
 
-func derivedPersistedImageLabel(sourceAsset models.Asset, index int) string {
+func derivedImageAssetLabel(sourceAsset models.Asset, index int) string {
 	base := strings.TrimSpace(AssetLabel(sourceAsset.Label, sourceAsset.URI))
 	if base == "" {
 		base = fmt.Sprintf("Asset %d", sourceAsset.ID)
 	}
 	return fmt.Sprintf("%s Image %d", base, index+1)
-}
-
-func loadDerivedImageAssetsByIDs(db *gorm.DB, projectID uint, ids []uint) []models.Asset {
-	return loadDerivedImageKeysForCleanup(db, projectID, ids)
 }
 
 func assetIDs(assets []models.Asset) []uint {

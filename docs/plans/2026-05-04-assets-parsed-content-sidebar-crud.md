@@ -20,8 +20,8 @@
 
 **当前实现状态：**
 
-- Step 1 ~ Step 13 已完成
-- Step 14 是 code review 后新增的最后收口项，后续处理
+- Step 1 ~ Step 14 已完成
+- 本轮计划中的实现与 code review 收口项已全部完成
 
 ---
 
@@ -455,7 +455,7 @@ git commit -m "fix(intake): 收紧素材删除链路的存储错误处理"
 git commit -m "feat(workbench): 将项目入口切换到 parsing generate"
 ```
 
-### Step 14：清理死代码与重复 helper
+### Step 14：清理死代码与重复 helper（已完成）
 
 问题：
 
@@ -464,6 +464,13 @@ git commit -m "feat(workbench): 将项目入口切换到 parsing generate"
 目标：
 
 - 清理无引用 helper，减少维护歧义
+
+完成情况：
+
+- 已删除未使用的 `derivedImageLabel(...)`
+- 已将派生图片标题 helper 收口为单一入口，避免两个近似函数并存
+- 已移除仅做转调的派生图片加载包装 helper，统一到单一实现
+- 本次调整不改变行为，只做 parsing 内部命名和结构收口
 
 建议提交备注：
 

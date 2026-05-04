@@ -7,12 +7,12 @@ import { server } from './setup'
 
 describe('A4Canvas', () => {
   it('renders the editor page with a 210mm by 297mm canvas', async () => {
-    // Add parsing mock handler (not in default MSW setup)
+    // Add assets mock handler required by the asset-driven editor sidebar.
     server.use(
-      http.post('/api/v1/parsing/parse', () => {
+      http.get('/api/v1/assets', () => {
         return HttpResponse.json({
           code: 0,
-          data: { parsed_contents: [] },
+          data: [],
           message: 'ok',
         })
       })
