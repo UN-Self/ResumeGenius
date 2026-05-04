@@ -8,7 +8,7 @@ RUN bun run build
 
 FROM docker.1ms.run/nginx:alpine AS runtime
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist /usr/share/nginx/html/app
 RUN chmod -R 755 /usr/share/nginx/html/ && \
     chown -R nginx:nginx /usr/share/nginx/html/
 EXPOSE 80
