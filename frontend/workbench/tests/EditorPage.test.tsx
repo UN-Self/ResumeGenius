@@ -168,7 +168,7 @@ describe('EditorPage', () => {
         expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
       })
 
-      expect(screen.getByText('已手动修改，重新解析将覆盖当前正文')).toBeInTheDocument()
+      expect(screen.getByText('有 1 项素材已手动修改，重新解析会覆盖当前正文。')).toBeInTheDocument()
       expect(screen.getByText('重新解析')).toBeInTheDocument()
     })
   })
