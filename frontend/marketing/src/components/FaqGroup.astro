@@ -2,14 +2,25 @@
 export interface Props {
   title: string
   id?: string
+  items: Array<{ q: string; a: string }>
 }
 
-const { title, id } = Astro.props
+const { title, id, items } = Astro.props
 ---
 
-<div {id} class="mb-12">
+<div {id} class="mb-10 scroll-mt-20">
   <h3 class="font-serif font-semibold text-xl text-foreground mb-4">{title}</h3>
   <div class="space-y-2">
-    <slot />
+    {items.map(item => (
+      <details class="bg-card border border-border rounded-lg group">
+        <summary class="px-5 py-4 cursor-pointer text-sm font-medium text-foreground hover:text-primary-600 transition-colors duration-150 list-none flex items-center justify-between">
+          {item.q}
+          <svg class="w-4 h-4 flex-shrink-0 ml-2 text-muted-foreground group-open:rotate-180 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="px-5 pb-4 text-sm text-muted-foreground leading-relaxed">
+          {item.a}
+        </div>
+      </details>
+    ))}
   </div>
 </div>

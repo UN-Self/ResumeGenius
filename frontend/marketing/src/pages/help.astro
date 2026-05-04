@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro'
 import Section from '../components/Section.astro'
+import FaqGroup from '../components/FaqGroup.astro'
 import CTASection from '../components/CTASection.astro'
 
 const groups = [
@@ -105,25 +106,20 @@ const groups = [
         </nav>
       </aside>
 
+      <!-- Mobile TOC: horizontal scrollable tags -->
+      <nav class="md:hidden flex gap-2 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-none">
+        {groups.map(g => (
+          <a href={`#${g.id}`}
+            class="flex-shrink-0 text-sm px-3 py-1.5 rounded-full border border-border text-muted-foreground hover:text-primary-600 hover:border-primary-300 transition-colors duration-150 no-underline">
+            {g.title}
+          </a>
+        ))}
+      </nav>
+
       <!-- FAQ content -->
       <div class="flex-1 min-w-0">
         {groups.map(group => (
-          <div id={group.id} class="mb-10 scroll-mt-20">
-            <h3 class="font-serif font-semibold text-xl text-foreground mb-4">{group.title}</h3>
-            <div class="space-y-2">
-              {group.items.map(item => (
-                <details class="bg-card border border-border rounded-lg group">
-                  <summary class="px-5 py-4 cursor-pointer text-sm font-medium text-foreground hover:text-primary-600 transition-colors duration-150 list-none flex items-center justify-between">
-                    {item.q}
-                    <svg class="w-4 h-4 flex-shrink-0 ml-2 text-muted-foreground group-open:rotate-180 transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                  </summary>
-                  <div class="px-5 pb-4 text-sm text-muted-foreground leading-relaxed">
-                    {item.a}
-                  </div>
-                </details>
-              ))}
-            </div>
-          </div>
+          <FaqGroup title={group.title} id={group.id} items={group.items} />
         ))}
       </div>
     </div>
