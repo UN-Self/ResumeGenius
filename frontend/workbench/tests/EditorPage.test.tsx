@@ -198,7 +198,10 @@ describe('Editor content protection — clipboard', () => {
     const editorEl = canvas.querySelector('.ProseMirror') as HTMLElement
     expect(editorEl).toBeTruthy()
 
-    // Dispatch a copy event with mock clipboardData
+    // Dispatch a copy event with mock clipboardData.
+    // Using deprecated document.createEvent + initEvent instead of new ClipboardEvent(...)
+    // because JSDOM does not fully support the ClipboardEvent constructor and its
+    // clipboardData property is read-only, making synthetic clipboardData injection impossible.
     const setData = vi.fn()
     const copyEvent = document.createEvent('Event')
     copyEvent.initEvent('copy', true /* bubbles */, true /* cancelable */)
