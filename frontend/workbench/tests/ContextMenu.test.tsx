@@ -143,6 +143,8 @@ describe('ContextMenu', () => {
     )
 
     const menu = screen.getByRole('menu')
+    // In jsdom's default 1024x768 viewport, a menu at (150, 300) won't overflow,
+    // so the position should remain unchanged after viewport adjustment.
     expect(menu).toHaveStyle({ left: '150px', top: '300px' })
   })
 

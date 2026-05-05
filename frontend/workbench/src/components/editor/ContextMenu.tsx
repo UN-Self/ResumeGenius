@@ -1,5 +1,6 @@
+import { useRef, useLayoutEffect, useState } from 'react'
 import { type Editor } from '@tiptap/react'
-import { Undo2, Redo2, Scissors, Copy, ClipboardPaste, CheckSquare } from 'lucide-react'
+import { Undo2, Redo2, Scissors, Copy, ClipboardPaste, MousePointerClick } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export interface ContextMenuProps {
@@ -23,10 +24,51 @@ function Separator() {
 }
 
 export function ContextMenu({ editor, isOpen, x, y, onClose }: ContextMenuProps) {
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [position, setPosition] = useState({ x, y })
+  const [clipboardError, setClipboardError] = useState<string | null>(null)
+
+  // Adjust position to keep menu within viewport boundaries
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      setClipboardError(null)
+      return
+    }
+    const menu = menuRef.current
+    if (!menu) return
+
+    const rect = menu.getBoundingClientRect()
+    const viewportW = window.innerWidth
+    const viewportH = window.innerHeight
+
+    let adjustedX = x
+    let adjustedY = y
+
+    if (rect.right > viewportW) {
+      adjustedX = viewportW - rect.width - 8
+    }
+    if (rect.bottom > viewportH) {
+      adjustedY = viewportH - rect.height - 8
+    }
+    if (adjustedX < 0) adjustedX = 4
+    if (adjustedY < 0) adjustedY = 4
+
+    if (adjustedX !== position.x || adjustedY !== position.y) {
+      setPosition({ x: adjustedX, y: adjustedY })
+    }
+  }, [isOpen, x, y, position.x, position.y])
+
   if (!isOpen || !editor) return null
 
   const { from, to } = editor.state.selection
   const hasSelection = from !== to
+
+  const safeWriteText = (text: string) => {
+    navigator.clipboard.writeText(text).catch((err) => {
+      console.error('Clipboard write failed:', err)
+      setClipboardError('剪贴板访问被拒绝')
+    })
+  }
 
   const items: MenuItem[] = [
     {
@@ -56,7 +98,7 @@ export function ContextMenu({ editor, isOpen, x, y, onClose }: ContextMenuProps)
       disabled: !hasSelection,
       action: () => {
         const plainText = editor.view.state.doc.textBetween(from, to, '\n')
-        navigator.clipboard.writeText(plainText)
+        safeWriteText(plainText)
         editor.chain().focus().deleteSelection().run()
         onClose()
       },
@@ -68,7 +110,7 @@ export function ContextMenu({ editor, isOpen, x, y, onClose }: ContextMenuProps)
       disabled: !hasSelection,
       action: () => {
         const plainText = editor.view.state.doc.textBetween(from, to, '\n')
-        navigator.clipboard.writeText(plainText)
+        safeWriteText(plainText)
         onClose()
       },
     },
@@ -80,14 +122,17 @@ export function ContextMenu({ editor, isOpen, x, y, onClose }: ContextMenuProps)
       action: () => {
         navigator.clipboard.readText().then((text) => {
           editor.chain().focus().insertContent(text).run()
+          onClose()
+        }).catch((err) => {
+          console.error('Clipboard read failed:', err)
+          setClipboardError('剪贴板访问被拒绝')
         })
-        onClose()
       },
     },
     {
       label: '全选',
       shortcut: 'Ctrl+A',
-      icon: CheckSquare,
+      icon: MousePointerClick,
       disabled: false,
       action: () => {
         editor.chain().focus().selectAll().run()
@@ -101,10 +146,16 @@ export function ContextMenu({ editor, isOpen, x, y, onClose }: ContextMenuProps)
 
   return (
     <div
+      ref={menuRef}
       role="menu"
       className="fixed z-20 min-w-[180px] bg-white border border-border rounded-lg shadow-sm py-1"
-      style={{ left: x, top: y }}
+      style={{ left: position.x, top: position.y }}
     >
+      {clipboardError && (
+        <div className="px-3 py-1.5 text-xs text-red-600 border-b border-border">
+          {clipboardError}
+        </div>
+      )}
       {items.map((item, index) => (
         <div key={item.label}>
           <button
