@@ -118,8 +118,10 @@ const groups = [
 
       <!-- FAQ content -->
       <div class="flex-1 min-w-0">
-        {groups.map(group => (
-          <FaqGroup title={group.title} id={group.id} items={group.items} />
+        {groups.map((group, i) => (
+          <div class={i > 0 ? 'animate-on-scroll' : ''} style={i > 0 ? `--delay: ${i * 100}ms` : undefined}>
+            <FaqGroup title={group.title} id={group.id} items={group.items} />
+          </div>
         ))}
       </div>
     </div>

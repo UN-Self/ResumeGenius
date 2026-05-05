@@ -36,11 +36,12 @@ const sections = [
 <BaseLayout title="功能介绍" description="ResumeGenius 不是模板平台，也不是表单工具——AI 直接生成简历 HTML，你可自由编辑后服务端渲染导出 PDF。">
   <Section title="不是模板，不是表单" subtitle="ResumeGenius 在五个关键环节上与传统方式不同">
     <div class="max-w-4xl mx-auto mt-8">
-      {sections.map(s => (
+      {sections.map((s, i) => (
         <FeatureSection
           title={s.title}
           subtitle={s.subtitle}
           imagePosition={s.imagePosition}
+          delay={`${i * 100}ms`}
         />
       ))}
     </div>

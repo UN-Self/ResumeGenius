@@ -14,11 +14,11 @@ const { title, subtitle, class: extraClass = '', containerClass = '', id } = Ast
   <div class={`max-w-6xl mx-auto px-6 ${containerClass}`}>
     {title && (
       <div class="text-center mb-12">
-        <h2 class="font-serif font-semibold text-3xl md:text-4xl text-foreground mb-4">
+        <h2 class="animate-on-scroll font-serif font-semibold text-3xl md:text-4xl text-foreground mb-4">
           {title}
         </h2>
         {subtitle && (
-          <p class="text-lg text-muted-foreground max-w-2xl mx-auto">
+          <p class="animate-on-scroll text-lg text-muted-foreground max-w-2xl mx-auto" style="--delay: 100ms">
             {subtitle}
           </p>
         )}
