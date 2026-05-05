@@ -172,7 +172,8 @@ func (s *AssetService) UploadFileWithReplacement(userID string, projectID uint, 
 		}
 	}
 
-	uri, err := s.storage.Save(projectID, filename, data)
+	fileHash := storage.SHA256Hex(data)
+	uri, err := s.storage.Save(userID, fileHash, ext, data)
 	if err != nil {
 		return nil, fmt.Errorf("save file: %w", err)
 	}
@@ -181,6 +182,8 @@ func (s *AssetService) UploadFileWithReplacement(userID string, projectID uint, 
 		ProjectID: projectID,
 		Type:      assetType,
 		URI:       &uri,
+		FileHash:  &fileHash,
+		Metadata:  withAssetOriginalFilenameMetadata(nil, filename),
 	}
 	if err := s.db.Create(&asset).Error; err != nil {
 		// Rollback: delete the file already saved
@@ -374,6 +377,17 @@ func withAssetUserEditMetadata(existing models.JSONB) models.JSONB {
 	metadata := cloneAssetJSONB(existing)
 	parsing := cloneAssetJSONMap(metadata["parsing"])
 	parsing["updated_by_user"] = true
+	metadata["parsing"] = parsing
+	return metadata
+}
+
+func withAssetOriginalFilenameMetadata(existing models.JSONB, filename string) models.JSONB {
+	metadata := cloneAssetJSONB(existing)
+	parsing := cloneAssetJSONMap(metadata["parsing"])
+	originalFilename := strings.TrimSpace(filepath.Base(filename))
+	if originalFilename != "" {
+		parsing["original_filename"] = originalFilename
+	}
 	metadata["parsing"] = parsing
 	return metadata
 }

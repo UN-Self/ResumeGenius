@@ -31,8 +31,8 @@ type PDFExporter interface {
 type ExportTask struct {
 	ID          string    `json:"task_id"`
 	DraftID     uint      `json:"draft_id"`
-	Status      string    `json:"status"`       // pending | processing | completed | failed
-	Progress    int       `json:"progress"`     // 0-100
+	Status      string    `json:"status"`   // pending | processing | completed | failed
+	Progress    int       `json:"progress"` // 0-100
 	DownloadURL *string   `json:"download_url"`
 	Error       *string   `json:"error"`
 	CreatedAt   time.Time `json:"created_at"`
@@ -177,8 +177,8 @@ func (s *ExportService) processTask(task *ExportTask) {
 		return
 	}
 
-	// Save the PDF file.
-	fileKey, err := s.store.Save(task.DraftID, task.ID+".pdf", pdfBytes)
+	// Save the PDF file using content-addressed storage under the exports namespace.
+	fileKey, err := s.store.Save("exports", storage.SHA256Hex(pdfBytes), ".pdf", pdfBytes)
 	if err != nil {
 		errMsg := fmt.Sprintf("save file: %s", err.Error())
 		task.Status = "failed"

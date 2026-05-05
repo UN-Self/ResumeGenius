@@ -10,89 +10,121 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLocalStorage_Save_ReturnsLogicalKey(t *testing.T) {
-	dir := t.TempDir()
-	s := NewLocalStorage(dir)
-
-	key, err := s.Save(1, "resume.pdf", []byte("hello world"))
-	require.NoError(t, err)
-	require.NotEmpty(t, key)
-
-	// Logical key should NOT contain the base directory
-	assert.False(t, strings.HasPrefix(key, dir),
-		"key should be logical, not a full path. got: %s", key)
-
-	// Logical key should start with project ID
-	assert.True(t, strings.HasPrefix(key, "1/"),
-		"key should start with project ID prefix. got: %s", key)
-
-	// Logical key should end with filename
-	assert.True(t, strings.HasSuffix(key, "resume.pdf"),
-		"key should end with filename. got: %s", key)
+func TestSHA256Hex(t *testing.T) {
+	assert.Equal(t,
+		"b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9",
+		SHA256Hex([]byte("hello world")),
+	)
 }
 
-func TestLocalStorage_Save_CreatesUniqueFileName(t *testing.T) {
+func TestNormalizeExt(t *testing.T) {
+	assert.Equal(t, ".pdf", NormalizeExt("resume.PDF"))
+	assert.Equal(t, ".docx", NormalizeExt(`..\unsafe\resume.docx`))
+	assert.Equal(t, "", NormalizeExt("README"))
+}
+
+func TestLocalStorage_Save_ReturnsContentAddressedLogicalKey(t *testing.T) {
 	dir := t.TempDir()
 	s := NewLocalStorage(dir)
 
-	key1, err := s.Save(1, "resume.pdf", []byte("v1"))
+	data := []byte("hello world")
+	hash := SHA256Hex(data)
+	key, err := s.Save("user-1", hash, "resume.PDF", data)
+	require.NoError(t, err)
+	assert.Equal(t, "user-1/"+hash+".pdf", key)
+
+	fullPath, err := s.Resolve(key)
+	require.NoError(t, err)
+	got, err := os.ReadFile(fullPath)
+	require.NoError(t, err)
+	assert.Equal(t, data, got)
+	assert.Equal(t, "user-1", filepath.Base(filepath.Dir(fullPath)))
+}
+
+func TestLocalStorage_Save_ReusesExistingKeyForSameHash(t *testing.T) {
+	dir := t.TempDir()
+	s := NewLocalStorage(dir)
+
+	data := []byte("same content")
+	hash := SHA256Hex(data)
+	key1, err := s.Save("user-1", hash, ".pdf", data)
 	require.NoError(t, err)
 
-	key2, err := s.Save(1, "resume.pdf", []byte("v2"))
+	key2, err := s.Save("user-1", hash, "resume.pdf", data)
 	require.NoError(t, err)
 
-	// Two saves of the same file should produce different keys
-	assert.NotEqual(t, key1, key2,
-		"saving the same filename twice should produce different keys")
+	assert.Equal(t, key1, key2)
+	assert.True(t, strings.HasSuffix(key1, hash+".pdf"))
+}
+
+func TestLocalStorage_Save_DifferentUsersUseDifferentNamespaces(t *testing.T) {
+	dir := t.TempDir()
+	s := NewLocalStorage(dir)
+
+	data := []byte("same content")
+	hash := SHA256Hex(data)
+
+	key1, err := s.Save("user-1", hash, ".pdf", data)
+	require.NoError(t, err)
+	key2, err := s.Save("user-2", hash, ".pdf", data)
+	require.NoError(t, err)
+
+	assert.NotEqual(t, key1, key2)
+	assert.True(t, strings.HasPrefix(key1, "user-1/"))
+	assert.True(t, strings.HasPrefix(key2, "user-2/"))
+}
+
+func TestLocalStorage_Save_RejectsInvalidInputs(t *testing.T) {
+	dir := t.TempDir()
+	s := NewLocalStorage(dir)
+
+	_, err := s.Save("user/1", SHA256Hex([]byte("a")), ".pdf", []byte("a"))
+	require.ErrorContains(t, err, "invalid user ID")
+
+	_, err = s.Save("user-1", "not-a-hash", ".pdf", []byte("a"))
+	require.ErrorContains(t, err, "invalid file hash")
+
+	_, err = s.Save("user-1", SHA256Hex([]byte("a")), "", []byte("a"))
+	require.ErrorContains(t, err, "empty file extension")
 }
 
 func TestLocalStorage_Resolve_ReturnsFullPath(t *testing.T) {
 	dir := t.TempDir()
 	s := NewLocalStorage(dir)
 
-	key, err := s.Save(42, "test.txt", []byte("data"))
+	data := []byte("data")
+	key, err := s.Save("user-42", SHA256Hex(data), ".txt", data)
 	require.NoError(t, err)
 
 	fullPath, err := s.Resolve(key)
 	require.NoError(t, err)
+	assert.True(t, filepath.IsAbs(fullPath))
 
-	// Resolved path must be absolute
-	assert.True(t, filepath.IsAbs(fullPath),
-		"resolved path should be absolute. got: %s", fullPath)
-
-	// The file must actually exist on disk
 	info, err := os.Stat(fullPath)
-	require.NoError(t, err, "resolved path should point to an existing file")
-	assert.False(t, info.IsDir(), "resolved path should be a file, not a directory")
+	require.NoError(t, err)
+	assert.False(t, info.IsDir())
 }
 
 func TestLocalStorage_Delete_WorksByKey(t *testing.T) {
 	dir := t.TempDir()
 	s := NewLocalStorage(dir)
 
-	key, err := s.Save(1, "resume.pdf", []byte("to-delete"))
+	data := []byte("to-delete")
+	key, err := s.Save("user-1", SHA256Hex(data), ".pdf", data)
 	require.NoError(t, err)
 
-	// Verify file exists before deletion
 	fullPath, err := s.Resolve(key)
 	require.NoError(t, err)
-	_, err = os.Stat(fullPath)
-	require.NoError(t, err, "file should exist before deletion")
+	require.FileExists(t, fullPath)
 
-	// Delete by logical key
-	err = s.Delete(key)
-	require.NoError(t, err)
-
-	// File should no longer exist
+	require.NoError(t, s.Delete(key))
 	_, err = os.Stat(fullPath)
-	assert.True(t, os.IsNotExist(err), "file should not exist after deletion")
+	assert.True(t, os.IsNotExist(err))
 }
 
 func TestLocalStorage_Delete_NonExistentReturnsNil(t *testing.T) {
 	dir := t.TempDir()
 	s := NewLocalStorage(dir)
 
-	err := s.Delete("9999/nonexistent_file.pdf")
-	assert.NoError(t, err,
-		"deleting a non-existent key should return nil error")
+	assert.NoError(t, s.Delete("user-1/nonexistent.pdf"))
 }

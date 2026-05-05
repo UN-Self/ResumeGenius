@@ -49,3 +49,13 @@ func newTestStorage(t *testing.T) sharedstorage.FileStorage {
 	t.Helper()
 	return sharedstorage.NewLocalStorage(t.TempDir())
 }
+
+func saveTestStorageFile(t *testing.T, store sharedstorage.FileStorage, userID string, filename string, data []byte) string {
+	t.Helper()
+
+	key, err := store.Save(userID, sharedstorage.SHA256Hex(data), filename, data)
+	if err != nil {
+		t.Fatalf("save test storage file: %v", err)
+	}
+	return key
+}

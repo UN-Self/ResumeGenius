@@ -772,6 +772,14 @@ func isSourceDeleted(metadata models.JSONB) bool {
 }
 
 func sourceFilenameForDeletedAsset(asset models.Asset) string {
+	parsing := cloneJSONMap(asset.Metadata["parsing"])
+	if originalFilename, ok := parsing["original_filename"].(string); ok {
+		trimmed := strings.TrimSpace(originalFilename)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+
 	if asset.URI == nil || *asset.URI == "" {
 		return ""
 	}
@@ -793,8 +801,14 @@ func (s *ParsingService) createDerivedImageAsset(tx *gorm.DB, sourceAsset models
 		return "", 0, fmt.Errorf("decode parsed image base64: %w", err)
 	}
 
+	userID, err := lookupProjectUserID(tx, sourceAsset.ProjectID)
+	if err != nil {
+		return "", 0, err
+	}
+
 	filename := fmt.Sprintf("asset-%d-image-%d.png", sourceAsset.ID, index+1)
-	key, err := s.storage.Save(sourceAsset.ProjectID, filename, imageBytes)
+	fileHash := storage.SHA256Hex(imageBytes)
+	key, err := s.storage.Save(userID, fileHash, filename, imageBytes)
 	if err != nil {
 		return "", 0, fmt.Errorf("save parsed image: %w", err)
 	}
@@ -816,6 +830,7 @@ func (s *ParsingService) createDerivedImageAsset(tx *gorm.DB, sourceAsset models
 		Type:      AssetTypeResumeImage,
 		URI:       &key,
 		Label:     &label,
+		FileHash:  &fileHash,
 		Metadata:  metadata,
 	}
 	if err := tx.Create(&derivedAsset).Error; err != nil {
@@ -824,6 +839,22 @@ func (s *ParsingService) createDerivedImageAsset(tx *gorm.DB, sourceAsset models
 	}
 
 	return key, derivedAsset.ID, nil
+}
+
+func lookupProjectUserID(db *gorm.DB, projectID uint) (string, error) {
+	if db == nil {
+		return "", ErrDatabaseNotConfigured
+	}
+
+	var project models.Project
+	if err := db.Select("user_id").Take(&project, projectID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", ErrProjectNotFound
+		}
+		return "", fmt.Errorf("load project user ID: %w", err)
+	}
+
+	return project.UserID, nil
 }
 
 func derivedImageAssetIDsFromMetadata(metadata models.JSONB) []uint {
