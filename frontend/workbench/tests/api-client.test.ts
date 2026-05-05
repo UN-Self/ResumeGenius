@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { intakeApi, authApi, workbenchApi, ApiError } from '@/lib/api-client'
+import { intakeApi, authApi, workbenchApi, parsingApi, ApiError } from '@/lib/api-client'
 
 describe('apiClient', () => {
   beforeEach(() => {
@@ -177,6 +177,20 @@ describe('apiClient', () => {
     expect(mock).toHaveBeenCalledWith('/api/v1/assets/1', expect.objectContaining({ method: 'DELETE' }))
   })
 
+  it('updateAsset calls PATCH /assets/:id', async () => {
+    const mock = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ code: 0, data: { id: 1, type: 'note', content: 'updated', label: 'Updated' } }),
+    })
+    vi.stubGlobal('fetch', mock)
+
+    const result = await intakeApi.updateAsset(1, { content: 'updated', label: 'Updated' })
+    expect(mock).toHaveBeenCalledWith('/api/v1/assets/1', expect.objectContaining({
+      method: 'PATCH',
+      body: JSON.stringify({ content: 'updated', label: 'Updated' }),
+    }))
+    expect(result.label).toBe('Updated')
+  })
+
   it('createNote calls POST /assets/notes', async () => {
     const mock = vi.fn().mockResolvedValue({
       json: () => Promise.resolve({ code: 0, data: { id: 1, type: 'note' } }),
@@ -197,6 +211,37 @@ describe('apiClient', () => {
     const result = await intakeApi.updateNote(1, 'updated', 'label')
     expect(mock).toHaveBeenCalledWith('/api/v1/assets/notes/1', expect.objectContaining({ method: 'PUT' }))
     expect(result.content).toBe('updated')
+  })
+
+  it('parseProject calls POST /parsing/parse', async () => {
+    const mock = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ code: 0, data: { parsed_contents: [] } }),
+    })
+    vi.stubGlobal('fetch', mock)
+
+    const result = await parsingApi.parseProject(1)
+    expect(mock).toHaveBeenCalledWith('/api/v1/parsing/parse', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ project_id: 1 }),
+    }))
+    expect(result).toEqual({ parsed_contents: [] })
+  })
+
+  it('generateProject calls POST /parsing/generate', async () => {
+    const mock = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({
+        code: 0,
+        data: { draft_id: 1, version_id: 2, html_content: '<p>Generated</p>' },
+      }),
+    })
+    vi.stubGlobal('fetch', mock)
+
+    const result = await parsingApi.generateProject(1)
+    expect(mock).toHaveBeenCalledWith('/api/v1/parsing/generate', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ project_id: 1 }),
+    }))
+    expect(result.html_content).toBe('<p>Generated</p>')
   })
 
   it('throws ApiError on non-zero code', async () => {
