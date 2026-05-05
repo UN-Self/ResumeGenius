@@ -6,9 +6,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+
+	"github.com/UN-Self/ResumeGenius/backend/internal/modules/render"
 )
 
-func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
+func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, versionSvc *render.VersionService, exportSvc *render.ExportService) {
 	sessionSvc := NewSessionService(db)
 
 	var provider ProviderAdapter
@@ -22,7 +24,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 		)
 	}
 
-	toolExecutor := NewAgentToolExecutor(db, "http://127.0.0.1:8080")
+	toolExecutor := NewAgentToolExecutor(db, versionSvc, exportSvc)
 	maxIterations := 3
 	if v := os.Getenv("AGENT_MAX_ITERATIONS"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {

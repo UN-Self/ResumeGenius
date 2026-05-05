@@ -7,6 +7,23 @@ import (
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
 )
 
+// NewServices creates VersionService and ExportService for use by other modules.
+// Returns the services and a cleanup function that releases resources.
+func NewServices(db *gorm.DB, store storage.FileStorage) (*VersionService, *ExportService, func()) {
+	versionSvc := NewVersionService(db)
+
+	exporter := NewChromeExporter()
+	exportSvc := NewExportService(exporter, store)
+	exportSvc.db = db
+
+	cleanup := func() {
+		exporter.Close()
+		exportSvc.Close()
+	}
+
+	return versionSvc, exportSvc, cleanup
+}
+
 // RegisterRoutes registers all render module endpoints.
 // Returns a cleanup function that releases ChromeExporter and ExportService resources.
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, store storage.FileStorage) func() {

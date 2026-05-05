@@ -1,19 +1,25 @@
 package agent
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 	"gorm.io/gorm"
 )
+
+// VersionService is the interface for creating draft versions.
+type VersionService interface {
+	Create(draftID uint, label string) (*models.Version, error)
+}
+
+// ExportService is the interface for creating PDF export tasks.
+type ExportService interface {
+	CreateTask(draftID uint, htmlContent string) (string, error)
+}
 
 // ToolDef represents a tool definition for OpenAI function calling.
 type ToolDef struct {
@@ -30,20 +36,19 @@ type ToolExecutor interface {
 	Execute(ctx context.Context, toolName string, params map[string]interface{}) (string, error)
 }
 
-// AgentToolExecutor implements ToolExecutor using database queries and internal HTTP calls.
+// AgentToolExecutor implements ToolExecutor using database queries and direct service calls.
 type AgentToolExecutor struct {
 	db         *gorm.DB
-	httpClient *http.Client
-	baseURL    string
+	versionSvc VersionService
+	exportSvc  ExportService
 }
 
 // NewAgentToolExecutor creates a new AgentToolExecutor.
-// baseURL should point to the internal API server (e.g. "http://127.0.0.1:8080").
-func NewAgentToolExecutor(db *gorm.DB, baseURL string) *AgentToolExecutor {
+func NewAgentToolExecutor(db *gorm.DB, versionSvc VersionService, exportSvc ExportService) *AgentToolExecutor {
 	return &AgentToolExecutor{
 		db:         db,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-		baseURL:    baseURL,
+		versionSvc: versionSvc,
+		exportSvc:  exportSvc,
 	}
 }
 
@@ -270,89 +275,49 @@ func (e *AgentToolExecutor) saveDraft(ctx context.Context, params map[string]int
 	return string(b), nil
 }
 
-// createVersion creates a version snapshot for the given draft via HTTP.
+// createVersion creates a version snapshot for the given draft.
 func (e *AgentToolExecutor) createVersion(ctx context.Context, params map[string]interface{}) (string, error) {
 	draftID, err := getIntParam(params, "draft_id")
 	if err != nil {
 		return "", err
 	}
+	label, _ := getStringParam(params, "label")
 
-	label, err := getStringParam(params, "label")
+	version, err := e.versionSvc.Create(uint(draftID), label)
 	if err != nil {
 		return "", err
 	}
 
-	body := map[string]interface{}{
-		"label": label,
+	result := map[string]interface{}{
+		"version_id": version.ID,
+		"label":      version.Label,
+		"created_at": version.CreatedAt,
 	}
-	return e.httpPost(ctx, fmt.Sprintf("/api/v1/drafts/%d/versions", draftID), body)
+	data, _ := json.Marshal(result)
+	return string(data), nil
 }
 
-// exportPDF triggers a PDF export for the given draft via HTTP.
+// exportPDF triggers a PDF export for the given draft.
 func (e *AgentToolExecutor) exportPDF(ctx context.Context, params map[string]interface{}) (string, error) {
 	draftID, err := getIntParam(params, "draft_id")
 	if err != nil {
 		return "", err
 	}
-
 	htmlContent, err := getStringParam(params, "html_content")
 	if err != nil {
 		return "", err
 	}
 
-	body := map[string]interface{}{
-		"html_content": htmlContent,
-	}
-	return e.httpPost(ctx, fmt.Sprintf("/api/v1/drafts/%d/export", draftID), body)
-}
-
-// httpPost sends an HTTP POST with a JSON body and extracts the data field from the
-// standard API response envelope.
-func (e *AgentToolExecutor) httpPost(ctx context.Context, path string, body map[string]interface{}) (string, error) {
-	jsonBody, err := json.Marshal(body)
+	taskID, err := e.exportSvc.CreateTask(uint(draftID), htmlContent)
 	if err != nil {
-		return "", fmt.Errorf("marshal request body: %w", err)
+		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.baseURL+path, bytes.NewReader(jsonBody))
-	if err != nil {
-		return "", fmt.Errorf("create request: %w", err)
+	result := map[string]interface{}{
+		"task_id": taskID,
 	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := e.httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("http post: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20))
-	if err != nil {
-		return "", fmt.Errorf("read response body: %w", err)
-	}
-
-	if resp.StatusCode >= 400 {
-		return "", fmt.Errorf("http %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	var apiResp struct {
-		Code    int              `json:"code"`
-		Data    *json.RawMessage `json:"data"`
-		Message string           `json:"message"`
-	}
-	if err := json.Unmarshal(respBody, &apiResp); err != nil {
-		return "", fmt.Errorf("parse response: %w", err)
-	}
-
-	if apiResp.Code != 0 {
-		return "", fmt.Errorf("api error code %d: %s", apiResp.Code, apiResp.Message)
-	}
-
-	if apiResp.Data == nil {
-		return "{}", nil
-	}
-
-	return string(*apiResp.Data), nil
+	data, _ := json.Marshal(result)
+	return string(data), nil
 }
 
 // getIntParam extracts an integer from params, supporting float64 (from JSON

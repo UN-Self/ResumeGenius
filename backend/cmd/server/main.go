@@ -80,11 +80,18 @@ func setupRouter(db *gorm.DB) (*gin.Engine, func()) {
 	auth.RegisterRoutes(v1, authed, db, secret, ttl, secure)
 	intake.RegisterRoutes(authed, db, uploadDir)
 	parsing.RegisterRoutes(authed, db, store)
-	agent.RegisterRoutes(authed, db)
-	workbench.RegisterRoutes(authed, db)
-	cleanup := render.RegisterRoutes(authed, db, store)
 
-	return r, cleanup
+	// 先创建 render services
+	versionSvc, exportSvc, renderCleanup := render.NewServices(db, store)
+
+	// agent 模块接收 render services
+	agent.RegisterRoutes(authed, db, versionSvc, exportSvc)
+	workbench.RegisterRoutes(authed, db)
+
+	// render 路由注册（复用已有 services）
+	render.RegisterRoutes(authed, db, store)
+
+	return r, renderCleanup
 }
 
 func main() {

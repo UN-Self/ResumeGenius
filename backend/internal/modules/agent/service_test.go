@@ -231,7 +231,10 @@ func TestChatService_SessionNotFound(t *testing.T) {
 type MockToolExecutor struct{}
 
 func (e *MockToolExecutor) Tools() []ToolDef {
-	return NewAgentToolExecutor(nil, "").Tools()
+	// Create a minimal mock executor just to get the tool definitions
+	vSvc := new(mockVersionSvc)
+	eSvc := new(mockExportSvc)
+	return NewAgentToolExecutor(nil, vSvc, eSvc).Tools()
 }
 
 func (e *MockToolExecutor) Execute(_ context.Context, toolName string, _ map[string]interface{}) (string, error) {

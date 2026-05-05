@@ -5,23 +5,54 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 )
 
+// mockVersionSvc mocks the VersionService for testing
+type mockVersionSvc struct {
+	mock.Mock
+}
+
+func (m *mockVersionSvc) Create(draftID uint, label string) (*models.Version, error) {
+	args := m.Called(draftID, label)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Version), args.Error(1)
+}
+
+// mockExportSvc mocks the ExportService for testing
+type mockExportSvc struct {
+	mock.Mock
+}
+
+func (m *mockExportSvc) CreateTask(draftID uint, htmlContent string) (string, error) {
+	args := m.Called(draftID, htmlContent)
+	return args.String(0), args.Error(1)
+}
+
+// Helper to create an executor with mocks for testing
+func newMockExecutor() (*AgentToolExecutor, *mockVersionSvc, *mockExportSvc) {
+	vSvc := new(mockVersionSvc)
+	eSvc := new(mockExportSvc)
+	executor := NewAgentToolExecutor(nil, vSvc, eSvc)
+	return executor, vSvc, eSvc
+}
+
 // ---------------------------------------------------------------------------
 // Tool definition tests
 // ---------------------------------------------------------------------------
 
 func TestToolExecutor_Tools_FiveDefinitions(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, "")
+	executor, _, _ := newMockExecutor()
 	tools := executor.Tools()
 	require.Len(t, tools, 5)
 
@@ -47,7 +78,7 @@ func TestToolExecutor_Tools_FiveDefinitions(t *testing.T) {
 }
 
 func TestToolExecutor_Tools_NamesAreCorrect(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, "")
+	executor, _, _ := newMockExecutor()
 	tools := executor.Tools()
 
 	names := make([]string, len(tools))
@@ -66,7 +97,7 @@ func TestToolExecutor_Tools_NamesAreCorrect(t *testing.T) {
 }
 
 func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, "")
+	executor, _, _ := newMockExecutor()
 	tools := executor.Tools()
 	toolByName := make(map[string]ToolDef)
 	for _, tool := range tools {
@@ -140,7 +171,7 @@ func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestToolExecutor_Execute_UnknownTool_ReturnsError(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, "")
+	executor, _, _ := newMockExecutor()
 	_, err := executor.Execute(context.Background(), "nonexistent_tool", nil)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown tool")
@@ -151,7 +182,7 @@ func TestToolExecutor_Execute_UnknownTool_ReturnsError(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestToolExecutor_Execute_MissingRequiredParams(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, "")
+	executor, _, _ := newMockExecutor()
 
 	_, err := executor.Execute(context.Background(), "get_project_assets", map[string]interface{}{})
 	assert.Error(t, err)
@@ -169,17 +200,13 @@ func TestToolExecutor_Execute_MissingRequiredParams(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "draft_id")
 
-	_, err = executor.Execute(context.Background(), "create_version", map[string]interface{}{"draft_id": float64(1)})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "label")
-
 	_, err = executor.Execute(context.Background(), "export_pdf", map[string]interface{}{"draft_id": float64(1)})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "html_content")
 }
 
 func TestToolExecutor_Execute_InvalidParamType(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, "")
+	executor, _, _ := newMockExecutor()
 
 	_, err := executor.Execute(context.Background(), "get_project_assets", map[string]interface{}{"project_id": "not-a-number"})
 	assert.Error(t, err)
@@ -200,7 +227,8 @@ func TestToolExecutor_Execute_InvalidParamType(t *testing.T) {
 func TestToolExecutor_GetProjectAssets(t *testing.T) {
 	db := SetupTestDB(t)
 	db.AutoMigrate(&models.Asset{})
-	executor := NewAgentToolExecutor(db, "")
+	executor, _, _ := newMockExecutor()
+	executor.db = db
 
 	proj := models.Project{Title: "Test Project", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -226,7 +254,8 @@ func TestToolExecutor_GetProjectAssets(t *testing.T) {
 func TestToolExecutor_GetProjectAssets_EmptyList(t *testing.T) {
 	db := SetupTestDB(t)
 	db.AutoMigrate(&models.Asset{})
-	executor := NewAgentToolExecutor(db, "")
+	executor, _, _ := newMockExecutor()
+	executor.db = db
 
 	proj := models.Project{Title: "Empty Project", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -239,7 +268,8 @@ func TestToolExecutor_GetProjectAssets_EmptyList(t *testing.T) {
 func TestToolExecutor_GetProjectAssets_HasMultipleAssets(t *testing.T) {
 	db := SetupTestDB(t)
 	db.AutoMigrate(&models.Asset{})
-	executor := NewAgentToolExecutor(db, "")
+	executor, _, _ := newMockExecutor()
+	executor.db = db
 
 	proj := models.Project{Title: "Multi Assets", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -260,7 +290,8 @@ func TestToolExecutor_GetProjectAssets_HasMultipleAssets(t *testing.T) {
 
 func TestToolExecutor_GetDraft(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, "")
+	executor, _, _ := newMockExecutor()
+	executor.db = db
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -280,7 +311,8 @@ func TestToolExecutor_GetDraft(t *testing.T) {
 
 func TestToolExecutor_GetDraft_NotFound(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, "")
+	executor, _, _ := newMockExecutor()
+	executor.db = db
 
 	_, err := executor.Execute(context.Background(), "get_draft", map[string]interface{}{"draft_id": float64(99999)})
 	assert.Error(t, err)
@@ -289,7 +321,8 @@ func TestToolExecutor_GetDraft_NotFound(t *testing.T) {
 
 func TestToolExecutor_SaveDraft(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, "")
+	executor, _, _ := newMockExecutor()
+	executor.db = db
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -316,7 +349,8 @@ func TestToolExecutor_SaveDraft(t *testing.T) {
 
 func TestToolExecutor_SaveDraft_NotFound(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, "")
+	executor, _, _ := newMockExecutor()
+	executor.db = db
 
 	_, err := executor.Execute(context.Background(), "save_draft", map[string]interface{}{
 		"draft_id":     float64(99999),
@@ -328,7 +362,8 @@ func TestToolExecutor_SaveDraft_NotFound(t *testing.T) {
 
 func TestToolExecutor_SaveDraft_EmptyContent(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, "")
+	executor, _, _ := newMockExecutor()
+	executor.db = db
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -353,25 +388,21 @@ func TestToolExecutor_SaveDraft_EmptyContent(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// HTTP tool tests (use mock HTTP server)
+// Service-based tool tests (use mocks)
 // ---------------------------------------------------------------------------
 
 func TestToolExecutor_CreateVersion(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/drafts/5/versions", func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "POST", r.Method)
+	executor, vSvc, _ := newMockExecutor()
 
-		var body map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, "v1.0", body["label"])
+	now := time.Now()
+	label := "v1.0"
+	vSvc.On("Create", uint(5), "v1.0").Return(&models.Version{
+		ID:        10,
+		DraftID:   5,
+		Label:     &label,
+		CreatedAt: now,
+	}, nil)
 
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"code":0,"data":{"id":10,"label":"v1.0","created_at":"2026-05-02T12:00:00Z"}}`)
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	executor := NewAgentToolExecutor(nil, srv.URL)
 	result, err := executor.Execute(context.Background(), "create_version", map[string]interface{}{
 		"draft_id": float64(5),
 		"label":    "v1.0",
@@ -380,26 +411,16 @@ func TestToolExecutor_CreateVersion(t *testing.T) {
 
 	var data map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(result), &data))
-	assert.Equal(t, float64(10), data["id"])
+	assert.Equal(t, float64(10), data["version_id"])
 	assert.Equal(t, "v1.0", data["label"])
+	vSvc.AssertCalled(t, "Create", uint(5), "v1.0")
 }
 
 func TestToolExecutor_ExportPDF(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/drafts/3/export", func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "POST", r.Method)
+	executor, _, eSvc := newMockExecutor()
 
-		var body map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, "<html>resume</html>", body["html_content"])
+	eSvc.On("CreateTask", uint(3), "<html>resume</html>").Return("task_abc", nil)
 
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"code":0,"data":{"task_id":"task_abc","status":"pending"}}`)
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	executor := NewAgentToolExecutor(nil, srv.URL)
 	result, err := executor.Execute(context.Background(), "export_pdf", map[string]interface{}{
 		"draft_id":     float64(3),
 		"html_content": "<html>resume</html>",
@@ -409,23 +430,14 @@ func TestToolExecutor_ExportPDF(t *testing.T) {
 	var data map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(result), &data))
 	assert.Equal(t, "task_abc", data["task_id"])
-	assert.Equal(t, "pending", data["status"])
+	eSvc.AssertCalled(t, "CreateTask", uint(3), "<html>resume</html>")
 }
 
 func TestToolExecutor_ExportPDF_EmptyHTML(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/drafts/3/export", func(w http.ResponseWriter, r *http.Request) {
-		var body map[string]interface{}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
-		assert.Equal(t, "", body["html_content"])
+	executor, _, eSvc := newMockExecutor()
 
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, `{"code":0,"data":{"task_id":"task_xyz","status":"pending"}}`)
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
+	eSvc.On("CreateTask", uint(3), "").Return("task_xyz", nil)
 
-	executor := NewAgentToolExecutor(nil, srv.URL)
 	result, err := executor.Execute(context.Background(), "export_pdf", map[string]interface{}{
 		"draft_id":     float64(3),
 		"html_content": "",
@@ -435,43 +447,33 @@ func TestToolExecutor_ExportPDF_EmptyHTML(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// HTTP error handling
+// Service error handling
 // ---------------------------------------------------------------------------
 
-func TestToolExecutor_HTTP_ServerError(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/drafts/1/export", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprint(w, `{"code":5001,"message":"PDF export failed"}`)
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
+func TestToolExecutor_CreateVersion_ServiceError(t *testing.T) {
+	executor, vSvc, _ := newMockExecutor()
 
-	executor := NewAgentToolExecutor(nil, srv.URL)
+	vSvc.On("Create", uint(1), "test").Return(nil, errors.New("draft not found"))
+
+	_, err := executor.Execute(context.Background(), "create_version", map[string]interface{}{
+		"draft_id": float64(1),
+		"label":    "test",
+	})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "draft not found")
+}
+
+func TestToolExecutor_ExportPDF_ServiceError(t *testing.T) {
+	executor, _, eSvc := newMockExecutor()
+
+	eSvc.On("CreateTask", uint(1), "<html></html>").Return("", errors.New("export failed"))
+
 	_, err := executor.Execute(context.Background(), "export_pdf", map[string]interface{}{
 		"draft_id":     float64(1),
 		"html_content": "<html></html>",
 	})
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "500")
-}
-
-func TestToolExecutor_HTTP_NotFound(t *testing.T) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/drafts/999/versions", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-		fmt.Fprint(w, `{"code":5002,"data":null,"message":"draft not found"}`)
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	executor := NewAgentToolExecutor(nil, srv.URL)
-	_, err := executor.Execute(context.Background(), "create_version", map[string]interface{}{
-		"draft_id": float64(999),
-		"label":    "test",
-	})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "404")
+	assert.Contains(t, err.Error(), "export failed")
 }
 
 func TestToolExecutor_GetIntParam_Float64(t *testing.T) {
