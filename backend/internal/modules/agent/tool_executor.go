@@ -201,6 +201,9 @@ func (e *AgentToolExecutor) getProjectAssets(ctx context.Context, params map[str
 			if a.URI != nil && *a.URI != "" {
 				line += " - 路径: " + *a.URI
 			}
+			if a.Content != nil && *a.Content != "" {
+				line += " - 解析内容: " + *a.Content
+			}
 		default:
 			if a.URI != nil && *a.URI != "" {
 				line += " - 路径: " + *a.URI
@@ -213,6 +216,21 @@ func (e *AgentToolExecutor) getProjectAssets(ctx context.Context, params map[str
 		line += " - 创建时间: " + timeStr
 		sb.WriteString(line)
 		sb.WriteString("\n")
+	}
+
+	// Also include drafts for this project
+	var drafts []models.Draft
+	if err := e.db.WithContext(ctx).Where("project_id = ?", projectID).Find(&drafts).Error; err == nil && len(drafts) > 0 {
+		sb.WriteString("\n项目草稿：\n")
+		for i, d := range drafts {
+			sb.WriteString(fmt.Sprintf("%d. Draft ID:%d - 更新时间:%s\n",
+				i+1, d.ID, d.UpdatedAt.Format("2006-01-02T15:04:05Z07:00")))
+			if d.HTMLContent != "" {
+				sb.WriteString("  HTML内容:\n")
+				sb.WriteString(d.HTMLContent)
+				sb.WriteString("\n")
+			}
+		}
 	}
 
 	return sb.String(), nil
