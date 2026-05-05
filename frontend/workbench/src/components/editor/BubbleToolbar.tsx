@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { Bold, Italic, Underline, List, ListOrdered } from 'lucide-react'
 import type { Editor } from '@tiptap/react'
 import { ToolbarButton } from './ToolbarButton'
-import { ToolbarSeparator } from './ToolbarSeparator'
 import { FontSelector } from './FontSelector'
 import { FontSizeSelector } from './FontSizeSelector'
 import { ColorPicker } from './ColorPicker'
@@ -27,81 +26,72 @@ function getActiveStates(editor: Editor): ActiveStates {
   }
 }
 
-interface FormatToolbarProps {
-  editor: Editor | null
+interface BubbleToolbarProps {
+  editor: Editor
 }
 
-export function FormatToolbar({ editor }: FormatToolbarProps) {
-  const [activeStates, setActiveStates] = useState<ActiveStates | null>(null)
+export function BubbleToolbar({ editor }: BubbleToolbarProps) {
+  const [activeStates, setActiveStates] = useState<ActiveStates>(() =>
+    getActiveStates(editor)
+  )
 
   useEffect(() => {
-    if (!editor) return
-
     const update = () => setActiveStates(getActiveStates(editor))
-    update()
     editor.on('transaction', update)
     return () => { editor.off('transaction', update) }
   }, [editor])
 
-  if (!editor || !activeStates) return null
-
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-2 bg-white border border-border rounded-lg shadow-sm px-1 py-0.5">
       {/* Font & Size group */}
-      <div role="group" aria-label="字体和字号" className="flex items-center gap-1">
+      <div role="group" aria-label="字体和字号" className="flex items-center gap-0.5">
         <FontSelector editor={editor} />
         <FontSizeSelector editor={editor} />
       </div>
 
-      <ToolbarSeparator />
-
       {/* Text Format + Color group */}
-      <div role="group" aria-label="文本格式" className="flex items-center gap-1">
+      <div role="group" aria-label="文本格式" className="flex items-center gap-0.5">
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBold().run()}
           isActive={activeStates.isBold}
-          icon={<Bold size={20} />}
+          icon={<Bold size={16} />}
           label="粗体 (Ctrl+B)"
         />
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleItalic().run()}
           isActive={activeStates.isItalic}
-          icon={<Italic size={20} />}
+          icon={<Italic size={16} />}
           label="斜体 (Ctrl+I)"
         />
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleUnderline().run()}
           isActive={activeStates.isUnderline}
-          icon={<Underline size={20} />}
+          icon={<Underline size={16} />}
           label="下划线 (Ctrl+U)"
         />
         <ColorPicker editor={editor} />
       </div>
 
-      <ToolbarSeparator />
-
       {/* List group */}
-      <div role="group" aria-label="列表格式" className="flex items-center gap-1">
+      <div role="group" aria-label="列表格式" className="flex items-center gap-0.5">
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleBulletList().run()}
           isActive={activeStates.isBulletList}
-          icon={<List size={20} />}
+          icon={<List size={16} />}
           label="无序列表 (Ctrl+Shift+8)"
         />
         <ToolbarButton
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
           isActive={activeStates.isOrderedList}
-          icon={<ListOrdered size={20} />}
+          icon={<ListOrdered size={16} />}
           label="有序列表 (Ctrl+Shift+7)"
         />
       </div>
 
-      <ToolbarSeparator />
-
-      {/* Line Height + Alignment group */}
-      <div role="group" aria-label="行距和对齐" className="flex items-center gap-1">
-        <LineHeightSelector editor={editor} />
+      {/* Alignment + Line Height group */}
+      <div role="group" aria-label="行距和对齐" className="flex items-center gap-0.5">
         <AlignSelector editor={editor} />
+        <LineHeightSelector editor={editor} />
       </div>
     </div>
   )
