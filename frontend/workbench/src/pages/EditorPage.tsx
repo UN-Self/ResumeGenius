@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useEditor } from '@tiptap/react'
+import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
 import { TextStyleKit } from '@tiptap/extension-text-style'
@@ -14,6 +15,8 @@ import { request, intakeApi, workbenchApi, ApiError, type Asset } from '@/lib/ap
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useExport } from '@/hooks/useExport'
 import { FullPageState } from '@/components/ui/full-page-state'
+import { ContextMenu } from '@/components/editor/ContextMenu'
+import { BubbleToolbar } from '@/components/editor/BubbleToolbar'
 
 export default function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -28,6 +31,9 @@ export default function EditorPage() {
   const [error, setError] = useState<string | null>(null)
   const [leftOpen, setLeftOpen] = useState(true)
   const [rightOpen, setRightOpen] = useState(true)
+  const [contextMenu, setContextMenu] = useState<{ isOpen: boolean; x: number; y: number }>({
+    isOpen: false, x: 0, y: 0,
+  })
 
   const editor = useEditor({
     extensions: [
@@ -80,6 +86,43 @@ export default function EditorPage() {
       exportPdf(Number(draftId), editor.getHTML())
     }
   }
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setContextMenu({ isOpen: true, x: e.clientX, y: e.clientY })
+  }, [])
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu((prev) => ({ ...prev, isOpen: false }))
+  }, [])
+
+  useEffect(() => {
+    const close = () => closeContextMenu()
+    document.addEventListener('scroll', close, true)
+    return () => document.removeEventListener('scroll', close, true)
+  }, [closeContextMenu])
+
+  useEffect(() => {
+    if (!contextMenu.isOpen) return
+
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[role="menu"]')) {
+        closeContextMenu()
+      }
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeContextMenu()
+    }
+
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [contextMenu.isOpen, closeContextMenu])
 
   useEffect(() => {
     draftIdRef.current = draftId
@@ -229,8 +272,23 @@ export default function EditorPage() {
             exportStatus={exportStatus}
             onExport={handleExport}
           />
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-auto" onContextMenu={handleContextMenu}>
             <A4Canvas editor={editor} />
+            {editor && (
+              <BubbleMenu
+                editor={editor}
+                options={{
+                  placement: 'top',
+                  arrow: false,
+                }}
+                shouldShow={({ editor: e }) => {
+                  const { from, to } = e.state.selection
+                  return from !== to
+                }}
+              >
+                <BubbleToolbar editor={editor} />
+              </BubbleMenu>
+            )}
           </div>
           <div className="format-toolbar">
             <FormatToolbar editor={editor} />
@@ -278,6 +336,14 @@ export default function EditorPage() {
           )}
         </div>
       </div>
+
+      <ContextMenu
+        editor={editor}
+        isOpen={contextMenu.isOpen}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        onClose={closeContextMenu}
+      />
     </div>
   )
 }

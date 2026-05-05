@@ -119,10 +119,7 @@ describe('FormatToolbar', () => {
     expect(screen.getByRole('button', { name: /下划线/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /无序列表/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /有序列表/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /左对齐/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /居中/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /右对齐/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /两端对齐/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /对齐方式/ })).toBeInTheDocument()
   })
 
   it('renders all typography selectors and toolbar buttons', () => {
@@ -142,8 +139,8 @@ describe('FormatToolbar', () => {
     // Line height selector - has aria-label
     expect(screen.getByRole('button', { name: /行距/ })).toBeInTheDocument()
 
-    // Alignment (including right-align)
-    expect(screen.getByRole('button', { name: /右对齐/i })).toBeInTheDocument()
+    // Alignment selector
+    expect(screen.getByRole('button', { name: /对齐方式/ })).toBeInTheDocument()
   })
 
   it('returns null when editor is not provided', () => {

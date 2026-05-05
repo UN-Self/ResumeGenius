@@ -41,7 +41,7 @@ export function A4Canvas({ editor, children }: A4CanvasProps) {
   }, [])
 
   return (
-    <div ref={containerRef} className="canvas-area bg-canvas-bg" onContextMenu={(e) => e.preventDefault()}>
+    <div ref={containerRef} className="canvas-area bg-canvas-bg">
       <div
         data-testid="a4-canvas"
         className="bg-white shadow-[0_2px_12px_rgba(0,0,0,0.08)] p-[18mm_20mm] relative"

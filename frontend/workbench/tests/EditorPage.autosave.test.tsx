@@ -38,6 +38,14 @@ vi.mock('@tiptap/react', () => ({
   }),
 }))
 
+vi.mock('@tiptap/react/menus', () => ({
+  BubbleMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+}))
+
+vi.mock('@/components/editor/BubbleToolbar', () => ({
+  BubbleToolbar: () => <div>mock-bubble-toolbar</div>,
+}))
+
 vi.mock('@/components/editor/A4Canvas', () => ({
   A4Canvas: () => <div data-testid="a4-canvas" />,
 }))
