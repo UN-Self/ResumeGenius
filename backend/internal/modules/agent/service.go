@@ -37,7 +37,7 @@ func (s *SessionService) Create(draftID uint) (*models.AISession, error) {
 		return nil, fmt.Errorf("check draft: %w", err)
 	}
 
-	session := models.AISession{DraftID: draftID}
+	session := models.AISession{DraftID: draftID, ProjectID: &draft.ProjectID}
 	if err := s.db.Create(&session).Error; err != nil {
 		return nil, fmt.Errorf("create session: %w", err)
 	}
@@ -241,7 +241,7 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 	// 4. Start ReAct loop
 	toolResults := make([]Message, 0)
 
-	for iteration := 0; iteration < s.maxIterations; iteration++ {
+	for stallCount := 0; stallCount < s.maxIterations; stallCount++ {
 		// a. Build messages array: system + history + pending tool results
 		sysPrompt := systemPromptReAct + fmt.Sprintf("\n\n## 当前会话\n- draft_id: %d\n- project_id: %d\n请在所有工具调用中使用这些 ID。", session.DraftID, session.ProjectID)
 			apiMessages := []Message{{Role: "system", Content: sysPrompt}}
@@ -253,6 +253,7 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 		var fullText strings.Builder
 		var thinkingAccum strings.Builder
 		hadText := false
+			hadToolCalls := false
 
 		// b. Call provider with streaming callbacks
 		err := s.provider.StreamChatReAct(
@@ -290,6 +291,7 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 					"params": call.Params,
 				})
 				sendEvent(string(callData))
+				hadToolCalls = true
 
 				// Execute tool
 				result, execErr := s.toolExecutor.Execute(context.Background(), call.Name, call.Params)
@@ -372,10 +374,12 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 			return nil
 		}
 
-		// d. If only tool_calls were made (no final text), continue loop
-		//    toolResults already contain the executed tool results
-	}
+		// d. Tool calls don't count as stall iterations
+			if hadToolCalls {
+				stallCount-- // cancel loop increment
+			}
 
+		}
 	// 5. Loop exceeded maxIterations
 	return ErrMaxIterations
 }
