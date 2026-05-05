@@ -41,6 +41,15 @@ export default function EditorPage() {
         class: 'resume-content outline-none',
         style: 'min-height: 261mm;',
       },
+      handleDOMEvents: {
+        copy(_view, event) {
+          const { from, to } = _view.state.selection
+          const plainText = _view.state.doc.textBetween(from, to, '\n')
+          event.preventDefault()
+          event.clipboardData?.setData('text/plain', plainText)
+          return true
+        },
+      },
     },
   })
 

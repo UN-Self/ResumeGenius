@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Editor } from '@tiptap/react'
 import { TipTapEditor } from './TipTapEditor'
+import { WatermarkOverlay } from './WatermarkOverlay'
 
 interface A4CanvasProps {
   editor?: Editor | null
@@ -40,10 +41,10 @@ export function A4Canvas({ editor, children }: A4CanvasProps) {
   }, [])
 
   return (
-    <div ref={containerRef} className="canvas-area bg-canvas-bg">
+    <div ref={containerRef} className="canvas-area bg-canvas-bg" onContextMenu={(e) => e.preventDefault()}>
       <div
         data-testid="a4-canvas"
-        className="bg-white shadow-[0_2px_12px_rgba(0,0,0,0.08)] p-[18mm_20mm]"
+        className="bg-white shadow-[0_2px_12px_rgba(0,0,0,0.08)] p-[18mm_20mm] relative"
         style={{
           width: '210mm',
           minHeight: '297mm',
@@ -52,6 +53,7 @@ export function A4Canvas({ editor, children }: A4CanvasProps) {
         }}
       >
         {children || (editor && <TipTapEditor editor={editor} />)}
+        <WatermarkOverlay />
       </div>
     </div>
   )

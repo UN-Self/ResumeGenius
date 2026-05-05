@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
@@ -171,5 +171,47 @@ describe('EditorPage', () => {
       expect(screen.getByText('有 1 项素材已手动修改，重新解析会覆盖当前正文。')).toBeInTheDocument()
       expect(screen.getByText('重新解析')).toBeInTheDocument()
     })
+  })
+})
+
+describe('Editor content protection — clipboard', () => {
+  it('intercepts copy event and writes only plain text to clipboard', async () => {
+    server.use(
+      http.get('/api/v1/assets', () =>
+        HttpResponse.json({ code: 0, data: [], message: 'ok' })
+      )
+    )
+
+    render(
+      <MemoryRouter initialEntries={['/projects/1/edit']}>
+        <Routes>
+          <Route path="/projects/:projectId" element={<div>Detail</div>} />
+          <Route path="/projects/:projectId/edit" element={<EditorPage />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    // Wait for editor to load
+    const canvas = await screen.findByTestId('a4-canvas')
+
+    // Find the ProseMirror editable area
+    const editorEl = canvas.querySelector('.ProseMirror') as HTMLElement
+    expect(editorEl).toBeTruthy()
+
+    // Dispatch a copy event with mock clipboardData
+    const setData = vi.fn()
+    const copyEvent = document.createEvent('Event')
+    copyEvent.initEvent('copy', true /* bubbles */, true /* cancelable */)
+    Object.defineProperty(copyEvent, 'clipboardData', {
+      value: { setData },
+      writable: false,
+    })
+
+    editorEl.dispatchEvent(copyEvent)
+
+    // Verify setData was called with text/plain
+    expect(setData).toHaveBeenCalledWith('text/plain', expect.any(String))
+    // Verify default was prevented (no HTML clipboard data written by browser)
+    expect(copyEvent.defaultPrevented).toBe(true)
   })
 })

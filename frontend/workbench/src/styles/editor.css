@@ -297,3 +297,40 @@
   right: 12px;
 }
 
+/* === Watermark Overlay === */
+.watermark-container {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.watermark-overlay {
+  position: absolute;
+  inset: -50%;
+  background-repeat: repeat;
+  background-size: 280px 100px;
+  transform: rotate(-30deg);
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.12;
+}
+
+/* Print Protection */
+@media print {
+  .canvas-area,
+  .a4-page {
+    display: none !important;
+  }
+
+  body::after {
+    content: "导出无水印 PDF 即可获得完整简历 — ResumeGenius";
+    display: block;
+    font-size: 20px;
+    text-align: center;
+    padding-top: 40vh;
+    color: #1a1815;
+  }
+}
+
