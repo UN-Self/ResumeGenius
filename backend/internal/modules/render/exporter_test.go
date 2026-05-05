@@ -228,18 +228,19 @@ func TestGetFile_TaskNotCompleted(t *testing.T) {
 	require.ErrorIs(t, err, ErrTaskNotCompleted)
 }
 
-func TestRegisterRoutes_ReturnsCleanup(t *testing.T) {
+func TestRegisterRoutes_NoPanic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	v1 := r.Group("/api/v1")
 
-	tmpDir := t.TempDir()
-	store := storage.NewLocalStorage(tmpDir)
-
-	cleanup := RegisterRoutes(v1, nil, store)
-	assert.NotNil(t, cleanup)
+	versionSvc := NewVersionService(nil)
+	exporter := NewChromeExporter()
+	exportSvc := NewExportService(exporter, nil)
 
 	assert.NotPanics(t, func() {
-		cleanup()
+		RegisterRoutes(v1, versionSvc, exportSvc)
 	})
+
+	exporter.Close()
+	exportSvc.Close()
 }

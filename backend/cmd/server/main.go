@@ -67,6 +67,12 @@ func setupRouter(db *gorm.DB) (*gin.Engine, func()) {
 
 	store := storage.NewLocalStorage(uploadDir)
 
+	// Create render services upfront (shared with agent module)
+	versionSvc := render.NewVersionService(db)
+	chromeExporter := render.NewChromeExporter()
+	exportSvc := render.NewExportService(chromeExporter, store)
+	exportSvc.SetDB(db)
+
 	v1 := r.Group("/api/v1")
 	secret, err := jwtSecret()
 	if err != nil {
@@ -80,10 +86,14 @@ func setupRouter(db *gorm.DB) (*gin.Engine, func()) {
 	auth.RegisterRoutes(v1, authed, db, secret, ttl, secure)
 	intake.RegisterRoutes(authed, db, uploadDir)
 	parsing.RegisterRoutes(authed, db, store)
-	agent.RegisterRoutes(authed, db)
+	agent.RegisterRoutes(authed, db, versionSvc, exportSvc)
 	workbench.RegisterRoutes(authed, db)
-	cleanup := render.RegisterRoutes(authed, db, store)
+	render.RegisterRoutes(authed, versionSvc, exportSvc)
 
+	cleanup := func() {
+		chromeExporter.Close()
+		exportSvc.Close()
+	}
 	return r, cleanup
 }
 

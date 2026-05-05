@@ -9,7 +9,7 @@ import (
 func TestResourceRoutes_AreMountedOnApiV1(t *testing.T) {
 	t.Setenv("JWT_SECRET", "test-secret")
 	t.Setenv("COOKIE_SECURE", "false")
-	r := setupRouter(nil)
+	r, _ := setupRouter(nil)
 
 	cases := []struct {
 		method string
@@ -53,7 +53,7 @@ func TestResourceRoutes_AreMountedOnApiV1(t *testing.T) {
 func TestLegacyRoutes_Return404(t *testing.T) {
 	t.Setenv("JWT_SECRET", "test-secret")
 	t.Setenv("COOKIE_SECURE", "false")
-	r := setupRouter(nil)
+	r, _ := setupRouter(nil)
 
 	legacy := []struct {
 		method string

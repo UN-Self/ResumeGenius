@@ -135,11 +135,11 @@ Gin 路由分组注册，每个模块统一签名 `func RegisterRoutes(rg *gin.R
 ## API 规约要点
 
 - 统一前缀 `/api/v1/{module}/{resource}`
-- 响应格式 `{code: 0, data: {...}, message: "ok"}`，错误码 5 位 `SSCCC`（SS=模块 01-05）
+- 响应格式 `{code: 0, data: {...}, message: "ok"}`，错误码 4 位（模块分段：intake=1xxx, parsing=2xxx, agent=3xxx, workbench=4xxx, render=5xxx）
 - JSON 字段 `snake_case`，日期 ISO 8601
-- AI 对话用 SSE 流式响应（Content-Type: text/event-stream，event types: text, html_start, html_chunk, html_end, done）
+- AI 对话用 SSE 流式响应（Content-Type: text/event-stream，event types: text, thinking, tool_call, tool_result, error, done）
 - PDF 导出用异步任务模式
-- v1 无认证
+- v1 认证：JWT（HttpOnly cookie），详见 api-conventions
 
 ## 文档体系
 

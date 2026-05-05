@@ -128,6 +128,7 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
       let currentText = ''
       let currentHTML = ''
       let inHTML = false
+      let gotDone = false
 
       while (true) {
         const { done, value } = await reader.read()
@@ -192,11 +193,20 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
               case 'error':
                 setError(event.message || 'AI 响应出错')
                 break
+              case 'done':
+                gotDone = true
+                break
             }
           } catch {
             // Skip unparseable lines
           }
         }
+      }
+      if (inHTML && currentHTML) {
+        setHtmlPreview(currentHTML)
+      }
+      if (!gotDone) {
+        setError('连接中断，AI 回复可能不完整')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : '连接失败')

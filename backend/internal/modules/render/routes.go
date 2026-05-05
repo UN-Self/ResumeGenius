@@ -2,20 +2,11 @@ package render
 
 import (
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
-
-	"github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
 )
 
 // RegisterRoutes registers all render module endpoints.
-// Returns a cleanup function that releases ChromeExporter and ExportService resources.
-func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, store storage.FileStorage) func() {
-	versionSvc := NewVersionService(db)
-
-	exporter := NewChromeExporter()
-	exportSvc := NewExportService(exporter, store)
-	exportSvc.db = db
-
+// Accepts pre-created services from main.go (lifecycle managed there).
+func RegisterRoutes(rg *gin.RouterGroup, versionSvc *VersionService, exportSvc *ExportService) {
 	h := NewHandler(versionSvc, exportSvc)
 
 	// Version management
@@ -27,9 +18,4 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, store storage.FileStorage)
 	rg.POST("/drafts/:draft_id/export", h.CreateExport)
 	rg.GET("/tasks/:task_id", h.GetTask)
 	rg.GET("/tasks/:task_id/file", h.DownloadFile)
-
-	return func() {
-		exporter.Close()
-		exportSvc.Close()
-	}
 }

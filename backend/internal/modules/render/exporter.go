@@ -68,6 +68,11 @@ func NewExportService(exporter PDFExporter, store storage.FileStorage) *ExportSe
 	return s
 }
 
+// SetDB sets the database connection used for draft validation.
+func (s *ExportService) SetDB(db *gorm.DB) {
+	s.db = db
+}
+
 // CreateTask validates the draft exists (if db is set), creates a new export task,
 // and queues it for async processing. Returns the task ID.
 func (s *ExportService) CreateTask(draftID uint, htmlContent string) (string, error) {
