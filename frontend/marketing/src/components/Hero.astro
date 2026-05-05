@@ -15,7 +15,10 @@ const features = [
 ]
 ---
 
-<section class="pt-12 pb-16 md:pt-20 md:pb-24 bg-gradient-to-b from-primary-50 to-background">
+<section class="relative overflow-hidden pt-12 pb-16 md:pt-20 md:pb-24 bg-gradient-to-b from-primary-50 to-background">
+    <!-- Decorative blobs -->
+    <div class="absolute top-10 right-10 w-[400px] h-[400px] rounded-full bg-primary-200/30 blur-[80px] animate-float pointer-events-none -z-10" aria-hidden="true"></div>
+    <div class="absolute bottom-10 left-10 w-[300px] h-[300px] rounded-full bg-accent/20 blur-[60px] animate-float-delayed pointer-events-none -z-10" aria-hidden="true"></div>
   <div class="max-w-4xl mx-auto px-6 text-center">
     <h1 class="hero-title font-serif font-semibold text-4xl md:text-5xl lg:text-[3rem] leading-normal text-foreground mb-3">
       <span class="sr-only">ResumeGenius — 有简历？AI 帮你优化细节。没简历？AI 帮你从零生成。</span>
@@ -28,11 +31,11 @@ const features = [
     </p>
     <div class="flex flex-col sm:flex-row gap-4 justify-center mb-16">
       <a href="/app"
-        class="inline-flex items-center justify-center h-12 px-8 text-base font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 active:bg-primary-800 transition-colors duration-150 no-underline">
+        class="btn-primary inline-flex items-center justify-center h-12 px-8 text-base font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 active:bg-primary-800 no-underline">
         免费开始使用
       </a>
       <a href="#features"
-        class="inline-flex items-center justify-center h-12 px-8 text-base font-medium text-primary-600 border border-primary-300 rounded-md hover:bg-primary-50 transition-colors duration-150 no-underline">
+        class="btn-secondary inline-flex items-center justify-center h-12 px-8 text-base font-medium text-primary-600 border border-primary-300 rounded-md hover:bg-primary-50 no-underline">
         了解更多
       </a>
     </div>
@@ -40,7 +43,7 @@ const features = [
     <!-- Mini feature cards -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
       {features.map(f => (
-        <div class="bg-card border border-border rounded-lg px-6 py-5 text-left">
+        <div class="card-hover bg-card border border-border rounded-lg px-6 py-5 text-left">
           <h3 class="font-sans font-semibold text-foreground mb-2">{f.title}</h3>
           <p class="text-sm text-muted-foreground leading-relaxed">{f.description}</p>
         </div>

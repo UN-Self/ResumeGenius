@@ -6,7 +6,7 @@ const navLinks = [
 ]
 ---
 
-<nav class="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm border-b border-border">
+<nav class="nav-bar fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm border-b border-transparent">
   <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
     <a href="/" class="flex items-center gap-2 no-underline">
       <span class="text-xl font-serif font-semibold text-foreground">ResumeGenius</span>
@@ -20,7 +20,7 @@ const navLinks = [
         </a>
       ))}
       <a href="/app"
-        class="inline-flex items-center justify-center h-10 px-5 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 active:bg-primary-800 transition-colors duration-150 no-underline">
+        class="btn-primary inline-flex items-center justify-center h-10 px-5 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 active:bg-primary-800 no-underline">
         开始使用
       </a>
     </div>
@@ -39,7 +39,7 @@ const navLinks = [
       </a>
     ))}
     <a href="/app"
-      class="inline-flex items-center justify-center h-10 px-5 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 transition-colors duration-150 no-underline mt-2">
+      class="btn-primary inline-flex items-center justify-center h-10 px-5 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 active:bg-primary-800 no-underline mt-2">
       开始使用
     </a>
   </div>

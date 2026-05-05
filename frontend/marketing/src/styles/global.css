@@ -12,3 +12,108 @@
     min-height: 100vh;
   }
 }
+
+/* ===== Scroll-triggered animations ===== */
+.animate-on-scroll {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--delay, 0ms);
+}
+
+.animate-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ===== Card hover lift ===== */
+.card-hover {
+  transition: transform 200ms ease-out, box-shadow 200ms ease-out;
+}
+
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px theme('colors.primary.950 / 0.08');
+}
+
+/* ===== Button interactions ===== */
+.btn-primary {
+  transition: transform 150ms ease-out, box-shadow 150ms ease-out, background-color 150ms ease-out;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px theme('colors.primary.400 / 0.3');
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+  box-shadow: none;
+}
+
+.btn-secondary {
+  transition: transform 150ms ease-out, background-color 150ms ease-out;
+}
+
+.btn-secondary:hover {
+  transform: translateY(-1px);
+}
+
+.btn-secondary:active {
+  transform: scale(0.98);
+}
+
+/* ===== FAQ smooth height transition ===== */
+.faq-content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 300ms ease-out;
+}
+
+.faq-content.open {
+  grid-template-rows: 1fr;
+}
+
+.faq-content > div {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ===== Nav scroll border ===== */
+.nav-bar {
+  transition: border-color 200ms ease-out;
+}
+
+.nav-scrolled {
+  border-bottom-color: theme('colors.border / 0.5');
+}
+
+/* ===== Footer gradient border ===== */
+.footer-gradient-border {
+  border-top: 1px solid transparent;
+  border-image: linear-gradient(to right, transparent, theme('colors.border'), transparent) 1;
+}
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  .animate-on-scroll {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .card-hover,
+  .btn-primary,
+  .btn-secondary,
+  .faq-content,
+  .nav-bar,
+  .footer-gradient-border {
+    transition-duration: 0.01ms !important;
+  }
+
+  [class*="animate-float"] {
+    animation: none !important;
+  }
+}
