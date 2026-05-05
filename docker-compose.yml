@@ -1,5 +1,5 @@
 # ResumeGenius Docker Compose
-# 统一编排 postgres + backend + workbench + marketing + gateway
+# 统一编排 postgres + backend + workbench + marketing
 
 networks:
   default:
@@ -48,26 +48,17 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       TZ: ${TZ:-Asia/Shanghai}
       CHROME_BIN: "/usr/bin/chromium"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sS http://localhost:8080/api/v1/auth/me || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     ports:
       - "${HOST_BACKEND_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
-    restart: always
-
-  gateway:
-    build:
-      context: ./gateway
-      dockerfile: Dockerfile
-    ports:
-      - "${HOST_GATEWAY_PORT:-80}:80"
-    depends_on:
-      marketing:
-        condition: service_started
-      workbench:
-        condition: service_started
-      backend:
-        condition: service_started
     restart: always
 
   workbench:
@@ -86,5 +77,10 @@ services:
       context: ./frontend/marketing
       dockerfile: Dockerfile
     ports:
-      - "${HOST_MARKETING_PORT:-}:80"
+      - "${HOST_MARKETING_PORT:-44321}:80"
+    depends_on:
+      workbench:
+        condition: service_started
+      backend:
+        condition: service_healthy
     restart: always

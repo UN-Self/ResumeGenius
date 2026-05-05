@@ -19,6 +19,7 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/re
     chromium \
     font-noto-cjk \
     ca-certificates \
+    curl \
     tzdata
 ENV TZ=Asia/Shanghai
 WORKDIR /app
