@@ -103,6 +103,8 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
     try {
       await intakeApi.uploadFile(projectId, file, replaceAssetId)
       await parsingApi.parseProject(projectId)
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : '上传或解析失败')
     } finally {
       await refreshAssets()
     }
@@ -113,6 +115,8 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
     try {
       await intakeApi.createGitRepo(projectId, repoUrl)
       await parsingApi.parseProject(projectId)
+    } catch (createGitError) {
+      setError(createGitError instanceof Error ? createGitError.message : '创建 Git 素材失败')
     } finally {
       await refreshAssets()
     }
@@ -120,16 +124,26 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
 
   const handleCreateNote = async (content: string, label: string) => {
     setError('')
-    await intakeApi.createNote(projectId, content, label)
-    await refreshAssets()
+    try {
+      await intakeApi.createNote(projectId, content, label)
+    } catch (createNoteError) {
+      setError(createNoteError instanceof Error ? createNoteError.message : '创建备注失败')
+    } finally {
+      await refreshAssets()
+    }
   }
 
   const handleUpdateAsset = async (content: string, label: string) => {
     if (!editingAsset) return
     setError('')
-    await intakeApi.updateAsset(editingAsset.id, { content, label })
-    setEditingAsset(null)
-    await refreshAssets()
+    try {
+      await intakeApi.updateAsset(editingAsset.id, { content, label })
+      setEditingAsset(null)
+    } catch (updateAssetError) {
+      setError(updateAssetError instanceof Error ? updateAssetError.message : '更新素材失败')
+    } finally {
+      await refreshAssets()
+    }
   }
 
   const handleDeleteAsset = async () => {

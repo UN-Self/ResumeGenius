@@ -24,6 +24,7 @@ export default function ProjectDetail() {
   // UI state
   const [parseLoading, setParseLoading] = useState(false)
   const [parseError, setParseError] = useState('')
+  const [assetActionError, setAssetActionError] = useState('')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [gitOpen, setGitOpen] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
@@ -34,34 +35,61 @@ export default function ProjectDetail() {
 
   // --- Intake handlers ---
   const handleUpload = async (file: File, replaceAssetId?: number) => {
-    await intakeApi.uploadFile(pid, file, replaceAssetId)
-    await parsingApi.parseProject(pid)
-    reload()
+    setAssetActionError('')
+    try {
+      await intakeApi.uploadFile(pid, file, replaceAssetId)
+      await parsingApi.parseProject(pid)
+    } catch (uploadError) {
+      setAssetActionError(uploadError instanceof Error ? uploadError.message : '上传或解析失败')
+    } finally {
+      reload()
+    }
   }
 
   const handleCreateGit = async (repoUrl: string) => {
-    await intakeApi.createGitRepo(pid, repoUrl)
-    reload()
+    setAssetActionError('')
+    try {
+      await intakeApi.createGitRepo(pid, repoUrl)
+    } catch (createGitError) {
+      setAssetActionError(createGitError instanceof Error ? createGitError.message : '创建 Git 素材失败')
+    } finally {
+      reload()
+    }
   }
 
   const handleCreateNote = async (content: string, label: string) => {
-    await intakeApi.createNote(pid, content, label)
-    reload()
+    setAssetActionError('')
+    try {
+      await intakeApi.createNote(pid, content, label)
+    } catch (createNoteError) {
+      setAssetActionError(createNoteError instanceof Error ? createNoteError.message : '创建备注失败')
+    } finally {
+      reload()
+    }
   }
 
   const handleUpdateNote = async (content: string, label: string) => {
     if (!editingNote) return
-    await intakeApi.updateNote(editingNote.id, content, label)
-    setEditingNote(null)
-    reload()
+    setAssetActionError('')
+    try {
+      await intakeApi.updateNote(editingNote.id, content, label)
+      setEditingNote(null)
+    } catch (updateNoteError) {
+      setAssetActionError(updateNoteError instanceof Error ? updateNoteError.message : '更新备注失败')
+    } finally {
+      reload()
+    }
   }
 
   const handleDeleteAsset = async () => {
     if (!deleteTarget || deleteTarget.type !== 'asset') return
     try {
       setDeleting(true)
+      setDeleteError('')
       await intakeApi.deleteAsset(deleteTarget.id)
       reload()
+    } catch (deleteError) {
+      setDeleteError(deleteError instanceof ApiError ? deleteError.message : '删除失败')
     } finally {
       setDeleting(false)
       setDeleteTarget(null)
@@ -145,6 +173,9 @@ export default function ProjectDetail() {
       )}
       {parseError && (
         <Alert className="mb-4">生成初稿失败：{parseError}</Alert>
+      )}
+      {assetActionError && (
+        <Alert className="mb-4">{assetActionError}</Alert>
       )}
       {deleteError && (
         <Alert className="mb-4">删除失败：{deleteError}</Alert>

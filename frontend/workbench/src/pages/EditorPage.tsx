@@ -21,6 +21,7 @@ export default function EditorPage() {
   const pid = Number(projectId)
 
   const [draftId, setDraftId] = useState<string | null>(null)
+  const draftIdRef = useRef<string | null>(null)
   const [projectTitle, setProjectTitle] = useState('')
   const [assets, setAssets] = useState<Asset[]>([])
   const [loading, setLoading] = useState(true)
@@ -47,8 +48,9 @@ export default function EditorPage() {
 
   const { scheduleSave, flush, retry, status, lastSavedAt } = useAutoSave({
     save: async (html: string) => {
-      if (draftId) {
-        await request(`/drafts/${draftId}`, {
+      const currentDraftId = draftIdRef.current
+      if (currentDraftId) {
+        await request(`/drafts/${currentDraftId}`, {
           method: 'PUT',
           body: JSON.stringify({ html_content: html }),
         })
@@ -69,6 +71,10 @@ export default function EditorPage() {
       exportPdf(Number(draftId), editor.getHTML())
     }
   }
+
+  useEffect(() => {
+    draftIdRef.current = draftId
+  }, [draftId])
 
   useEffect(() => {
     if (!projectId || Number.isNaN(pid)) return
