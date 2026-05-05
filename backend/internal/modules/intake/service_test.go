@@ -2,13 +2,13 @@ package intake
 
 import (
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
+	sharedstorage "github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
 )
 
 // --- ProjectService tests ---
@@ -153,6 +153,14 @@ func TestProjectService_Delete_WrongUser(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func saveTestStoredFile(t *testing.T, store sharedstorage.FileStorage, userID string, filename string, data []byte) string {
+	t.Helper()
+
+	key, err := store.Save(userID, sharedstorage.SHA256Hex(data), filename, data)
+	require.NoError(t, err)
+	return key
+}
+
 // --- AssetService tests ---
 
 func TestAssetService_UploadFile(t *testing.T) {
@@ -170,7 +178,9 @@ func TestAssetService_UploadFile(t *testing.T) {
 	assert.NotNil(t, asset)
 	assert.Equal(t, "resume_pdf", asset.Type)
 	assert.NotNil(t, asset.URI)
-	assert.True(t, strings.HasSuffix(*asset.URI, "resume.pdf"))
+	assert.NotNil(t, asset.FileHash)
+	assert.Equal(t, sharedstorage.SHA256Hex(data), *asset.FileHash)
+	assert.Equal(t, "user-1/"+*asset.FileHash+".pdf", *asset.URI)
 }
 
 func TestAssetService_UploadFile_UnsupportedFormat(t *testing.T) {
@@ -221,8 +231,8 @@ func TestAssetService_UploadFileWithReplacement_ReplacesSameNameAssetInProject(t
 	oldAsset, err := svc.UploadFile("user-1", proj.ID, "resume.pdf", []byte("%PDF old"), 8)
 	require.NoError(t, err)
 
-	derivedKey, err := storage.Save(proj.ID, "derived.png", []byte("img"))
-	require.NoError(t, err)
+	derivedBytes := []byte("img")
+	derivedKey := saveTestStoredFile(t, storage, proj.UserID, "derived.png", derivedBytes)
 	derivedLabel := "Derived image"
 	derivedAsset := models.Asset{
 		ProjectID: proj.ID,
@@ -239,6 +249,7 @@ func TestAssetService_UploadFileWithReplacement_ReplacesSameNameAssetInProject(t
 	require.NoError(t, db.Create(&derivedAsset).Error)
 	require.NoError(t, db.Model(&models.Asset{}).Where("id = ?", oldAsset.ID).Update("metadata", models.JSONB{
 		"parsing": map[string]interface{}{
+			"original_filename":       "resume.pdf",
 			"derived_image_asset_ids": []interface{}{derivedAsset.ID},
 		},
 	}).Error)
@@ -554,8 +565,7 @@ func TestAssetService_DeleteAsset_RemovesDerivedImageAssets(t *testing.T) {
 	sourceAsset, err := svc.UploadFile("user-1", proj.ID, "resume.pdf", []byte("%PDF fake"), 10)
 	require.NoError(t, err)
 
-	derivedKey1, err := storage.Save(proj.ID, "derived-1.png", []byte("img-1"))
-	require.NoError(t, err)
+	derivedKey1 := saveTestStoredFile(t, storage, proj.UserID, "derived-1.png", []byte("img-1"))
 	derivedLabel1 := "简历图片 1"
 	derivedAsset1 := models.Asset{
 		ProjectID: proj.ID,
@@ -571,8 +581,7 @@ func TestAssetService_DeleteAsset_RemovesDerivedImageAssets(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&derivedAsset1).Error)
 
-	derivedKey2, err := storage.Save(proj.ID, "derived-2.png", []byte("img-2"))
-	require.NoError(t, err)
+	derivedKey2 := saveTestStoredFile(t, storage, proj.UserID, "derived-2.png", []byte("img-2"))
 	derivedLabel2 := "简历图片 2"
 	derivedAsset2 := models.Asset{
 		ProjectID: proj.ID,
@@ -588,8 +597,7 @@ func TestAssetService_DeleteAsset_RemovesDerivedImageAssets(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&derivedAsset2).Error)
 
-	unrelatedKey, err := storage.Save(proj.ID, "standalone.png", []byte("standalone"))
-	require.NoError(t, err)
+	unrelatedKey := saveTestStoredFile(t, storage, proj.UserID, "standalone.png", []byte("standalone"))
 	unrelatedLabel := "独立图片"
 	unrelatedAsset := models.Asset{
 		ProjectID: proj.ID,

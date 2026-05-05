@@ -701,12 +701,18 @@ func TestParseDeletesOriginalSourceFileAfterPersistence(t *testing.T) {
 		t.Fatalf("create project: %v", err)
 	}
 
-	originalKey, err := store.Save(project.ID, "resume.pdf", []byte("pdf-bytes"))
-	if err != nil {
-		t.Fatalf("save original source file: %v", err)
-	}
+	originalKey := saveTestStorageFile(t, store, project.UserID, "resume.pdf", []byte("pdf-bytes"))
 
-	pdfAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeResumePDF, URI: &originalKey}
+	pdfAsset := models.Asset{
+		ProjectID: project.ID,
+		Type:      AssetTypeResumePDF,
+		URI:       &originalKey,
+		Metadata: models.JSONB{
+			"parsing": map[string]interface{}{
+				"original_filename": "resume.pdf",
+			},
+		},
+	}
 	if err := db.Create(&pdfAsset).Error; err != nil {
 		t.Fatalf("create pdf asset: %v", err)
 	}
@@ -796,12 +802,18 @@ func TestParseKeepsOriginalSourceFileWhenImagePersistenceFails(t *testing.T) {
 		t.Fatalf("create project: %v", err)
 	}
 
-	originalKey, err := store.Save(project.ID, "resume.pdf", []byte("pdf-bytes"))
-	if err != nil {
-		t.Fatalf("save original source file: %v", err)
-	}
+	originalKey := saveTestStorageFile(t, store, project.UserID, "resume.pdf", []byte("pdf-bytes"))
 
-	pdfAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeResumePDF, URI: &originalKey}
+	pdfAsset := models.Asset{
+		ProjectID: project.ID,
+		Type:      AssetTypeResumePDF,
+		URI:       &originalKey,
+		Metadata: models.JSONB{
+			"parsing": map[string]interface{}{
+				"original_filename": "resume.pdf",
+			},
+		},
+	}
 	if err := db.Create(&pdfAsset).Error; err != nil {
 		t.Fatalf("create pdf asset: %v", err)
 	}
@@ -817,7 +829,7 @@ func TestParseKeepsOriginalSourceFileWhenImagePersistenceFails(t *testing.T) {
 
 	svc := NewParsingServiceWithGeneratorAndStorage(db, pdfParser, nil, nil, nil, store)
 
-	_, err = svc.Parse(project.ID)
+	_, err := svc.Parse(project.ID)
 	if err == nil {
 		t.Fatal("expected parse to fail when derived image persistence fails")
 	}
@@ -835,8 +847,9 @@ func TestParseKeepsOriginalSourceFileWhenImagePersistenceFails(t *testing.T) {
 	if storedPDF.Content != nil {
 		t.Fatalf("expected content not to be persisted on failure, got %+v", storedPDF.Content)
 	}
-	if storedPDF.Metadata != nil {
-		t.Fatalf("expected metadata to remain unchanged on failure, got %+v", storedPDF.Metadata)
+	parsing := getParsingMetadataMap(t, storedPDF.Metadata)
+	if got := parsing["original_filename"]; got != "resume.pdf" {
+		t.Fatalf("expected original_filename resume.pdf to remain on failure, got %+v", got)
 	}
 }
 
@@ -1073,12 +1086,18 @@ func TestGenerateFallsBackToParseAndPersistsMissingFileContent(t *testing.T) {
 		t.Fatalf("create project: %v", err)
 	}
 
-	originalKey, err := store.Save(project.ID, "resume.pdf", []byte("pdf-bytes"))
-	if err != nil {
-		t.Fatalf("save original file: %v", err)
-	}
+	originalKey := saveTestStorageFile(t, store, project.UserID, "resume.pdf", []byte("pdf-bytes"))
 
-	pdfAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeResumePDF, URI: &originalKey}
+	pdfAsset := models.Asset{
+		ProjectID: project.ID,
+		Type:      AssetTypeResumePDF,
+		URI:       &originalKey,
+		Metadata: models.JSONB{
+			"parsing": map[string]interface{}{
+				"original_filename": "resume.pdf",
+			},
+		},
+	}
 	if err := db.Create(&pdfAsset).Error; err != nil {
 		t.Fatalf("create pdf asset: %v", err)
 	}

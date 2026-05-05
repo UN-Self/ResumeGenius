@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
+	sharedstorage "github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
 )
 
 func SetupTestDB(t *testing.T) *gorm.DB {
@@ -59,9 +60,13 @@ func newFailingDeleteStorage(deleteErr error) *failingDeleteStorage {
 	}
 }
 
-func (s *failingDeleteStorage) Save(projectID uint, filename string, data []byte) (string, error) {
+func (s *failingDeleteStorage) Save(userID string, fileHash string, ext string, data []byte) (string, error) {
 	s.saveSeq++
-	key := fmt.Sprintf("%d/test-%d-%s", projectID, s.saveSeq, filename)
+	normalizedExt := sharedstorage.NormalizeExt(ext)
+	if normalizedExt == "" {
+		return "", fmt.Errorf("invalid extension: %q", ext)
+	}
+	key := fmt.Sprintf("%s/test-%d-%s%s", userID, s.saveSeq, fileHash, normalizedExt)
 	s.saved[key] = append([]byte(nil), data...)
 	return key, nil
 }
