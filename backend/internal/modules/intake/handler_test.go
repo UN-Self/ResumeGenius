@@ -196,7 +196,7 @@ func TestHandler_DeleteProject(t *testing.T) {
 	assert.Equal(t, CodeProjectNotFound, resp.Code)
 }
 
-func TestHandler_DeleteProject_ReturnsErrorWhenDeleteProjectAssetsFails(t *testing.T) {
+func TestHandler_DeleteProject_SucceedsWhenStorageDeleteWouldFail(t *testing.T) {
 	h, r := setupTestHandlerWithStorage(t, newFailingDeleteStorage(errors.New("disk busy")))
 	r.DELETE("/projects/:project_id", h.DeleteProject)
 
@@ -205,19 +205,17 @@ func TestHandler_DeleteProject_ReturnsErrorWhenDeleteProjectAssetsFails(t *testi
 	require.NoError(t, err)
 
 	w := doJSON(t, r, "DELETE", "/projects/"+strconv.Itoa(int(projID)), nil)
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	resp := parseResponse(t, w)
-	assert.Equal(t, CodeInternalError, resp.Code)
-	assert.Equal(t, "failed to delete project assets", resp.Message)
+	assert.Equal(t, 0, resp.Code)
+	assert.Equal(t, "ok", resp.Message)
 
-	proj, err := h.projectSvc.GetByID("test-user-1", projID)
-	require.NoError(t, err)
-	assert.Equal(t, projID, proj.ID)
+	_, err = h.projectSvc.GetByID("test-user-1", projID)
+	require.ErrorIs(t, err, ErrProjectNotFound)
 
-	assets, err := h.assetSvc.ListByProject("test-user-1", projID)
-	require.NoError(t, err)
-	assert.Len(t, assets, 1)
+	_, err = h.assetSvc.ListByProject("test-user-1", projID)
+	require.ErrorIs(t, err, ErrProjectNotFound)
 }
 
 func TestHandler_UploadFile(t *testing.T) {
