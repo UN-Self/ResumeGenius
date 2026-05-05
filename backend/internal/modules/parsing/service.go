@@ -520,7 +520,11 @@ func (s *ParsingService) persistParsedAsset(asset models.Asset, parsed *ParsedCo
 	contentToPersist, contentPersisted := parsedAssetContentForPersistence(asset, parsed)
 	var oldDerivedAssets []models.Asset
 	if s.storage != nil {
-		oldDerivedAssets = loadDerivedImageAssetsForCleanup(s.db, asset.ProjectID, derivedImageAssetIDsFromMetadata(asset.Metadata))
+		var err error
+		oldDerivedAssets, err = loadDerivedImageAssetsForCleanup(s.db, asset.ProjectID, derivedImageAssetIDsFromMetadata(asset.Metadata))
+		if err != nil {
+			return err
+		}
 	}
 	savedKeys := make([]string, 0, len(parsed.Images))
 	newDerivedImageAssetIDs := make([]uint, 0, len(parsed.Images))
@@ -716,11 +720,6 @@ func (s *ParsingService) deleteOriginalSourceAfterPersistence(
 		return nil
 	}
 
-	originalKey := *asset.URI
-	if err := s.storage.Delete(originalKey); err != nil {
-		return fmt.Errorf("delete original source file: %w", err)
-	}
-
 	if persistedMetadata == nil {
 		persistedMetadata = withAssetParsingMetadata(
 			asset.Metadata,
@@ -738,6 +737,11 @@ func (s *ParsingService) deleteOriginalSourceAfterPersistence(
 	}
 	if err := s.db.Model(&models.Asset{}).Where("id = ?", asset.ID).Updates(updates).Error; err != nil {
 		return fmt.Errorf("mark original source deleted: %w", err)
+	}
+
+	originalKey := *asset.URI
+	if err := s.storage.Delete(originalKey); err != nil {
+		return fmt.Errorf("delete original source file: %w", err)
 	}
 
 	return nil
@@ -883,16 +887,16 @@ func derivedImageAssetIDsFromMetadata(metadata models.JSONB) []uint {
 	return ids
 }
 
-func loadDerivedImageAssetsForCleanup(db *gorm.DB, projectID uint, ids []uint) []models.Asset {
+func loadDerivedImageAssetsForCleanup(db *gorm.DB, projectID uint, ids []uint) ([]models.Asset, error) {
 	if db == nil || len(ids) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	var assets []models.Asset
 	if err := db.Where("project_id = ? AND id IN ?", projectID, ids).Find(&assets).Error; err != nil {
-		return nil
+		return nil, fmt.Errorf("load derived image assets for cleanup: %w", err)
 	}
-	return assets
+	return assets, nil
 }
 
 func uintSliceToInterfaceSlice(ids []uint) []interface{} {

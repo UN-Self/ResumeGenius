@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 	sharedstorage "github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
@@ -78,6 +79,10 @@ func TestProjectService_Delete(t *testing.T) {
 
 	_, err = svc.GetByID("user-1", created.ID)
 	assert.Error(t, err)
+
+	var deleted models.Project
+	require.NoError(t, db.Unscoped().First(&deleted, created.ID).Error)
+	assert.True(t, deleted.DeletedAt.Valid)
 }
 
 func TestProjectService_Delete_CascadeClearsDraftAndRelations(t *testing.T) {
@@ -93,31 +98,60 @@ func TestProjectService_Delete_CascadeClearsDraftAndRelations(t *testing.T) {
 	// Set current_draft_id (circular FK)
 	require.NoError(t, db.Model(&proj).Update("current_draft_id", draft.ID).Error)
 
-	// Create downstream: version, ai_session, ai_message
+	// Create downstream: version, ai_session, ai_message, ai_tool_call
 	version := models.Version{DraftID: draft.ID, HTMLSnapshot: "<p>v1</p>"}
 	require.NoError(t, db.Create(&version).Error)
 
 	session := models.AISession{DraftID: draft.ID}
 	require.NoError(t, db.Create(&session).Error)
 
-	msg := models.AIMessage{SessionID: session.ID, Role: "user", Content: "hello"}
+	toolCall := models.AIToolCall{
+		SessionID: session.ID,
+		ToolName:  "read_html",
+		Params:    models.JSONB{"path": "resume.html"},
+		Status:    "completed",
+	}
+	require.NoError(t, db.Create(&toolCall).Error)
+
+	msg := models.AIMessage{SessionID: session.ID, Role: "user", Content: "hello", ToolCallID: &toolCall.ID}
 	require.NoError(t, db.Create(&msg).Error)
 
 	// Delete project
 	err := svc.Delete("user-1", proj.ID)
 	assert.NoError(t, err)
 
-	// Verify all related records are gone
-	var draftCount, versionCount, sessionCount, msgCount int64
-	db.Model(&models.Draft{}).Where("project_id = ?", proj.ID).Count(&draftCount)
-	db.Model(&models.Version{}).Where("draft_id = ?", draft.ID).Count(&versionCount)
-	db.Model(&models.AISession{}).Where("draft_id = ?", draft.ID).Count(&sessionCount)
-	db.Model(&models.AIMessage{}).Where("session_id = ?", session.ID).Count(&msgCount)
+	var draftCount, versionCount, sessionCount, msgCount, toolCallCount int64
+	require.NoError(t, db.Model(&models.Draft{}).Where("project_id = ?", proj.ID).Count(&draftCount).Error)
+	require.NoError(t, db.Model(&models.Version{}).Where("draft_id = ?", draft.ID).Count(&versionCount).Error)
+	require.NoError(t, db.Model(&models.AISession{}).Where("draft_id = ?", draft.ID).Count(&sessionCount).Error)
+	require.NoError(t, db.Model(&models.AIMessage{}).Where("session_id = ?", session.ID).Count(&msgCount).Error)
+	require.NoError(t, db.Model(&models.AIToolCall{}).Where("session_id = ?", session.ID).Count(&toolCallCount).Error)
 
-	assert.Zero(t, draftCount, "drafts should be deleted")
-	assert.Zero(t, versionCount, "versions should be deleted")
-	assert.Zero(t, sessionCount, "ai_sessions should be deleted")
-	assert.Zero(t, msgCount, "ai_messages should be deleted")
+	assert.Zero(t, draftCount, "active drafts should be hidden after soft delete")
+	assert.Zero(t, versionCount, "active versions should be hidden after soft delete")
+	assert.Zero(t, sessionCount, "active ai_sessions should be hidden after soft delete")
+	assert.Zero(t, msgCount, "active ai_messages should be hidden after soft delete")
+	assert.Zero(t, toolCallCount, "active ai_tool_calls should be hidden after soft delete")
+
+	var deletedDraft models.Draft
+	require.NoError(t, db.Unscoped().First(&deletedDraft, draft.ID).Error)
+	assert.True(t, deletedDraft.DeletedAt.Valid)
+
+	var deletedVersion models.Version
+	require.NoError(t, db.Unscoped().First(&deletedVersion, version.ID).Error)
+	assert.True(t, deletedVersion.DeletedAt.Valid)
+
+	var deletedSession models.AISession
+	require.NoError(t, db.Unscoped().First(&deletedSession, session.ID).Error)
+	assert.True(t, deletedSession.DeletedAt.Valid)
+
+	var deletedMessage models.AIMessage
+	require.NoError(t, db.Unscoped().First(&deletedMessage, msg.ID).Error)
+	assert.True(t, deletedMessage.DeletedAt.Valid)
+
+	var deletedToolCall models.AIToolCall
+	require.NoError(t, db.Unscoped().First(&deletedToolCall, toolCall.ID).Error)
+	assert.True(t, deletedToolCall.DeletedAt.Valid)
 }
 
 func TestProjectService_Delete_CascadeClearsAssets(t *testing.T) {
@@ -129,18 +163,22 @@ func TestProjectService_Delete_CascadeClearsAssets(t *testing.T) {
 	proj, _ := svc.Create("user-1", "资产删除测试")
 
 	// Create file and note assets
-	_, err := assetSvc.UploadFile("user-1", proj.ID, "resume.pdf", []byte("%PDF fake"), 10)
+	fileAsset, err := assetSvc.UploadFile("user-1", proj.ID, "resume.pdf", []byte("%PDF fake"), 10)
 	require.NoError(t, err)
-	_, err = assetSvc.CreateNote("user-1", proj.ID, "note content", "Label")
+	noteAsset, err := assetSvc.CreateNote("user-1", proj.ID, "note content", "Label")
 	require.NoError(t, err)
 
 	err = svc.Delete("user-1", proj.ID)
 	assert.NoError(t, err)
 
-	// Assets should be gone from DB (file cleanup is AssetService responsibility)
+	assert.True(t, storage.Exists(*fileAsset.URI))
+
 	var assetCount int64
-	db.Model(&models.Asset{}).Where("project_id = ?", proj.ID).Count(&assetCount)
+	require.NoError(t, db.Model(&models.Asset{}).Where("project_id = ?", proj.ID).Count(&assetCount).Error)
 	assert.Zero(t, assetCount)
+
+	requireSoftDeletedAsset(t, db, fileAsset.ID)
+	requireSoftDeletedAsset(t, db, noteAsset.ID)
 }
 
 func TestProjectService_Delete_WrongUser(t *testing.T) {
@@ -159,6 +197,15 @@ func saveTestStoredFile(t *testing.T, store sharedstorage.FileStorage, userID st
 	key, err := store.Save(userID, sharedstorage.SHA256Hex(data), filename, data)
 	require.NoError(t, err)
 	return key
+}
+
+func requireSoftDeletedAsset(t *testing.T, db *gorm.DB, assetID uint) models.Asset {
+	t.Helper()
+
+	var asset models.Asset
+	require.NoError(t, db.Unscoped().First(&asset, assetID).Error)
+	require.True(t, asset.DeletedAt.Valid)
+	return asset
 }
 
 // --- AssetService tests ---
@@ -261,17 +308,92 @@ func TestAssetService_UploadFileWithReplacement_ReplacesSameNameAssetInProject(t
 	assert.NotEqual(t, oldAsset.ID, replacedAsset.ID)
 	require.NotNil(t, replacedAsset.URI)
 	assert.True(t, storage.Exists(*replacedAsset.URI))
-	assert.False(t, storage.Exists(*oldAsset.URI))
-	assert.False(t, storage.Exists(derivedKey))
+	assert.True(t, storage.Exists(*oldAsset.URI))
+	assert.True(t, storage.Exists(derivedKey))
 
-	var deletedCount int64
-	db.Model(&models.Asset{}).Where("id IN ?", []uint{oldAsset.ID, derivedAsset.ID}).Count(&deletedCount)
-	assert.Zero(t, deletedCount)
+	requireSoftDeletedAsset(t, db, oldAsset.ID)
+	requireSoftDeletedAsset(t, db, derivedAsset.ID)
 
 	var keptAssets []models.Asset
 	require.NoError(t, db.Where("project_id = ?", proj.ID).Find(&keptAssets).Error)
 	require.Len(t, keptAssets, 1)
 	assert.Equal(t, replacedAsset.ID, keptAssets[0].ID)
+}
+
+func TestAssetService_UploadFile_RestoresSoftDeletedSameFileAndDerivedAssets(t *testing.T) {
+	db := SetupTestDB(t)
+	storage := NewLocalStorage(t.TempDir())
+	svc := NewAssetService(db, storage)
+
+	projSvc := NewProjectService(db)
+	projA, err := projSvc.Create("user-1", "Project A")
+	require.NoError(t, err)
+	projB, err := projSvc.Create("user-1", "Project B")
+	require.NoError(t, err)
+
+	originalBytes := []byte("%PDF restore me")
+	oldAsset, err := svc.UploadFile("user-1", projA.ID, "resume.pdf", originalBytes, int64(len(originalBytes)))
+	require.NoError(t, err)
+
+	derivedBytes := []byte("derived-image")
+	derivedHash := sharedstorage.SHA256Hex(derivedBytes)
+	derivedKey, err := storage.Save(projA.UserID, derivedHash, ".png", derivedBytes)
+	require.NoError(t, err)
+	derivedLabel := "Derived image"
+	derivedAsset := models.Asset{
+		ProjectID: projA.ID,
+		Type:      "resume_image",
+		URI:       &derivedKey,
+		Label:     &derivedLabel,
+		FileHash:  &derivedHash,
+		Metadata: models.JSONB{
+			"parsing": map[string]interface{}{
+				"derived":         true,
+				"source_asset_id": oldAsset.ID,
+			},
+		},
+	}
+	require.NoError(t, db.Create(&derivedAsset).Error)
+
+	parsedContent := "Persisted parsed text"
+	require.NoError(t, db.Model(&models.Asset{}).Where("id = ?", oldAsset.ID).Updates(map[string]interface{}{
+		"content": parsedContent,
+		"metadata": models.JSONB{
+			"parsing": map[string]interface{}{
+				"original_filename":       "resume.pdf",
+				"source_deleted":          true,
+				"derived_image_asset_ids": []interface{}{derivedAsset.ID},
+			},
+		},
+		"uri": nil,
+	}).Error)
+
+	require.NoError(t, svc.DeleteAsset("user-1", oldAsset.ID))
+	requireSoftDeletedAsset(t, db, oldAsset.ID)
+	requireSoftDeletedAsset(t, db, derivedAsset.ID)
+
+	restoredAsset, err := svc.UploadFile("user-1", projB.ID, "resume.pdf", originalBytes, int64(len(originalBytes)))
+	require.NoError(t, err)
+	require.NotNil(t, restoredAsset)
+	assert.Equal(t, oldAsset.ID, restoredAsset.ID)
+	assert.Equal(t, projB.ID, restoredAsset.ProjectID)
+	require.NotNil(t, restoredAsset.FileHash)
+	require.NotNil(t, oldAsset.FileHash)
+	assert.Equal(t, *oldAsset.FileHash, *restoredAsset.FileHash)
+	require.NotNil(t, restoredAsset.Content)
+	assert.Equal(t, parsedContent, *restoredAsset.Content)
+	assert.Nil(t, restoredAsset.URI)
+
+	var activeAssets []models.Asset
+	require.NoError(t, db.Where("project_id = ?", projB.ID).Order("id asc").Find(&activeAssets).Error)
+	require.Len(t, activeAssets, 2)
+	assert.Equal(t, restoredAsset.ID, activeAssets[0].ID)
+	assert.Equal(t, derivedAsset.ID, activeAssets[1].ID)
+
+	var restoredDerived models.Asset
+	require.NoError(t, db.First(&restoredDerived, derivedAsset.ID).Error)
+	assert.Equal(t, projB.ID, restoredDerived.ProjectID)
+	assert.True(t, storage.Exists(derivedKey))
 }
 
 func TestAssetService_UploadFileWithReplacement_RejectsCrossProjectReplace(t *testing.T) {
@@ -544,13 +666,14 @@ func TestAssetService_DeleteAsset(t *testing.T) {
 	err = svc.DeleteAsset("user-1", asset.ID)
 	assert.NoError(t, err)
 
-	// File should be removed
-	assert.False(t, storage.Exists(*asset.URI))
+	assert.True(t, storage.Exists(*asset.URI))
 
-	// Asset record should be gone
 	var found models.Asset
 	result := db.First(&found, asset.ID)
 	assert.Error(t, result.Error)
+
+	deleted := requireSoftDeletedAsset(t, db, asset.ID)
+	assert.Equal(t, asset.ID, deleted.ID)
 }
 
 func TestAssetService_DeleteAsset_RemovesDerivedImageAssets(t *testing.T) {
@@ -621,14 +744,14 @@ func TestAssetService_DeleteAsset_RemovesDerivedImageAssets(t *testing.T) {
 	err = svc.DeleteAsset("user-1", sourceAsset.ID)
 	assert.NoError(t, err)
 
-	assert.False(t, storage.Exists(*sourceAsset.URI))
-	assert.False(t, storage.Exists(derivedKey1))
-	assert.False(t, storage.Exists(derivedKey2))
+	assert.True(t, storage.Exists(*sourceAsset.URI))
+	assert.True(t, storage.Exists(derivedKey1))
+	assert.True(t, storage.Exists(derivedKey2))
 	assert.True(t, storage.Exists(unrelatedKey))
 
-	var deletedCount int64
-	db.Model(&models.Asset{}).Where("id IN ?", []uint{sourceAsset.ID, derivedAsset1.ID, derivedAsset2.ID}).Count(&deletedCount)
-	assert.Zero(t, deletedCount)
+	requireSoftDeletedAsset(t, db, sourceAsset.ID)
+	requireSoftDeletedAsset(t, db, derivedAsset1.ID)
+	requireSoftDeletedAsset(t, db, derivedAsset2.ID)
 
 	var kept models.Asset
 	require.NoError(t, db.First(&kept, unrelatedAsset.ID).Error)
@@ -651,7 +774,7 @@ func TestAssetService_DeleteAsset_WrongUser(t *testing.T) {
 	assert.ErrorIs(t, err, ErrProjectNotFound)
 }
 
-func TestAssetService_DeleteAsset_ReturnsErrorWhenStorageDeleteFails(t *testing.T) {
+func TestAssetService_DeleteAsset_IgnoresStorageDeleteFailuresBecauseFilesAreRetained(t *testing.T) {
 	db := SetupTestDB(t)
 	storage := newFailingDeleteStorage(errors.New("disk busy"))
 	svc := NewAssetService(db, storage)
@@ -664,12 +787,9 @@ func TestAssetService_DeleteAsset_ReturnsErrorWhenStorageDeleteFails(t *testing.
 	require.NoError(t, err)
 
 	err = svc.DeleteAsset("user-1", asset.ID)
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "delete stored file")
+	require.NoError(t, err)
 
-	var kept models.Asset
-	require.NoError(t, db.First(&kept, asset.ID).Error)
-	assert.Equal(t, asset.ID, kept.ID)
+	requireSoftDeletedAsset(t, db, asset.ID)
 }
 
 func TestAssetService_DeleteProjectAssets(t *testing.T) {
@@ -690,16 +810,16 @@ func TestAssetService_DeleteProjectAssets(t *testing.T) {
 	err = svc.DeleteProjectAssets("user-1", proj.ID)
 	assert.NoError(t, err)
 
-	// File should be removed
-	assert.False(t, storage.Exists(*fileAsset.URI))
+	assert.True(t, storage.Exists(*fileAsset.URI))
 
-	// All assets for this project should be gone
 	var assets []models.Asset
-	db.Where("project_id = ?", proj.ID).Find(&assets)
+	require.NoError(t, db.Where("project_id = ?", proj.ID).Find(&assets).Error)
 	assert.Len(t, assets, 0)
+
+	requireSoftDeletedAsset(t, db, fileAsset.ID)
 }
 
-func TestAssetService_DeleteProjectAssets_ReturnsErrorWhenStorageDeleteFails(t *testing.T) {
+func TestAssetService_DeleteProjectAssets_IgnoresStorageDeleteFailuresBecauseFilesAreRetained(t *testing.T) {
 	db := SetupTestDB(t)
 	storage := newFailingDeleteStorage(errors.New("disk busy"))
 	svc := NewAssetService(db, storage)
@@ -714,14 +834,11 @@ func TestAssetService_DeleteProjectAssets_ReturnsErrorWhenStorageDeleteFails(t *
 	require.NoError(t, err)
 
 	err = svc.DeleteProjectAssets("user-1", proj.ID)
-	require.Error(t, err)
-	assert.ErrorContains(t, err, "delete stored file")
+	require.NoError(t, err)
 
 	var keptAssets []models.Asset
 	require.NoError(t, db.Where("project_id = ?", proj.ID).Find(&keptAssets).Error)
-	assert.Len(t, keptAssets, 2)
+	assert.Len(t, keptAssets, 0)
 
-	var keptFile models.Asset
-	require.NoError(t, db.First(&keptFile, fileAsset.ID).Error)
-	assert.Equal(t, fileAsset.ID, keptFile.ID)
+	requireSoftDeletedAsset(t, db, fileAsset.ID)
 }

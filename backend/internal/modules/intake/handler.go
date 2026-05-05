@@ -12,8 +12,8 @@ import (
 
 // Error codes for intake module (01xxx)
 const (
-	CodeParamInvalid      = 10001 // request parameter invalid
-	CodeInternalError     = 50001 // internal server error
+	CodeParamInvalid      = 1001 // request parameter invalid
+	CodeInternalError     = 1999 // internal server error
 	CodeUnsupportedFormat = 1001  // unsupported file format
 	CodeFileTooLarge      = 1002  // file size exceeds limit
 	CodeInvalidGitURL     = 1003  // invalid git URL
@@ -123,18 +123,6 @@ func (h *Handler) DeleteProject(c *gin.Context) {
 	uid := userID(c)
 	projectID := uint(id)
 
-	// Step 1: Delete asset files + DB records (DeleteProjectAssets handles both)
-	if err := h.assetSvc.DeleteProjectAssets(uid, projectID); err != nil {
-		if errors.Is(err, ErrProjectNotFound) {
-			response.Error(c, CodeProjectNotFound, "project not found")
-		} else {
-			response.Error(c, CodeInternalError, "failed to delete project assets")
-		}
-		return
-	}
-
-	// Step 2: Cascade delete remaining DB records in a single transaction
-	// (includes assets as safety net in case step 1 partially failed)
 	if err := h.projectSvc.Delete(uid, projectID); err != nil {
 		if errors.Is(err, ErrProjectNotFound) {
 			response.Error(c, CodeProjectNotFound, "project not found")

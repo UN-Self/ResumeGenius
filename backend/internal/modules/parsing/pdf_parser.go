@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"image/png"
 	"io"
+	"log"
 
 	"github.com/ledongthuc/pdf"
 )
@@ -98,6 +99,7 @@ func extractPageImages(pageNum int, xObjects pdf.Value) []ParsedImage {
 
 		parsedImage, ok := extractImageObject(pageNum, objectName, objectValue)
 		if !ok {
+			log.Printf("parsing: skipped embedded image on page %d object %s", pageNum, objectName)
 			continue
 		}
 		images = append(images, parsedImage)

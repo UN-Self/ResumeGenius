@@ -55,9 +55,11 @@ func (s *ProjectService) GetByID(userID string, id uint) (*models.Project, error
 }
 
 func (s *ProjectService) Delete(userID string, id uint) error {
-	// Validate ownership first
 	var count int64
-	s.db.Where("id = ? AND user_id = ?", id, userID).Model(&models.Project{}).Count(&count)
+	result := s.db.Model(&models.Project{}).Where("id = ? AND user_id = ?", id, userID).Count(&count)
+	if result.Error != nil {
+		return fmt.Errorf("validate project ownership: %w", result.Error)
+	}
 	if count == 0 {
 		return ErrProjectNotFound
 	}
@@ -71,23 +73,39 @@ func (s *ProjectService) Delete(userID string, id uint) error {
 		}
 
 		// Delete AI messages for all drafts of this project
-		if err := tx.Exec(`DELETE FROM ai_messages WHERE session_id IN (SELECT id FROM ai_sessions WHERE draft_id IN (SELECT id FROM drafts WHERE project_id = ?))`, id).Error; err != nil {
-			return fmt.Errorf("delete ai_messages: %w", err)
+		var draftIDs []uint
+		if err := tx.Model(&models.Draft{}).Where("project_id = ?", id).Pluck("id", &draftIDs).Error; err != nil {
+			return fmt.Errorf("load draft ids: %w", err)
 		}
 
-		// Delete AI sessions for all drafts of this project
-		if err := tx.Exec(`DELETE FROM ai_sessions WHERE draft_id IN (SELECT id FROM drafts WHERE project_id = ?)`, id).Error; err != nil {
-			return fmt.Errorf("delete ai_sessions: %w", err)
-		}
+		if len(draftIDs) > 0 {
+			if err := tx.Where("draft_id IN ?", draftIDs).Delete(&models.Version{}).Error; err != nil {
+				return fmt.Errorf("delete versions: %w", err)
+			}
 
-		// Delete versions for all drafts of this project
-		if err := tx.Exec(`DELETE FROM versions WHERE draft_id IN (SELECT id FROM drafts WHERE project_id = ?)`, id).Error; err != nil {
-			return fmt.Errorf("delete versions: %w", err)
-		}
+			var sessionIDs []uint
+			if err := tx.Model(&models.AISession{}).Where("draft_id IN ?", draftIDs).Pluck("id", &sessionIDs).Error; err != nil {
+				return fmt.Errorf("load ai session ids: %w", err)
+			}
 
-		// Delete all drafts
-		if err := tx.Where("project_id = ?", id).Delete(&models.Draft{}).Error; err != nil {
-			return fmt.Errorf("delete drafts: %w", err)
+			if len(sessionIDs) > 0 {
+				if err := tx.Model(&models.AIMessage{}).Where("session_id IN ?", sessionIDs).Update("tool_call_id", nil).Error; err != nil {
+					return fmt.Errorf("clear ai_message.tool_call_id: %w", err)
+				}
+				if err := tx.Where("session_id IN ?", sessionIDs).Delete(&models.AIMessage{}).Error; err != nil {
+					return fmt.Errorf("delete ai_messages: %w", err)
+				}
+				if err := tx.Where("session_id IN ?", sessionIDs).Delete(&models.AIToolCall{}).Error; err != nil {
+					return fmt.Errorf("delete ai_tool_calls: %w", err)
+				}
+			}
+
+			if err := tx.Where("draft_id IN ?", draftIDs).Delete(&models.AISession{}).Error; err != nil {
+				return fmt.Errorf("delete ai_sessions: %w", err)
+			}
+			if err := tx.Where("project_id = ?", id).Delete(&models.Draft{}).Error; err != nil {
+				return fmt.Errorf("delete drafts: %w", err)
+			}
 		}
 
 		// Delete all assets
@@ -140,7 +158,10 @@ func NewAssetService(db *gorm.DB, store storage.FileStorage) *AssetService {
 
 func (s *AssetService) validateProject(userID string, projectID uint) error {
 	var count int64
-	s.db.Where("id = ? AND user_id = ?", projectID, userID).Model(&models.Project{}).Count(&count)
+	result := s.db.Model(&models.Project{}).Where("id = ? AND user_id = ?", projectID, userID).Count(&count)
+	if result.Error != nil {
+		return fmt.Errorf("validate project: %w", result.Error)
+	}
 	if count == 0 {
 		return ErrProjectNotFound
 	}
@@ -166,13 +187,24 @@ func (s *AssetService) UploadFileWithReplacement(userID string, projectID uint, 
 		return nil, ErrFileTooLarge
 	}
 
+	var replaceAsset *models.Asset
+	var err error
 	if replaceAssetID != nil {
-		if _, err := s.loadReplaceableAsset(userID, projectID, filename, assetType, *replaceAssetID); err != nil {
+		replaceAsset, err = s.loadReplaceableAsset(userID, projectID, filename, assetType, *replaceAssetID)
+		if err != nil {
 			return nil, err
 		}
 	}
 
 	fileHash := storage.SHA256Hex(data)
+	restoredAsset, err := s.restoreDeletedAssetByFileHash(userID, projectID, filename, assetType, fileHash, replaceAsset)
+	if err != nil {
+		return nil, err
+	}
+	if restoredAsset != nil {
+		return restoredAsset, nil
+	}
+
 	uri, err := s.storage.Save(userID, fileHash, ext, data)
 	if err != nil {
 		return nil, fmt.Errorf("save file: %w", err)
@@ -186,13 +218,12 @@ func (s *AssetService) UploadFileWithReplacement(userID string, projectID uint, 
 		Metadata:  withAssetOriginalFilenameMetadata(nil, filename),
 	}
 	if err := s.db.Create(&asset).Error; err != nil {
-		// Rollback: delete the file already saved
 		_ = s.storage.Delete(uri)
 		return nil, fmt.Errorf("create asset record: %w", err)
 	}
 
-	if replaceAssetID != nil {
-		if err := s.DeleteAsset(userID, *replaceAssetID); err != nil {
+	if replaceAsset != nil {
+		if err := s.DeleteAsset(userID, replaceAsset.ID); err != nil {
 			_ = s.db.Delete(&models.Asset{}, asset.ID).Error
 			_ = s.storage.Delete(uri)
 			return nil, err
@@ -298,33 +329,16 @@ func (s *AssetService) DeleteAsset(userID string, assetID uint) error {
 		return err
 	}
 
-	assetsToDelete, err := s.collectAssetsForDelete(asset)
-	if err != nil {
-		return err
-	}
-
-	if err := s.deleteStoredAssetFiles(assetsToDelete); err != nil {
-		return err
-	}
-
-	if err := s.db.Where("project_id = ? AND id IN ?", asset.ProjectID, assetIDsForDelete(assetsToDelete)).Delete(&models.Asset{}).Error; err != nil {
-		return fmt.Errorf("delete asset: %w", err)
-	}
-
-	return nil
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := s.softDeleteAssetCascade(tx, asset); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (s *AssetService) DeleteProjectAssets(userID string, projectID uint) error {
 	if err := s.validateProject(userID, projectID); err != nil {
-		return err
-	}
-
-	var assets []models.Asset
-	if err := s.db.Where("project_id = ?", projectID).Find(&assets).Error; err != nil {
-		return fmt.Errorf("find project assets: %w", err)
-	}
-
-	if err := s.deleteStoredAssetFiles(assets); err != nil {
 		return err
 	}
 
@@ -452,7 +466,102 @@ func (s *AssetService) loadReplaceableAsset(userID string, projectID uint, filen
 	return &asset, nil
 }
 
-func (s *AssetService) collectAssetsForDelete(asset models.Asset) ([]models.Asset, error) {
+func (s *AssetService) findDeletedAssetByFileHash(userID, fileHash string) (*models.Asset, error) {
+	var asset models.Asset
+	err := s.db.Unscoped().
+		Joins("JOIN projects ON projects.id = assets.project_id").
+		Where("projects.user_id = ? AND assets.file_hash = ? AND assets.deleted_at IS NOT NULL", userID, fileHash).
+		Order("assets.deleted_at DESC").
+		First(&asset).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("find deleted asset by file hash: %w", err)
+	}
+	return &asset, nil
+}
+
+func (s *AssetService) restoreDeletedAssetByFileHash(
+	userID string,
+	projectID uint,
+	filename, assetType, fileHash string,
+	replaceAsset *models.Asset,
+) (*models.Asset, error) {
+	deletedAsset, err := s.findDeletedAssetByFileHash(userID, fileHash)
+	if err != nil || deletedAsset == nil {
+		return deletedAsset, err
+	}
+
+	restoredMetadata := withAssetOriginalFilenameMetadata(deletedAsset.Metadata, filename)
+	derivedIDs := derivedImageAssetIDsFromAssetMetadata(deletedAsset.Metadata)
+	restoredAssetID := deletedAsset.ID
+
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		if replaceAsset != nil {
+			if err := s.softDeleteAssetCascade(tx, *replaceAsset); err != nil {
+				return err
+			}
+		}
+
+		updates := map[string]interface{}{
+			"project_id":  projectID,
+			"type":        assetType,
+			"label":       nil,
+			"file_hash":   fileHash,
+			"metadata":    restoredMetadata,
+			"deleted_at":  nil,
+			"updated_at":  gorm.Expr("CURRENT_TIMESTAMP"),
+		}
+		if err := tx.Unscoped().Model(&models.Asset{}).Where("id = ?", restoredAssetID).Updates(updates).Error; err != nil {
+			return fmt.Errorf("restore deleted asset: %w", err)
+		}
+
+		if len(derivedIDs) == 0 {
+			return nil
+		}
+
+		if err := tx.Unscoped().
+			Model(&models.Asset{}).
+			Where("type = ? AND id IN ?", "resume_image", derivedIDs).
+			Updates(map[string]interface{}{
+				"project_id": projectID,
+				"deleted_at": nil,
+				"updated_at": gorm.Expr("CURRENT_TIMESTAMP"),
+			}).Error; err != nil {
+			return fmt.Errorf("restore derived image assets: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var restoredAsset models.Asset
+	if err := s.db.First(&restoredAsset, restoredAssetID).Error; err != nil {
+		return nil, fmt.Errorf("reload restored asset: %w", err)
+	}
+	return &restoredAsset, nil
+}
+
+func (s *AssetService) softDeleteAssetCascade(tx *gorm.DB, asset models.Asset) error {
+	assetsToDelete, err := s.collectAssetsForDelete(tx, asset)
+	if err != nil {
+		return err
+	}
+
+	ids := assetIDsForDelete(assetsToDelete)
+	if len(ids) == 0 {
+		return nil
+	}
+	if err := tx.Where("id IN ?", ids).Delete(&models.Asset{}).Error; err != nil {
+		return fmt.Errorf("delete asset: %w", err)
+	}
+	return nil
+}
+
+func (s *AssetService) collectAssetsForDelete(db *gorm.DB, asset models.Asset) ([]models.Asset, error) {
 	assets := []models.Asset{asset}
 	derivedIDs := derivedImageAssetIDsFromAssetMetadata(asset.Metadata)
 	if len(derivedIDs) == 0 {
@@ -460,7 +569,7 @@ func (s *AssetService) collectAssetsForDelete(asset models.Asset) ([]models.Asse
 	}
 
 	var derivedAssets []models.Asset
-	if err := s.db.
+	if err := db.
 		Where("project_id = ? AND type = ? AND id IN ?", asset.ProjectID, "resume_image", derivedIDs).
 		Find(&derivedAssets).Error; err != nil {
 		return nil, fmt.Errorf("find derived image assets: %w", err)
@@ -509,26 +618,6 @@ func assetIDsForDelete(assets []models.Asset) []uint {
 		ids = append(ids, asset.ID)
 	}
 	return ids
-}
-
-func (s *AssetService) deleteStoredAssetFiles(assets []models.Asset) error {
-	for _, asset := range assets {
-		if err := s.deleteStoredAssetFile(asset); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (s *AssetService) deleteStoredAssetFile(asset models.Asset) error {
-	if s.storage == nil || asset.URI == nil || *asset.URI == "" {
-		return nil
-	}
-
-	if err := s.storage.Delete(*asset.URI); err != nil {
-		return fmt.Errorf("delete stored file for asset %d: %w", asset.ID, err)
-	}
-	return nil
 }
 
 var storedFilePrefixPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_`)
