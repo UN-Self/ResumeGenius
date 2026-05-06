@@ -51,6 +51,34 @@ describe('ChatPanel', () => {
     })
   })
 
+  it('uses theme-aware styling for assistant message bubbles', async () => {
+    server.use(
+      http.get('/api/v1/ai/sessions', () => {
+        return HttpResponse.json({ code: 0, data: [{ id: 5, draft_id: 1 }] })
+      }),
+      http.get('/api/v1/ai/sessions/5/history', () => {
+        return HttpResponse.json({
+          code: 0,
+          data: {
+            items: [
+              { id: 2, role: 'assistant', content: 'hi there', created_at: '' },
+            ],
+          },
+        })
+      }),
+    )
+
+    const { container } = renderChatPanel()
+
+    await waitFor(() => {
+      expect(screen.getByText('hi there')).toBeInTheDocument()
+    })
+
+    const assistantBubble = container.querySelector('[data-message-role="assistant"]')
+    expect(assistantBubble).toHaveClass('bg-[var(--color-card)]')
+    expect(assistantBubble).not.toHaveClass('bg-white')
+  })
+
   it('shows undo/redo buttons in chat after edits are applied', async () => {
     const onRestoreHtml = vi.fn()
     renderChatPanel(1, vi.fn().mockResolvedValue(undefined), onRestoreHtml)
@@ -178,7 +206,7 @@ describe('ChatPanel', () => {
   })
 
   it('clears messages and creates new session when new chat button is clicked', async () => {
-    let newSessionId = 10
+    const newSessionId = 10
     server.use(
       http.get('/api/v1/ai/sessions', () => {
         return HttpResponse.json({ code: 0, data: [{ id: 5, draft_id: 1 }] })

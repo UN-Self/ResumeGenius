@@ -1,6 +1,8 @@
 import { FileText, ArrowLeft } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { ThemeSwitcher } from '@/components/ui/theme-switcher'
 import type { ExportStatus } from '@/hooks/useExport'
 
 interface ActionBarProps {
@@ -32,9 +34,10 @@ export function ActionBar({
   return (
     <div className="action-bar">
       {/* Logo */}
-      <div className="flex items-center gap-2">
-        <FileText size={24} className="text-primary" />
-      </div>
+      <Link to="/" className="action-bar-home-link" aria-label="返回简历首页">
+        <FileText size={22} className="text-primary" />
+        <span className="hidden text-sm font-semibold text-foreground sm:inline">ResumeGenius</span>
+      </Link>
 
       {/* Project Name */}
       <div className="h-6 w-px bg-border" />
@@ -47,6 +50,8 @@ export function ActionBar({
       <div className="flex items-center gap-2">
         {saveIndicator}
       </div>
+
+      <ThemeSwitcher compact className="shrink-0" />
 
       {/* Version History */}
       {children}
