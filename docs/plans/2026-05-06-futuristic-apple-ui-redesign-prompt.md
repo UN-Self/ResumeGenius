@@ -45,7 +45,7 @@
 
 当前界面过于空白和传统，需要升级为有科技感、期待感和高级质感的界面。参考图 2、图 3 的感觉：深色沉浸式工作台、半透明玻璃面板、微弱发光边界、AI 正在生成的分步状态列表、左侧对话/任务流、右侧实时预览区域、浮动气泡工具条和右键菜单。整体要像 Apple Pro 应用和现代 AI IDE 的结合，但不要做成浮夸游戏 UI。
 
-主题不要只做简单日间/夜间两套。请设计 Mode x Palette 的主题系统：Mode 分为 light / dark，Palette 至少包含 Futuristic Apple、Warm Editorial、Quiet Luxury、Professional Blue 四套色调。Futuristic Apple 用于默认科技感版本；Warm Editorial 和 Quiet Luxury 来自现有同事文档，用于保留简历产品的纸张温度、暖驼色和克制专业感；Professional Blue 可承接旧版编辑器蓝色系。所有主题共享语义 token，支持一键切换或后续扩展。
+主题不要只做简单日间/夜间两套。请设计 Mode x Palette 的主题系统：Mode 分为 light / dark，Palette 包含 Futuristic Apple、Warm Editorial、Quiet Luxury 三套色调。Futuristic Apple 用于默认科技感版本；Warm Editorial 和 Quiet Luxury 来自现有同事文档，用于保留简历产品的纸张温度、暖驼色和克制专业感。主题选择器第一项是“跟随系统”：系统夜间使用科技夜，系统日间使用银白。所有主题共享语义 token，支持一键切换或后续扩展。
 
 请重构所有相关页面和组件，不要只改首页或工作台：
 1. 登录页：品牌入口、登录表单、错误提示、加载状态、主题切换。
@@ -94,7 +94,7 @@
 
 ```ts
 type ThemeMode = 'light' | 'dark'
-type ThemePalette = 'futuristic-apple' | 'warm-editorial' | 'quiet-luxury' | 'professional-blue'
+type ThemePalette = 'futuristic-apple' | 'warm-editorial' | 'quiet-luxury'
 ```
 
 | Palette | 来源/用途 | 气质 |
@@ -102,7 +102,6 @@ type ThemePalette = 'futuristic-apple' | 'warm-editorial' | 'quiet-luxury' | 'pr
 | `futuristic-apple` | 本次重设计默认 | 银白玻璃、石墨黑、冰蓝高光、Apple-like 科技感 |
 | `warm-editorial` | `docs/01-product/ui-design-system.md` / Intake 同事文档 | 暖驼色、纸张温度、编辑器专业感 |
 | `quiet-luxury` | Intake 文档暗色备用方案 | 深棕黑、暖金高光、克制高级 |
-| `professional-blue` | 旧版编辑器蓝色系兼容 | 稳定、工具感、适合企业用户 |
 
 语义 token 保持一致，具体色值由 `mode + palette` 决定：
 
@@ -204,28 +203,9 @@ type ThemePalette = 'futuristic-apple' | 'warm-editorial' | 'quiet-luxury' | 'pr
 
 关键词：`quiet luxury`, `warm graphite`, `champagne accent`, `premium editor`。
 
-### 2.5 Professional Blue 色调
+### 2.5 色调使用规则
 
-用于保留旧版工具感和企业专业感，避免所有主题都偏暖或偏霓虹。
-
-| 角色 | 建议色值 | 用途 |
-|------|----------|------|
-| `background` | `#f7faff` | 浅蓝白页面基底 |
-| `surface` | `#ffffff` | 卡片、弹窗 |
-| `surface-strong` | `#eef4ff` | 弱化面板 |
-| `border` | `#d7e2f2` | 通用边框 |
-| `border-glow` | `#80b7ff` | hover / focus 边界 |
-| `text` | `#152033` | 主文字 |
-| `muted` | `#61708a` | 次级文字 |
-| `accent` | `#1a73e8` | 主按钮、链接 |
-| `accent-hover` | `#1557b0` | 主按钮 hover |
-| `accent-bg` | `#e8f0fe` | 标签、选中背景 |
-
-关键词：`clean SaaS`, `calm enterprise`, `blue productivity`, `stable workspace`。
-
-### 2.6 色调使用规则
-
-- 默认推荐 `futuristic-apple + dark` 作为最有科技感的展示版本。
+- 主题选择器必须提供“跟随系统”，夜间解析为 `futuristic-apple + dark`，日间解析为 `futuristic-apple + light`。
 - 日常编辑可提供 `futuristic-apple + light` 或 `warm-editorial + light`。
 - 简历 A4 纸永远使用 `--resume-paper: #ffffff`，不随暗色模式变黑。
 - 背景可以有玻璃、发光、粒子、网格，但不能穿透干扰 A4 简历内容。
@@ -392,7 +372,7 @@ type ThemePalette = 'futuristic-apple' | 'warm-editorial' | 'quiet-luxury' | 'pr
 
 ## 7. 验收标准
 
-- `futuristic-apple`, `warm-editorial`, `quiet-luxury`, `professional-blue` 至少有明确 token 方案，其中默认主题完整实现 light / dark。
+- `futuristic-apple`, `warm-editorial`, `quiet-luxury` 至少有明确 token 方案，其中默认主题完整实现 light / dark。
 - 主题覆盖登录页、项目列表、项目详情、工作台、AI 面板、弹窗、按钮、输入框、卡片、空状态和错误状态。
 - 主题实现沿用当前 `--color-*` token，现有 Tailwind utility class 不需要大面积重写。
 - 项目/简历列表使用模板预览式网格卡片，不再使用简单长条卡片。
@@ -411,7 +391,7 @@ type ThemePalette = 'futuristic-apple' | 'warm-editorial' | 'quiet-luxury' | 'pr
 ### 8.1 已实现范围
 
 - Workbench 全局主题 token：基于当前 Tailwind v4 `@theme` / `--color-*` 命名扩展，不另起孤立变量系统。
-- 主题切换：新增科技夜、银白、暖驼、静奢、企业蓝五个 preset，并持久化到 `localStorage`。
+- 主题切换：新增跟随系统、科技夜、银白、暖驼、静奢五个选项；跟随系统不锁定具体主题，会根据 OS 明暗自动解析，手动选择具体主题后持久化到 `localStorage`。
 - 登录页：改为玻璃登录卡片 + 左侧 AI 简历工作台氛围。
 - 项目列表页：移除顶部简单创建输入框主入口，改为简历图库网格和同尺寸 `+` 新建简历卡片。
 - 项目详情页：改为 AI intake pipeline，上传、Git、备注入口以三张操作卡呈现。

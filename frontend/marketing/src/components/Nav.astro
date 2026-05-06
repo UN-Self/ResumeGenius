@@ -6,11 +6,11 @@ const navLinks = [
 ]
 
 const themePresets = [
+  { id: 'system', label: '跟随系统' },
   { id: 'futuristic-dark', label: '科技夜' },
   { id: 'futuristic-light', label: '银白' },
   { id: 'warm-editorial', label: '暖驼' },
   { id: 'quiet-luxury', label: '静奢' },
-  { id: 'professional-blue', label: '企业蓝' },
 ]
 ---
 
@@ -30,7 +30,7 @@ const themePresets = [
       <div class="theme-menu relative" data-theme-menu>
         <button type="button" class="theme-menu-trigger" data-theme-menu-button aria-expanded="false">
           <span class="theme-menu-dot"></span>
-          <span data-theme-current>科技夜</span>
+          <span data-theme-current>跟随系统</span>
           <svg class="theme-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
         </button>
         <div class="theme-menu-panel hidden" data-theme-menu-panel>
@@ -65,7 +65,7 @@ const themePresets = [
       <button type="button" class="theme-menu-trigger w-full justify-between" data-theme-menu-button aria-expanded="false">
         <span class="inline-flex items-center gap-2">
           <span class="theme-menu-dot"></span>
-          <span data-theme-current>科技夜</span>
+          <span data-theme-current>跟随系统</span>
         </span>
         <svg class="theme-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
       </button>
