@@ -71,6 +71,7 @@ func setupRouter(t *testing.T) (*gin.Engine, *Handler, *gorm.DB) {
 		d := drafts.Group("/:draft_id")
 		{
 			d.GET("/versions", h.ListVersions)
+			d.GET("/versions/:version_id", h.GetVersion)
 			d.POST("/versions", h.CreateVersion)
 			d.POST("/rollback", h.Rollback)
 			d.POST("/export", h.CreateExport)
@@ -217,6 +218,38 @@ func TestHandler_Rollback(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("%d", draft.ID), fmt.Sprintf("%v", data["draft_id"]))
 	assert.Contains(t, data["new_version_label"], "回退到版本")
 	assert.NotZero(t, data["new_version_id"])
+}
+
+func TestHandler_GetVersion(t *testing.T) {
+	r, _, db := setupRouter(t)
+	draft := seedDraft(t, db)
+
+	v1 := seedVersion(t, db, draft.ID, "v1")
+
+	w := doJSON(t, r, "GET",
+		fmt.Sprintf("/drafts/%d/versions/%d", draft.ID, v1.ID), nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	resp := parseResp(t, w)
+	assert.Equal(t, 0, resp.Code)
+
+	data, ok := resp.Data.(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "v1", data["label"])
+	assert.NotZero(t, data["id"])
+	assert.Contains(t, data["html_snapshot"], "Test")
+}
+
+func TestHandler_GetVersion_NotFound(t *testing.T) {
+	r, _, db := setupRouter(t)
+	draft := seedDraft(t, db)
+
+	w := doJSON(t, r, "GET",
+		fmt.Sprintf("/drafts/%d/versions/99999", draft.ID), nil)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	resp := parseResp(t, w)
+	assert.Equal(t, CodeVersionNotFound, resp.Code)
 }
 
 // ---------------------------------------------------------------------------

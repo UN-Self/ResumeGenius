@@ -43,6 +43,19 @@ func (s *VersionService) ListByDraft(draftID uint) ([]models.Version, error) {
 	return versions, err
 }
 
+// GetByID returns a single version by ID, scoped to the given draft.
+func (s *VersionService) GetByID(draftID, versionID uint) (*models.Version, error) {
+	var version models.Version
+	err := s.db.Where("id = ? AND draft_id = ?", versionID, draftID).First(&version).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrVersionNotFound
+		}
+		return nil, err
+	}
+	return &version, nil
+}
+
 // Create snapshots the current draft HTML and creates a new version record.
 // If label is empty, it defaults to "手动保存".
 func (s *VersionService) Create(draftID uint, label string) (*models.Version, error) {
