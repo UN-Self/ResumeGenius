@@ -211,6 +211,7 @@ button:disabled {
 
 .app-shell {
   position: relative;
+  isolation: isolate;
   min-height: 100vh;
   overflow: hidden;
   background:
@@ -229,6 +230,25 @@ button:disabled {
     linear-gradient(180deg, color-mix(in srgb, var(--color-background), transparent 8%), var(--color-background));
   mask-image: linear-gradient(to bottom, black, transparent 78%);
   z-index: 0;
+  animation: ambient-glow-drift 18s ease-in-out infinite alternate;
+}
+
+.app-shell::after {
+  content: "";
+  position: fixed;
+  inset: -12vmax;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.72;
+  background:
+    radial-gradient(circle at 14% 24%, color-mix(in srgb, var(--color-primary), transparent 86%) 0 5.5rem, transparent 5.7rem),
+    radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--color-accent), transparent 88%) 0 8rem, transparent 8.2rem),
+    radial-gradient(circle at 78% 76%, color-mix(in srgb, var(--color-primary), transparent 91%) 0 6.4rem, transparent 6.6rem),
+    radial-gradient(circle at 24% 78%, transparent 0 4.8rem, color-mix(in srgb, var(--color-accent), transparent 82%) 4.9rem 5.15rem, transparent 5.25rem),
+    radial-gradient(ellipse at 50% 42%, color-mix(in srgb, var(--color-primary), transparent 94%) 0 18rem, transparent 18.5rem);
+  filter: blur(0.3px) saturate(128%);
+  transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  animation: ambient-orbit 26s ease-in-out infinite alternate;
 }
 
 .glass-panel {
@@ -352,6 +372,29 @@ button:disabled {
   }
 }
 
+@keyframes ambient-orbit {
+  0% {
+    transform: translate3d(-1.5vw, -1vh, 0) rotate(0deg) scale(1);
+  }
+  45% {
+    transform: translate3d(1.8vw, 1.2vh, 0) rotate(4deg) scale(1.025);
+  }
+  100% {
+    transform: translate3d(-0.8vw, 2vh, 0) rotate(-3deg) scale(1.04);
+  }
+}
+
+@keyframes ambient-glow-drift {
+  0% {
+    transform: translate3d(0, -1vh, 0) scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate3d(0, 1.5vh, 0) scale(1.03);
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -370,6 +413,11 @@ button:disabled {
 
   .typing-cursor {
     opacity: 0;
+    animation: none !important;
+  }
+
+  .app-shell::before,
+  .app-shell::after {
     animation: none !important;
   }
 }
