@@ -220,6 +220,16 @@ button:disabled {
   background-size: 64px 64px;
 }
 
+.grid-ripple-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  opacity: 0.82;
+}
+
 .app-shell::before {
   content: "";
   position: fixed;
@@ -227,10 +237,13 @@ button:disabled {
   pointer-events: none;
   background:
     radial-gradient(circle at 50% -10%, color-mix(in srgb, var(--color-primary), transparent 74%), transparent 34rem),
+    radial-gradient(circle at 8% 10%, color-mix(in srgb, var(--color-primary), transparent 88%) 0 6rem, transparent 6.3rem),
+    radial-gradient(circle at 96% 9%, color-mix(in srgb, var(--color-accent), transparent 88%) 0 8rem, transparent 8.4rem),
+    radial-gradient(circle at 82% 96%, color-mix(in srgb, var(--color-primary), transparent 90%) 0 6.5rem, transparent 6.8rem),
     linear-gradient(180deg, color-mix(in srgb, var(--color-background), transparent 8%), var(--color-background));
   mask-image: linear-gradient(to bottom, black, transparent 78%);
   z-index: 0;
-  animation: ambient-glow-drift 18s ease-in-out infinite alternate;
+  animation: ambient-glow-drift 16s ease-in-out infinite alternate;
 }
 
 .app-shell::after {
@@ -245,10 +258,14 @@ button:disabled {
     radial-gradient(circle at 88% 18%, color-mix(in srgb, var(--color-accent), transparent 88%) 0 8rem, transparent 8.2rem),
     radial-gradient(circle at 78% 76%, color-mix(in srgb, var(--color-primary), transparent 91%) 0 6.4rem, transparent 6.6rem),
     radial-gradient(circle at 24% 78%, transparent 0 4.8rem, color-mix(in srgb, var(--color-accent), transparent 82%) 4.9rem 5.15rem, transparent 5.25rem),
-    radial-gradient(ellipse at 50% 42%, color-mix(in srgb, var(--color-primary), transparent 94%) 0 18rem, transparent 18.5rem);
+    radial-gradient(ellipse at 50% 42%, color-mix(in srgb, var(--color-primary), transparent 94%) 0 18rem, transparent 18.5rem),
+    radial-gradient(circle at 8% 92%, transparent 0 5.2rem, color-mix(in srgb, var(--color-accent), transparent 84%) 5.3rem 5.6rem, transparent 5.8rem),
+    radial-gradient(circle at 62% 12%, transparent 0 3.5rem, color-mix(in srgb, var(--color-primary), transparent 86%) 3.6rem 3.85rem, transparent 4rem),
+    radial-gradient(circle at 43% 88%, color-mix(in srgb, var(--color-accent), transparent 92%) 0 5.8rem, transparent 6.1rem),
+    radial-gradient(circle at 96% 58%, transparent 0 4.2rem, color-mix(in srgb, var(--color-primary), transparent 88%) 4.3rem 4.55rem, transparent 4.75rem);
   filter: blur(0.3px) saturate(128%);
   transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
-  animation: ambient-orbit 26s ease-in-out infinite alternate;
+  animation: ambient-orbit 22s ease-in-out infinite alternate;
 }
 
 .glass-panel {
