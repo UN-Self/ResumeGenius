@@ -4,9 +4,10 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { server } from './setup'
 import { ChatPanel } from '@/components/chat/ChatPanel'
+import type { PendingEdit } from '@/lib/api-client'
 
-function renderChatPanel(draftId = 1, onApplyHTML = vi.fn()) {
-  return render(<ChatPanel draftId={draftId} onApplyHTML={onApplyHTML} />)
+function renderChatPanel(draftId = 1, onApplyDiffHTML = vi.fn(), onRestoreHtml = vi.fn()) {
+  return render(<ChatPanel draftId={draftId} onApplyDiffHTML={onApplyDiffHTML} onRestoreHtml={onRestoreHtml} />)
 }
 
 describe('ChatPanel', () => {
@@ -51,6 +52,46 @@ describe('ChatPanel', () => {
     })
   })
 
+  it('shows undo/redo buttons in chat after edits are applied', async () => {
+    const onRestoreHtml = vi.fn()
+    renderChatPanel(1, vi.fn(), onRestoreHtml)
+    const input = screen.getByPlaceholderText('输入你的需求...')
+    await waitFor(() => expect(input).toBeEnabled())
+
+    await userEvent.type(input, '优化简历')
+    await userEvent.click(screen.getByRole('button', { name: /发送/i }))
+
+    // Undo/redo buttons should appear in chat after edits are applied
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /undo/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /redo/i })).toBeInTheDocument()
+    })
+  })
+
+  it('calls onRestoreHtml when undo button is clicked', async () => {
+    const restoredHTML = '<p>restored content</p>'
+    const onRestoreHtml = vi.fn()
+    server.use(
+      http.post('/api/v1/ai/drafts/1/undo', () => {
+        return HttpResponse.json({ code: 0, data: { html_content: restoredHTML } })
+      }),
+    )
+
+    renderChatPanel(1, vi.fn(), onRestoreHtml)
+    const input = screen.getByPlaceholderText('输入你的需求...')
+    await waitFor(() => expect(input).toBeEnabled())
+
+    await userEvent.type(input, '优化简历')
+    await userEvent.click(screen.getByRole('button', { name: /发送/i }))
+
+    const undoBtn = await screen.findByRole('button', { name: /undo/i })
+    await userEvent.click(undoBtn)
+
+    await waitFor(() => {
+      expect(onRestoreHtml).toHaveBeenCalledWith(restoredHTML)
+    })
+  })
+
   it('shows empty state message when no history', () => {
     server.use(
       http.get('/api/v1/ai/sessions', () => {
@@ -83,7 +124,34 @@ describe('ChatPanel', () => {
     expect(sendButton).toBeEnabled()
   })
 
-  it('extracts HTML from RESUME_HTML markers in text events and shows preview', async () => {
+  it('handles edit events and calls onApplyDiffHTML with pending edits', async () => {
+    const onApplyDiffHTML = vi.fn()
+    renderChatPanel(1, onApplyDiffHTML)
+    const input = screen.getByPlaceholderText('输入你的需求...')
+    await waitFor(() => {
+      expect(input).toBeEnabled()
+    })
+
+    await userEvent.type(input, '优化简历')
+    const sendButton = screen.getByRole('button', { name: /发送/i })
+    await userEvent.click(sendButton)
+
+    // Wait for the response to complete and onApplyDiffHTML to be called
+    await waitFor(() => {
+      expect(onApplyDiffHTML).toHaveBeenCalledTimes(1)
+    })
+
+    // Verify the edits were passed correctly
+    const edits = onApplyDiffHTML.mock.calls[0][0] as PendingEdit[]
+    expect(edits).toHaveLength(1)
+    expect(edits[0]).toEqual({
+      old_string: '前端开发工程师',
+      new_string: '高级前端开发工程师',
+      description: '提升职位级别',
+    })
+  })
+
+  it('displays tool call log after streaming completes', async () => {
     renderChatPanel()
     const input = screen.getByPlaceholderText('输入你的需求...')
     await waitFor(() => {
@@ -94,20 +162,17 @@ describe('ChatPanel', () => {
     const sendButton = screen.getByRole('button', { name: /发送/i })
     await userEvent.click(sendButton)
 
-    // Wait for HTML preview to appear (HTML提取成功)
+    // Wait for the tool call log to appear after streaming completes
     await waitFor(() => {
-      expect(screen.getByText('HTML 预览')).toBeInTheDocument()
+      expect(screen.getByText('读取简历')).toBeInTheDocument()
     })
-    expect(screen.getByText('应用到简历')).toBeInTheDocument()
-    // Verify HtmlPreview iframe is rendered with extracted HTML
-    const iframe = screen.getByTitle('AI 生成的简历 HTML 预览')
-    expect(iframe).toBeInTheDocument()
-    expect(iframe.tagName).toBe('IFRAME')
+
+    // Verify the OK status is shown
+    expect(screen.getByText('OK')).toBeInTheDocument()
   })
 
-  it('calls onApplyHTML when apply button is clicked', async () => {
-    const onApplyHTML = vi.fn()
-    renderChatPanel(1, onApplyHTML)
+  it('shows thinking section when thinking events are received', async () => {
+    renderChatPanel()
     const input = screen.getByPlaceholderText('输入你的需求...')
     await waitFor(() => {
       expect(input).toBeEnabled()
@@ -117,19 +182,121 @@ describe('ChatPanel', () => {
     const sendButton = screen.getByRole('button', { name: /发送/i })
     await userEvent.click(sendButton)
 
-    // Wait for apply button to appear
+    // Wait for thinking section to appear
     await waitFor(() => {
-      expect(screen.getByText('应用到简历')).toBeInTheDocument()
+      expect(screen.getByText('AI 推理过程')).toBeInTheDocument()
+    })
+  })
+
+  it('clears messages and creates new session when new chat button is clicked', async () => {
+    let newSessionId = 10
+    server.use(
+      http.get('/api/v1/ai/sessions', () => {
+        return HttpResponse.json({ code: 0, data: [{ id: 5, draft_id: 1 }] })
+      }),
+      http.get('/api/v1/ai/sessions/5/history', () => {
+        return HttpResponse.json({
+          code: 0,
+          data: {
+            items: [
+              { id: 1, role: 'user', content: 'old message', created_at: '' },
+              { id: 2, role: 'assistant', content: 'old reply', created_at: '' },
+            ],
+          },
+        })
+      }),
+      http.post('/api/v1/ai/sessions', () => {
+        return HttpResponse.json({ code: 0, data: { id: newSessionId, draft_id: 1 } })
+      }),
+    )
+
+    renderChatPanel()
+
+    // Wait for existing messages to load
+    await waitFor(() => {
+      expect(screen.getByText('old message')).toBeInTheDocument()
     })
 
-    await userEvent.click(screen.getByText('应用到简历'))
+    // Click the new chat button
+    await userEvent.click(screen.getByRole('button', { name: /新对话/i }))
 
-    // Verify onApplyHTML was called with extracted HTML
-    expect(onApplyHTML).toHaveBeenCalledTimes(1)
-    const appliedHTML = onApplyHTML.mock.calls[0][0] as string
-    expect(appliedHTML).toContain('<html>')
-    expect(appliedHTML).toContain('Mock优化简历')
-    expect(appliedHTML).not.toContain('<!--RESUME_HTML_START-->')
-    expect(appliedHTML).not.toContain('<!--RESUME_HTML_END-->')
+    // Messages should be cleared and empty state shown
+    await waitFor(() => {
+      expect(screen.queryByText('old message')).not.toBeInTheDocument()
+      expect(screen.getByText(/输入你的需求/)).toBeInTheDocument()
+    })
+  })
+
+  it('renders assistant messages as markdown', async () => {
+    server.use(
+      http.get('/api/v1/ai/sessions', () => {
+        return HttpResponse.json({ code: 0, data: [{ id: 5, draft_id: 1 }] })
+      }),
+      http.get('/api/v1/ai/sessions/5/history', () => {
+        return HttpResponse.json({
+          code: 0,
+          data: {
+            items: [
+              { id: 2, role: 'assistant', content: '已完成以下修改：\n\n- 职位头衔提升\n- 添加项目经验', created_at: '' },
+            ],
+          },
+        })
+      }),
+    )
+
+    renderChatPanel()
+
+    await waitFor(() => {
+      // Markdown list items should be rendered as <li> elements
+      const listItems = screen.getAllByRole('listitem')
+      expect(listItems).toHaveLength(2)
+      expect(listItems[0]).toHaveTextContent('职位头衔提升')
+      expect(listItems[1]).toHaveTextContent('添加项目经验')
+    })
+  })
+
+  it('shows tool running status from tool_call events and completes after tool_result', async () => {
+    const encoder = new TextEncoder()
+    server.use(
+      http.post('/api/v1/ai/sessions/1/chat', () => {
+        // Use a stream that sends tool_call but never sends tool_result
+        // so the running state persists long enough to be observed
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode('data: {"type":"text","content":"处理中..."}\n\n'))
+            controller.enqueue(encoder.encode('data: {"type":"tool_call","name":"get_draft","params":{"draft_id":1}}\n\n'))
+            // Intentionally do NOT send tool_result so running status stays
+            // The done event will still fire after a delay via setTimeout
+            setTimeout(() => {
+              controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'))
+              controller.close()
+            }, 500)
+          },
+        })
+        return new Response(stream, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      }),
+    )
+
+    renderChatPanel()
+    const input = screen.getByPlaceholderText('输入你的需求...')
+    await waitFor(() => {
+      expect(input).toBeEnabled()
+    })
+
+    await userEvent.type(input, '读取简历')
+    const sendButton = screen.getByRole('button', { name: /发送/i })
+    await userEvent.click(sendButton)
+
+    // The active tool indicator should appear while tool is running
+    await waitFor(() => {
+      expect(screen.getByText('正在执行工具...')).toBeInTheDocument()
+    })
+
+    // After done event fires, streaming should stop
+    await waitFor(() => {
+      expect(screen.queryByText('正在执行工具...')).not.toBeInTheDocument()
+    }, { timeout: 3000 })
   })
 })

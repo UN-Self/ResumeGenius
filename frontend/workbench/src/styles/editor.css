@@ -1,6 +1,7 @@
 /* Action Bar (顶部栏) */
 .action-bar {
   height: 56px;
+  width: 100%;
   background: #ffffff;
   border-bottom: 1px solid var(--color-border, #e4ddd5);
   padding: 12px 16px;
@@ -322,5 +323,20 @@
     padding-top: 40vh;
     color: #1a1815;
   }
+}
+
+/* === AI Diff Marks === */
+.ProseMirror del {
+  text-decoration: line-through;
+  color: #dc2626;
+  background-color: #fef2f2;
+  border-radius: 2px;
+}
+
+.ProseMirror ins {
+  text-decoration: none;
+  color: #16a34a;
+  background-color: #f0fdf4;
+  border-radius: 2px;
 }
 

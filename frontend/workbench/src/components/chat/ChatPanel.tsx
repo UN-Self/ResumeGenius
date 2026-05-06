@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Sparkles, Send, Loader2 } from 'lucide-react'
-import { agentApi, type AISession } from '@/lib/api-client'
-import { HtmlPreview } from './HtmlPreview'
+import { Sparkles, Send, Plus } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
+import { agentApi, undoDraft, redoDraft, type AISession, type ToolCallEntry, type PendingEdit } from '@/lib/api-client'
+import { ToolCallLog } from './ToolCallLog'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -10,48 +11,30 @@ interface Message {
 
 interface Props {
   draftId: number
-  onApplyHTML?: (html: string) => void
+  onApplyDiffHTML?: (edits: PendingEdit[]) => void
+  onRestoreHtml?: (html: string) => void
 }
 
-const HTML_START = '<!--RESUME_HTML_START-->'
-const HTML_END = '<!--RESUME_HTML_END-->'
-
-function getDisplayText(rawText: string): string {
-  const startIdx = rawText.indexOf(HTML_START)
-  if (startIdx === -1) return rawText
-  const endIdx = rawText.indexOf(HTML_END, startIdx)
-  const before = rawText.substring(0, startIdx)
-  const after = endIdx !== -1 ? rawText.substring(endIdx + HTML_END.length) : ''
-  return (before + after).trim()
-}
-
-const TOOL_LABELS: Record<string, string> = {
-  get_project_assets: '获取项目资产',
-  get_draft: '获取当前草稿',
-  save_draft: '保存草稿',
-  create_version: '创建版本快照',
-  export_pdf: '导出PDF',
-}
-
-export function ChatPanel({ draftId, onApplyHTML }: Props) {
+export function ChatPanel({ draftId, onApplyDiffHTML, onRestoreHtml }: Props) {
   const [session, setSession] = useState<AISession | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
-  const [htmlPreview, setHtmlPreview] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [thinking, setThinking] = useState('')
-  const [activeTool, setActiveTool] = useState<string | null>(null)
+  const [toolCalls, setToolCalls] = useState<ToolCallEntry[]>([])
+  const [pendingEdits, setPendingEdits] = useState<PendingEdit[]>([])
+  const [editsApplied, setEditsApplied] = useState(false)
+  const [undoRedoLoading, setUndoRedoLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Reuse existing session or create one on mount / draft change
   useEffect(() => {
     let cancelled = false
     setSession(null)
     setMessages([])
-    setHtmlPreview(null)
     setThinking('')
-    setActiveTool(null)
+    setToolCalls([])
+    setPendingEdits([])
     setError(null)
 
     const init = async () => {
@@ -66,22 +49,10 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
           const history = await agentApi.getHistory(s.id)
           if (!cancelled) {
             const loadedMessages: Message[] = []
-            let loadedHTML: string | null = null
             for (const m of history.items) {
-              const displayText = getDisplayText(m.content)
-              loadedMessages.push({ role: m.role, text: displayText })
-              if (m.role === 'assistant') {
-                const startIdx = m.content.indexOf(HTML_START)
-                if (startIdx !== -1) {
-                  const endIdx = m.content.indexOf(HTML_END, startIdx + HTML_START.length)
-                  if (endIdx !== -1) {
-                    loadedHTML = m.content.substring(startIdx + HTML_START.length, endIdx)
-                  }
-                }
-              }
+              loadedMessages.push({ role: m.role, text: m.content })
             }
             setMessages(loadedMessages)
-            if (loadedHTML) setHtmlPreview(loadedHTML)
           }
         } else {
           s = await agentApi.createSession(draftId)
@@ -96,10 +67,9 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
     return () => { cancelled = true }
   }, [draftId])
 
-  // Auto-scroll
   useEffect(() => {
     scrollRef.current?.scrollIntoView?.({ behavior: 'smooth' })
-  }, [messages, htmlPreview])
+  }, [messages, toolCalls])
 
   const handleSend = useCallback(async () => {
     const text = input.trim()
@@ -107,7 +77,9 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
 
     setInput('')
     setThinking('')
-    setActiveTool(null)
+    setToolCalls([])
+    setPendingEdits([])
+    setEditsApplied(false)
     setError(null)
     setMessages((prev) => [...prev, { role: 'user', text }])
     setStreaming(true)
@@ -126,9 +98,8 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
       const decoder = new TextDecoder()
       let buffer = ''
       let currentText = ''
-      let currentHTML = ''
-      let inHTML = false
       let gotDone = false
+      const edits: PendingEdit[] = []
 
       while (true) {
         const { done, value } = await reader.read()
@@ -149,45 +120,30 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
                 setThinking(prev => prev + event.content)
                 break
               case 'tool_call':
-                setActiveTool(TOOL_LABELS[event.name] || event.name)
+                setToolCalls(prev => [...prev, { name: event.name, status: 'running', params: event.params }])
                 break
               case 'tool_result':
-                setActiveTool(null)
+                setToolCalls(prev => {
+                  const updated = [...prev]
+                  const last = updated[updated.length - 1]
+                  if (last) updated[updated.length - 1] = { ...last, status: event.status }
+                  return updated
+                })
+                break
+              case 'edit':
+                if (event.params?.ops) {
+                  edits.push(...(event.params.ops as PendingEdit[]))
+                  setPendingEdits([...edits])
+                }
                 break
               case 'text':
                 currentText += event.content
-                // Detect and extract HTML markers from the text stream
-                if (!inHTML) {
-                  const startIdx = currentText.indexOf(HTML_START)
-                  if (startIdx !== -1) {
-                    inHTML = true
-                    currentHTML = ''
-                    const afterStart = currentText.substring(startIdx + HTML_START.length)
-                    const endIdx = afterStart.indexOf(HTML_END)
-                    if (endIdx !== -1) {
-                      currentHTML = afterStart.substring(0, endIdx)
-                      inHTML = false
-                      setHtmlPreview(currentHTML)
-                    } else {
-                      currentHTML = afterStart
-                    }
-                  }
-                } else {
-                  currentHTML += event.content
-                  const endIdx = currentHTML.indexOf(HTML_END)
-                  if (endIdx !== -1) {
-                    currentHTML = currentHTML.substring(0, endIdx)
-                    inHTML = false
-                    setHtmlPreview(currentHTML)
-                  }
-                }
                 setMessages((prev) => {
-                  const displayText = getDisplayText(currentText)
                   const last = prev[prev.length - 1]
                   if (last?.role === 'assistant') {
-                    return [...prev.slice(0, -1), { ...last, text: displayText }]
+                    return [...prev.slice(0, -1), { ...last, text: currentText }]
                   }
-                  return [...prev, { role: 'assistant', text: displayText }]
+                  return [...prev, { role: 'assistant', text: currentText }]
                 })
                 break
               case 'error':
@@ -195,6 +151,11 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
                 break
               case 'done':
                 gotDone = true
+                if (edits.length > 0 && onApplyDiffHTML) {
+                  onApplyDiffHTML(edits)
+                  setEditsApplied(true)
+                }
+                setPendingEdits([])
                 break
             }
           } catch {
@@ -210,14 +171,7 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
     } finally {
       setStreaming(false)
     }
-  }, [input, session, streaming])
-
-  const handleApply = useCallback(() => {
-    if (htmlPreview && onApplyHTML) {
-      onApplyHTML(htmlPreview)
-      setHtmlPreview(null)
-    }
-  }, [htmlPreview, onApplyHTML])
+  }, [input, session, streaming, onApplyDiffHTML])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -226,12 +180,36 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
     }
   }, [handleSend])
 
+  const handleNewChat = useCallback(async () => {
+    setMessages([])
+    setThinking('')
+    setToolCalls([])
+    setPendingEdits([])
+    setEditsApplied(false)
+    setError(null)
+    try {
+      const s = await agentApi.createSession(draftId)
+      setSession(s)
+    } catch {
+      setError('创建新会话失败')
+    }
+  }, [draftId])
+
   return (
     <div className="flex flex-col h-full bg-[var(--color-page-bg)]">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--color-divider)]">
         <Sparkles size={16} className="text-[var(--color-primary)]" />
         <span className="text-sm font-medium text-[var(--color-text-main)]">AI 助手</span>
+        <div className="flex-1" />
+        <button
+          onClick={handleNewChat}
+          disabled={streaming}
+          aria-label="新对话"
+          className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-main)] disabled:opacity-50 cursor-pointer"
+        >
+          <Plus size={16} />
+        </button>
       </div>
 
       {/* Messages */}
@@ -253,39 +231,72 @@ export function ChatPanel({ draftId, onApplyHTML }: Props) {
         )}
 
         {messages.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
-              msg.role === 'user'
-                ? 'bg-[var(--color-primary)] text-white'
-                : 'bg-white border border-[var(--color-divider)] text-[var(--color-text-main)]'
-            }`}>
-              {msg.text}
+          <div key={i}>
+            <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+                msg.role === 'user'
+                  ? 'bg-[var(--color-primary)] text-white'
+                  : 'bg-white border border-[var(--color-divider)] text-[var(--color-text-main)]'
+              }`}>
+                {msg.role === 'user' ? (
+                  msg.text
+                ) : (
+                  <ReactMarkdown>{msg.text}</ReactMarkdown>
+                )}
+              </div>
             </div>
+            {/* Show tool calls after the last assistant message */}
+            {msg.role === 'assistant' && i === messages.length - 1 && !streaming && toolCalls.length > 0 && (
+              <ToolCallLog calls={toolCalls} />
+            )}
+            {/* Show undo/redo after the last assistant message when edits were applied */}
+            {msg.role === 'assistant' && i === messages.length - 1 && !streaming && editsApplied && (
+              <div className="flex gap-1 mt-1">
+                <button
+                  onClick={async () => {
+                    setUndoRedoLoading(true)
+                    try {
+                      const result = await undoDraft(draftId)
+                      onRestoreHtml?.(result.html_content)
+                    } finally { setUndoRedoLoading(false) }
+                  }}
+                  disabled={undoRedoLoading}
+                  aria-label="Undo"
+                  className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded disabled:opacity-50 cursor-pointer"
+                >
+                  Undo
+                </button>
+                <button
+                  onClick={async () => {
+                    setUndoRedoLoading(true)
+                    try {
+                      const result = await redoDraft(draftId)
+                      onRestoreHtml?.(result.html_content)
+                    } finally { setUndoRedoLoading(false) }
+                  }}
+                  disabled={undoRedoLoading}
+                  aria-label="Redo"
+                  className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded disabled:opacity-50 cursor-pointer"
+                >
+                  Redo
+                </button>
+              </div>
+            )}
           </div>
         ))}
 
-        {/* Tool Status */}
-        {activeTool && (
-          <div className="flex items-center gap-2 px-3 py-2 text-xs text-[var(--color-text-secondary)] bg-[var(--color-page-bg)] border border-[var(--color-divider)] rounded-lg">
-            <Loader2 size={12} className="animate-spin" />
-            <span>正在执行：{activeTool}</span>
+        {/* Pending edits indicator during streaming */}
+        {streaming && pendingEdits.length > 0 && (
+          <div className="flex items-center gap-2 px-3 py-2 text-xs text-[var(--color-text-secondary)] bg-blue-50 border border-blue-200 rounded-lg">
+            <span>已生成 {pendingEdits.length} 项修改，等待确认...</span>
           </div>
         )}
 
-        {/* HTML Preview */}
-        {htmlPreview && (
-          <div className="border border-green-300 rounded-lg overflow-hidden bg-white">
-            <div className="flex items-center justify-between px-3 py-1.5 bg-green-50 border-b border-green-200">
-              <span className="text-xs font-medium text-green-700">HTML 预览</span>
-              <button
-                onClick={handleApply}
-                disabled={streaming}
-                className="text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 disabled:opacity-50 transition-colors cursor-pointer"
-              >
-                应用到简历
-              </button>
-            </div>
-            <HtmlPreview html={htmlPreview} />
+        {/* Active tool indicator */}
+        {streaming && toolCalls.some(c => c.status === 'running') && (
+          <div className="flex items-center gap-2 px-3 py-2 text-xs text-[var(--color-text-secondary)] bg-[var(--color-page-bg)] border border-[var(--color-divider)] rounded-lg">
+            <span className="animate-spin">...</span>
+            <span>正在执行工具...</span>
           </div>
         )}
 

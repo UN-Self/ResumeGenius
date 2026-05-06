@@ -32,7 +32,7 @@ export const agentHandlers = [
     const encoder = new TextEncoder()
     const stream = new ReadableStream({
       start(controller) {
-        // Text reply before HTML
+        // Text reply
         controller.enqueue(encoder.encode('data: {"type":"text","content":"好的，我来帮你优化简历。"}\n\n'))
         // ReAct: thinking
         controller.enqueue(encoder.encode('data: {"type":"thinking","content":"用户希望优化简历，需要先查看当前草稿内容。"}\n\n'))
@@ -40,12 +40,10 @@ export const agentHandlers = [
         controller.enqueue(encoder.encode('data: {"type":"tool_call","name":"get_draft","params":{"draft_id":1}}\n\n'))
         // ReAct: tool_result
         controller.enqueue(encoder.encode('data: {"type":"tool_result","name":"get_draft","status":"completed"}\n\n'))
-        // HTML chunk 1: START marker + first part (no END — tests cross-chunk parsing)
-        controller.enqueue(encoder.encode('data: {"type":"text","content":"\\n<!--RESUME_HTML_START-->\\n<html><body><h1>Mock"}\n\n'))
-        // HTML chunk 2: middle part (still no END)
-        controller.enqueue(encoder.encode('data: {"type":"text","content":"优化简历</h1><p>工作经验：Mock公司前端开发</p>"}\n\n'))
-        // HTML chunk 3: last part + END marker
-        controller.enqueue(encoder.encode('data: {"type":"text","content":"</body></html>\\n<!--RESUME_HTML_END-->\\n"}\n\n'))
+        // Edit events (new format: inline diff ops)
+        controller.enqueue(encoder.encode('data: {"type":"edit","params":{"ops":[{"old_string":"前端开发工程师","new_string":"高级前端开发工程师","description":"提升职位级别"}]}}\n\n'))
+        // Final text
+        controller.enqueue(encoder.encode('data: {"type":"text","content":"\\n已完成简历优化，主要调整了职位头衔。"}\n\n'))
         controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'))
         controller.close()
       },
@@ -62,9 +60,7 @@ export const agentHandlers = [
         items: [
           { id: 1, session_id: Number(params.sessionId), role: 'user', content: '优化简历', created_at: new Date().toISOString() },
           { id: 2, session_id: Number(params.sessionId), role: 'assistant',
-            content: '好的，我来帮你优化简历。<!--RESUME_HTML_START--><html><body>Mock优化简历</body></html><!--RESUME_HTML_END-->',
-            thinking: '用户希望优化简历，需要先查看当前草稿内容。',
-            tool_call: { id: 1, tool_name: 'get_draft', params: { draft_id: 1 }, result: {}, status: 'completed' },
+            content: '好的，我来帮你优化简历。\n已完成简历优化，主要调整了职位头衔。',
             created_at: new Date().toISOString() },
         ],
       },

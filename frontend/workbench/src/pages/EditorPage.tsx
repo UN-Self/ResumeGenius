@@ -10,7 +10,8 @@ import { ActionBar } from '@/components/editor/ActionBar'
 import { SaveIndicator } from '@/components/editor/SaveIndicator'
 import { ChatPanel } from '@/components/chat/ChatPanel'
 import AssetSidebar from '@/components/intake/AssetSidebar'
-import { request, intakeApi, workbenchApi, ApiError, type Asset } from '@/lib/api-client'
+import { Deletion, Insertion } from '@/components/editor/extensions/ai-diff'
+import { request, intakeApi, workbenchApi, ApiError, type Asset, type PendingEdit } from '@/lib/api-client'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useExport } from '@/hooks/useExport'
 import { FullPageState } from '@/components/ui/full-page-state'
@@ -36,9 +37,11 @@ export default function EditorPage() {
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({ strike: false }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       TextStyleKit,
+      Deletion,
+      Insertion,
     ],
     content: '',
     editorProps: {
@@ -264,13 +267,16 @@ export default function EditorPage() {
           </button>
         )}
         <div className="flex h-full flex-col">
-          <ActionBar
-            projectName={projectTitle}
-            saveIndicator={<SaveIndicator status={status} lastSavedAt={lastSavedAt} onRetry={retry} />}
-            draftId={draftId}
-            exportStatus={exportStatus}
-            onExport={handleExport}
-          />
+          <div className="flex items-center gap-2">
+            <ActionBar
+              projectName={projectTitle}
+              saveIndicator={<SaveIndicator status={status} lastSavedAt={lastSavedAt} onRetry={retry} />}
+              draftId={draftId}
+              exportStatus={exportStatus}
+              onExport={handleExport}
+              onBack={() => navigate(`/projects/${pid}`)}
+            />
+          </div>
           <div className="flex-1 overflow-auto" onContextMenu={handleContextMenu}>
             <A4Canvas editor={editor} />
             {editor && (
@@ -310,20 +316,19 @@ export default function EditorPage() {
           {draftId ? (
             <ChatPanel
               draftId={Number(draftId)}
-              onApplyHTML={(html) => {
-                editor?.commands.setContent(html)
-
-                if (draftId) {
-                  request(`/drafts/${draftId}`, {
-                    method: 'PUT',
-                    body: JSON.stringify({
-                      html_content: html,
-                      create_version: true,
-                      version_label: 'AI \u4fee\u6539',
-                    }),
-                  }).catch((saveError) => console.error('Failed to save AI changes:', saveError))
+              onApplyDiffHTML={(edits: PendingEdit[]) => {
+                if (!editor) return
+                const currentHTML = editor.getHTML()
+                let diffHTML = currentHTML
+                for (const edit of edits) {
+                  diffHTML = diffHTML.replace(
+                    edit.old_string,
+                    `<del>${edit.old_string}</del><ins>${edit.new_string}</ins>`
+                  )
                 }
+                editor.commands.setContent(diffHTML)
               }}
+              onRestoreHtml={(html) => editor?.commands.setContent(html)}
             />
           ) : (
             <p className="mt-8 text-center text-xs text-[var(--color-text-secondary)]">

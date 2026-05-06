@@ -178,6 +178,27 @@ export interface AIMessageItem {
   created_at: string
 }
 
+export interface PendingEdit {
+  old_string: string
+  new_string: string
+  description?: string
+}
+
+export interface ToolCallEntry {
+  name: string
+  status: 'running' | 'completed' | 'failed'
+  params?: Record<string, unknown>
+  result?: string
+}
+
+export async function undoDraft(draftId: number) {
+  return request<{ html_content: string }>(`/ai/drafts/${draftId}/undo`, { method: 'POST' })
+}
+
+export async function redoDraft(draftId: number) {
+  return request<{ html_content: string }>(`/ai/drafts/${draftId}/redo`, { method: 'POST' })
+}
+
 export const agentApi = {
   listSessions: (draftId: number) =>
     request<AISession[]>(`/ai/sessions?draft_id=${draftId}`),

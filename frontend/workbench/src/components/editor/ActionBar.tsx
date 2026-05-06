@@ -1,4 +1,4 @@
-import { FileText } from 'lucide-react'
+import { FileText, ArrowLeft } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import type { ExportStatus } from '@/hooks/useExport'
@@ -9,6 +9,7 @@ interface ActionBarProps {
   draftId: string | null
   exportStatus: ExportStatus
   onExport: () => void
+  onBack?: () => void
 }
 
 const EXPORT_LABEL: Record<ExportStatus, string> = {
@@ -24,6 +25,7 @@ export function ActionBar({
   draftId,
   exportStatus,
   onExport,
+  onBack,
 }: ActionBarProps) {
   return (
     <div className="action-bar">
@@ -58,6 +60,13 @@ export function ActionBar({
       >
         {EXPORT_LABEL[exportStatus]}
       </Button>
+
+      {/* Back Button */}
+      {onBack && (
+        <Button variant="ghost" size="sm" type="button" onClick={onBack} aria-label="返回项目">
+          <ArrowLeft size={16} />
+        </Button>
+      )}
     </div>
   )
 }
