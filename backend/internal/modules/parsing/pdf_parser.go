@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"io"
 	"log"
+	"os/exec"
 
 	"github.com/ledongthuc/pdf"
 )
@@ -37,23 +38,16 @@ func (p *PDFParserImpl) Parse(path string) (*ParsedContent, error) {
 }
 
 func ExtractTextFromPDF(path string) (string, error) {
-	file, reader, err := pdf.Open(path)
+	cmd := exec.Command("pdftotext", "-layout", "-enc", "UTF-8", path, "-")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	output, err := cmd.Output()
 	if err != nil {
-		return "", fmt.Errorf("open pdf: %w", err)
-	}
-	defer file.Close()
-
-	plainText, err := reader.GetPlainText()
-	if err != nil {
-		return "", fmt.Errorf("extract pdf text: %w", err)
+		return "", fmt.Errorf("pdftotext failed: %w: %s", err, stderr.String())
 	}
 
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, plainText); err != nil {
-		return "", fmt.Errorf("read pdf text: %w", err)
-	}
-
-	return normalizePDFText(buf.String()), nil
+	return normalizePDFText(string(output)), nil
 }
 
 func normalizePDFText(raw string) string {
