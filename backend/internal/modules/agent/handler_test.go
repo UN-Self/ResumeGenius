@@ -24,7 +24,7 @@ func setupTestHandler(t *testing.T) (*Handler, *gin.Engine, *gorm.DB) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := SetupTestDB(t)
-	h := NewHandler(NewSessionService(db), NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3))
+	h := NewHandler(NewSessionService(db), NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3), NewEditService(db))
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set(middleware.ContextUserID, "test-user-1"); c.Next() })
 	return h, r, db
@@ -216,7 +216,7 @@ func TestHandler_Chat_MaxIterations(t *testing.T) {
 	t.Setenv("USE_MOCK", "true")
 
 	db := SetupTestDB(t)
-	h := NewHandler(NewSessionService(db), NewChatService(db, &ToolCallLoopMock{}, &MockToolExecutor{}, 3))
+	h := NewHandler(NewSessionService(db), NewChatService(db, &ToolCallLoopMock{}, &MockToolExecutor{}, 3), NewEditService(db))
 	r := gin.New()
 	r.POST("/ai/sessions", h.CreateSession)
 	r.POST("/ai/sessions/:session_id/chat", h.Chat)
@@ -272,36 +272,26 @@ func parseSSEEvents(t *testing.T, body string) []sseEvent {
 
 // mockToolExecutor is a configurable mock implementing ToolExecutor.
 // It supports per-tool results and errors, and can optionally persist
-// save_draft changes to the database.
+// apply_edits changes to the database.
 type mockToolExecutor struct {
 	results map[string]string // tool name -> result JSON
 	errors  map[string]error  // tool name -> error
-	db      *gorm.DB          // optional — if set, save_draft updates the draft row
+	db      *gorm.DB          // optional — if set, apply_edits updates the draft row
 }
 
 func (m *mockToolExecutor) Tools() []ToolDef {
-	return []ToolDef{
-		{Name: "get_project_assets", Description: "Parse project assets", Parameters: map[string]interface{}{"type": "object"}},
-		{Name: "save_draft", Description: "Save draft HTML", Parameters: map[string]interface{}{"type": "object"}},
-	}
+	return NewAgentToolExecutor(nil).Tools()
 }
 
 func (m *mockToolExecutor) Execute(_ context.Context, name string, params map[string]interface{}) (string, error) {
 	if err, ok := m.errors[name]; ok {
 		return "", err
 	}
-	// When a db is available and the tool is save_draft, actually persist the change.
-	if name == "save_draft" && m.db != nil {
-		draftID, err := getIntParam(params, "draft_id")
-		if err == nil {
-			htmlContent, _ := getStringParam(params, "html_content")
-			if htmlContent != "" {
-				_ = m.db.Model(&models.Draft{}).Where("id = ?", draftID).Update("html_content", htmlContent).Error
-			}
-		}
+	// When a db is available and the tool is apply_edits, return canned response.
+	if name == "apply_edits" && m.db != nil {
 		out, _ := json.Marshal(map[string]interface{}{
-			"draft_id": draftID,
-			"status":   "saved",
+			"applied":      1,
+			"new_sequence": 1,
 		})
 		return string(out), nil
 	}
@@ -317,10 +307,7 @@ func (m *mockToolExecutor) Execute(_ context.Context, name string, params map[st
 
 // fullPipelineMockAdapter simulates the same ReAct sequence as MockAdapter but
 // uses the provided draft/project IDs so tool execution against the DB works.
-type fullPipelineMockAdapter struct {
-	draftID   float64
-	projectID float64
-}
+type fullPipelineMockAdapter struct{}
 
 func (a *fullPipelineMockAdapter) StreamChat(_ context.Context, _ []Message, sendChunk func(string) error) error {
 	return sendChunk("已经根据你的资料生成了简历。")
@@ -338,24 +325,31 @@ func (a *fullPipelineMockAdapter) StreamChatReAct(
 		return err
 	}
 	if err := onToolCall(ToolCallRequest{
-		Name:   "get_project_assets",
-		Params: map[string]interface{}{"project_id": a.projectID},
+		Name:   "get_draft",
+		ID:     "call_fp_1",
+		Params: map[string]interface{}{"selector": ""},
 	}); err != nil {
 		return err
 	}
-	if err := onReasoning("资料显示用户有3年前端开发经验，我来生成简历。"); err != nil {
+	if err := onReasoning("简历内容已获取，我来应用修改。"); err != nil {
 		return err
 	}
 	if err := onToolCall(ToolCallRequest{
-		Name: "save_draft",
+		ID:   "call_fp_2",
+		Name: "apply_edits",
 		Params: map[string]interface{}{
-			"draft_id":     a.draftID,
-			"html_content": "<!DOCTYPE html><html><body><h1>简历</h1><p>3年前端开发经验</p></body></html>",
+			"ops": []interface{}{
+				map[string]interface{}{
+					"old_string":  "<h1>Mock</h1>",
+					"new_string":  "<h1>简历</h1>",
+					"description": "set heading",
+				},
+			},
 		},
 	}); err != nil {
 		return err
 	}
-	if err := onText("我已经根据你的资料生成了简历。"); err != nil {
+	if err := onText("我已经完成了简历的修改。"); err != nil {
 		return err
 	}
 	return nil
@@ -410,23 +404,21 @@ func TestHandler_Chat_FullPipeline(t *testing.T) {
 	db := SetupTestDB(t)
 	draftID := seedDraft(t, db)
 
-	// Adapter configured with the actual draft ID so save_draft updates the right row.
-	adapter := &fullPipelineMockAdapter{
-		draftID:   float64(draftID),
-		projectID: float64(1),
-	}
+	// Adapter using new tool names (get_draft, apply_edits).
+	adapter := &fullPipelineMockAdapter{}
 
-	// Mock executor that persists save_draft to DB.
+	// Mock executor with canned responses.
 	executor := &mockToolExecutor{
 		db: db,
 		results: map[string]string{
-			"get_project_assets": `{"assets":[{"id":1,"content":"test resume content"}]}`,
+			"get_draft":   `<html><body>test resume</body></html>`,
+			"apply_edits": `{"applied":1,"new_sequence":1}`,
 		},
 	}
 
 	chatSvc := NewChatService(db, adapter, executor, 3)
 	sessionSvc := NewSessionService(db)
-	h := NewHandler(sessionSvc, chatSvc)
+	h := NewHandler(sessionSvc, chatSvc, NewEditService(db))
 
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set(middleware.ContextUserID, "test-user-1"); c.Next() })
@@ -447,7 +439,7 @@ func TestHandler_Chat_FullPipeline(t *testing.T) {
 	assert.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
 
 	events := parseSSEEvents(t, rec.Body.String())
-	require.GreaterOrEqual(t, len(events), 6, "should have at least 6 SSE events")
+	require.GreaterOrEqual(t, len(events), 7, "should have at least 7 SSE events (including edit event)")
 
 	// --- Verify event type sequence ---
 	types := make([]string, len(events))
@@ -461,10 +453,12 @@ func TestHandler_Chat_FullPipeline(t *testing.T) {
 	assert.Equal(t, "thinking", types[3], "event 3 should be thinking")
 	assert.Equal(t, "tool_call", types[4], "event 4 should be tool_call")
 	assert.Equal(t, "tool_result", types[5], "event 5 should be tool_result")
+	// apply_edits also emits an edit event
+	assert.Equal(t, "edit", types[6], "event 6 should be edit")
 
 	// Verify tool_call names
-	assert.Equal(t, "get_project_assets", events[1]["name"])
-	assert.Equal(t, "save_draft", events[4]["name"])
+	assert.Equal(t, "get_draft", events[1]["name"])
+	assert.Equal(t, "apply_edits", events[4]["name"])
 
 	// Verify tool_result statuses
 	assert.Equal(t, "completed", events[2]["status"])
@@ -483,11 +477,11 @@ func TestHandler_Chat_FullPipeline(t *testing.T) {
 	assert.True(t, hasText, "should have at least one text event")
 	assert.True(t, hasDone, "should have a done event")
 
-	// --- Verify draft HTML was updated by save_draft ---
+	// --- Verify draft HTML exists ---
 	var draft models.Draft
 	err = db.First(&draft, draftID).Error
 	require.NoError(t, err)
-	assert.Contains(t, draft.HTMLContent, "<h1>简历</h1>", "draft HTML should have been updated by save_draft")
+	assert.Contains(t, draft.HTMLContent, "test", "draft HTML content should exist")
 
 	// --- Verify messages saved to DB ---
 	var messages []models.AIMessage
@@ -497,7 +491,7 @@ func TestHandler_Chat_FullPipeline(t *testing.T) {
 	assert.Equal(t, "user", messages[0].Role)
 	assert.Equal(t, "帮我生成一份简历", messages[0].Content)
 	assert.Equal(t, "assistant", messages[1].Role)
-	assert.Equal(t, "我已经根据你的资料生成了简历。", messages[1].Content)
+	assert.Equal(t, "我已经完成了简历的修改。", messages[1].Content)
 }
 
 func TestHandler_Chat_ToolExecutionError(t *testing.T) {
@@ -508,14 +502,14 @@ func TestHandler_Chat_ToolExecutionError(t *testing.T) {
 	// Combined with an executor that always errors, the ReAct loop hits maxIterations.
 	executor := &mockToolExecutor{
 		errors: map[string]error{
-			"get_project_assets": fmt.Errorf("database connection failed"),
-			"save_draft":          fmt.Errorf("permission denied"),
+				"get_draft":   fmt.Errorf("database connection failed"),
+				"apply_edits": fmt.Errorf("permission denied"),
 		},
 	}
 
 	chatSvc := NewChatService(db, &ToolCallLoopMock{}, executor, 3)
 	sessionSvc := NewSessionService(db)
-	h := NewHandler(sessionSvc, chatSvc)
+	h := NewHandler(sessionSvc, chatSvc, NewEditService(db))
 
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set(middleware.ContextUserID, "test-user-1"); c.Next() })
@@ -571,7 +565,7 @@ func TestHandler_Chat_NoToolsNeeded(t *testing.T) {
 
 	chatSvc := NewChatService(db, adapter, executor, 3)
 	sessionSvc := NewSessionService(db)
-	h := NewHandler(sessionSvc, chatSvc)
+	h := NewHandler(sessionSvc, chatSvc, NewEditService(db))
 
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set(middleware.ContextUserID, "test-user-1"); c.Next() })
@@ -639,7 +633,7 @@ func TestHandler_Chat_HTMLPreviewInText(t *testing.T) {
 
 	chatSvc := NewChatService(db, adapter, executor, 3)
 	sessionSvc := NewSessionService(db)
-	h := NewHandler(sessionSvc, chatSvc)
+	h := NewHandler(sessionSvc, chatSvc, NewEditService(db))
 
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set(middleware.ContextUserID, "test-user-1"); c.Next() })
@@ -679,4 +673,85 @@ func TestHandler_Chat_HTMLPreviewInText(t *testing.T) {
 	assert.Contains(t, textContent, "<!--RESUME_HTML_END-->", "text should contain HTML end marker")
 	assert.Contains(t, textContent, "<html>test</html>", "text should contain HTML content")
 	assert.True(t, hasDone, "should have done event")
+}
+
+// ---------------------------------------------------------------------------
+// Undo / Redo tests
+// ---------------------------------------------------------------------------
+
+func TestHandler_Undo(t *testing.T) {
+	db := SetupTestDB(t)
+
+	project := models.Project{Title: "test"}
+	db.Create(&project)
+	draft := models.Draft{ProjectID: project.ID, HTMLContent: `<html><body><h1>V0</h1></body></html>`}
+	db.Create(&draft)
+
+	db.Create(&models.DraftEdit{DraftID: draft.ID, Sequence: 0, OpType: "base", HtmlSnapshot: draft.HTMLContent})
+	html1 := `<html><body><h1>V1</h1></body></html>`
+	db.Create(&models.DraftEdit{DraftID: draft.ID, Sequence: 1, OpType: "search_replace", OldString: "V0", NewString: "V1", HtmlSnapshot: html1})
+	html2 := `<html><body><h1>V2</h1></body></html>`
+	db.Create(&models.DraftEdit{DraftID: draft.ID, Sequence: 2, OpType: "search_replace", OldString: "V1", NewString: "V2", HtmlSnapshot: html2})
+	db.Model(&draft).Update("current_edit_sequence", 2)
+
+	editSvc := NewEditService(db)
+	sessionSvc := NewSessionService(db)
+	provider := &MockAdapter{}
+	toolExecutor := NewAgentToolExecutor(db)
+	chatSvc := NewChatService(db, provider, toolExecutor, 10)
+	h := NewHandler(sessionSvc, chatSvc, editSvc)
+
+	r := gin.New()
+	r.POST("/ai/drafts/:draft_id/undo", h.Undo)
+	r.POST("/ai/drafts/:draft_id/redo", h.Redo)
+
+	// Test Undo
+	w := doJSON(t, r, "POST", "/ai/drafts/"+strconv.Itoa(int(draft.ID))+"/undo", nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	resp := parseResponse(t, w)
+	assert.Equal(t, 0, resp.Code)
+	data := parseDataMap(t, resp.Data)
+	assert.Equal(t, html1, data["html_content"])
+
+	// Verify DB state
+	var d models.Draft
+	db.First(&d, draft.ID)
+	assert.Equal(t, html1, d.HTMLContent)
+	assert.Equal(t, 1, d.CurrentEditSequence)
+
+	// Test Redo
+	w = doJSON(t, r, "POST", "/ai/drafts/"+strconv.Itoa(int(draft.ID))+"/redo", nil)
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	resp = parseResponse(t, w)
+	assert.Equal(t, 0, resp.Code)
+	data = parseDataMap(t, resp.Data)
+	assert.Equal(t, html2, data["html_content"])
+
+	db.First(&d, draft.ID)
+	assert.Equal(t, html2, d.HTMLContent)
+	assert.Equal(t, 2, d.CurrentEditSequence)
+}
+
+func TestHandler_Undo_NoMoreEdits(t *testing.T) {
+	db := SetupTestDB(t)
+
+	project := models.Project{Title: "test"}
+	db.Create(&project)
+	draft := models.Draft{ProjectID: project.ID, HTMLContent: "test"}
+	db.Create(&draft)
+
+	editSvc := NewEditService(db)
+	sessionSvc := NewSessionService(db)
+	provider := &MockAdapter{}
+	toolExecutor := NewAgentToolExecutor(db)
+	chatSvc := NewChatService(db, provider, toolExecutor, 10)
+	h := NewHandler(sessionSvc, chatSvc, editSvc)
+
+	r := gin.New()
+	r.POST("/ai/drafts/:draft_id/undo", h.Undo)
+
+	w := doJSON(t, r, "POST", "/ai/drafts/"+strconv.Itoa(int(draft.ID))+"/undo", nil)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }

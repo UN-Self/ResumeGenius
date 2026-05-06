@@ -3,23 +3,41 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
-	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
+	"github.com/PuerkitoBio/goquery"
 	"gorm.io/gorm"
+
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 )
 
-// VersionService is the interface for creating draft versions.
-type VersionService interface {
-	Create(draftID uint, label string) (*models.Version, error)
+// ---------------------------------------------------------------------------
+// Context keys
+// ---------------------------------------------------------------------------
+
+type contextKey int
+
+const (
+	draftIDKey  contextKey = iota
+	projectIDKey
+)
+
+// WithDraftID returns a context carrying the given draft ID.
+func WithDraftID(ctx context.Context, id uint) context.Context {
+	return context.WithValue(ctx, draftIDKey, id)
 }
 
-// ExportService is the interface for creating PDF export tasks.
-type ExportService interface {
-	CreateTask(draftID uint, htmlContent string) (string, error)
+// WithProjectID returns a context carrying the given project ID.
+func WithProjectID(ctx context.Context, id uint) context.Context {
+	return context.WithValue(ctx, projectIDKey, id)
 }
+
+// ---------------------------------------------------------------------------
+// Tool definitions
+// ---------------------------------------------------------------------------
 
 // ToolDef represents a tool definition for OpenAI function calling.
 type ToolDef struct {
@@ -36,105 +54,67 @@ type ToolExecutor interface {
 	Execute(ctx context.Context, toolName string, params map[string]interface{}) (string, error)
 }
 
-// AgentToolExecutor implements ToolExecutor using database queries and direct service calls.
+// AgentToolExecutor implements ToolExecutor using database queries.
 type AgentToolExecutor struct {
-	db         *gorm.DB
-	versionSvc VersionService
-	exportSvc  ExportService
+	db *gorm.DB
 }
 
 // NewAgentToolExecutor creates a new AgentToolExecutor.
-func NewAgentToolExecutor(db *gorm.DB, versionSvc VersionService, exportSvc ExportService) *AgentToolExecutor {
-	return &AgentToolExecutor{
-		db:         db,
-		versionSvc: versionSvc,
-		exportSvc:  exportSvc,
-	}
+func NewAgentToolExecutor(db *gorm.DB) *AgentToolExecutor {
+	return &AgentToolExecutor{db: db}
 }
 
-// Tools returns the five AI-callable tool definitions.
+// Tools returns the three AI-callable tool definitions.
 func (e *AgentToolExecutor) Tools() []ToolDef {
 	return []ToolDef{
 		{
-			Name:        "get_project_assets",
-			Description: "Get project's asset list",
-			Parameters: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"project_id": map[string]interface{}{
-						"type":        "integer",
-						"description": "The project ID to get assets from",
-					},
-				},
-				"required": []interface{}{"project_id"},
-			},
-		},
-		{
 			Name:        "get_draft",
-			Description: "Get current draft HTML",
+			Description: "读取当前简历 HTML。不带参数返回完整 HTML，带 selector 参数只返回匹配的片段（CSS 选择器）。",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"draft_id": map[string]interface{}{
-						"type":        "integer",
-						"description": "The draft ID to retrieve",
+					"selector": map[string]interface{}{
+						"type":        "string",
+						"description": "CSS 选择器，例如 '#experience'、'.skill-item'。不传则返回完整 HTML。",
 					},
 				},
-				"required": []interface{}{"draft_id"},
+				"required": []string{},
 			},
 		},
 		{
-			Name:        "save_draft",
-			Description: "Save/update draft HTML",
+			Name:        "apply_edits",
+			Description: "对简历 HTML 应用搜索替换编辑。提交一组操作，全部验证通过后原子执行。old_string 必须精确匹配当前 HTML。",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"draft_id": map[string]interface{}{
-						"type":        "integer",
-						"description": "The draft ID to update",
-					},
-					"html_content": map[string]interface{}{
-						"type":        "string",
-						"description": "The HTML content to save",
+					"ops": map[string]interface{}{
+						"type":        "array",
+						"description": "搜索替换操作数组",
+						"items": map[string]interface{}{
+							"type": "object",
+							"properties": map[string]interface{}{
+								"old_string":  map[string]interface{}{"type": "string", "description": "必须在当前 HTML 中精确匹配的文本"},
+								"new_string":  map[string]interface{}{"type": "string", "description": "替换后的文本"},
+								"description": map[string]interface{}{"type": "string", "description": "修改说明（可选）"},
+							},
+							"required": []string{"old_string", "new_string"},
+						},
 					},
 				},
-				"required": []interface{}{"draft_id", "html_content"},
+				"required": []string{"ops"},
 			},
 		},
 		{
-			Name:        "create_version",
-			Description: "Create version snapshot",
+			Name:        "search_assets",
+			Description: "搜索用户资料（旧简历、Git 摘要、笔记等）。可按关键词和类型过滤。长内容返回前 2000 字符。",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"draft_id": map[string]interface{}{
-						"type":        "integer",
-						"description": "The draft ID to create version for",
-					},
-					"label": map[string]interface{}{
-						"type":        "string",
-						"description": "The version label",
-					},
+					"query": map[string]interface{}{"type": "string", "description": "搜索关键词"},
+					"type":  map[string]interface{}{"type": "string", "description": "资料类型：resume | git_summary | note"},
+					"limit": map[string]interface{}{"type": "integer", "description": "返回数量上限，默认 5"},
 				},
-				"required": []interface{}{"draft_id", "label"},
-			},
-		},
-		{
-			Name:        "export_pdf",
-			Description: "Trigger PDF export",
-			Parameters: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"draft_id": map[string]interface{}{
-						"type":        "integer",
-						"description": "The draft ID to export",
-					},
-					"html_content": map[string]interface{}{
-						"type":        "string",
-						"description": "The HTML content to export",
-					},
-				},
-				"required": []interface{}{"draft_id", "html_content"},
+				"required": []string{},
 			},
 		},
 	}
@@ -143,200 +123,255 @@ func (e *AgentToolExecutor) Tools() []ToolDef {
 // Execute dispatches to the correct tool implementation based on toolName.
 func (e *AgentToolExecutor) Execute(ctx context.Context, toolName string, params map[string]interface{}) (string, error) {
 	switch toolName {
-	case "get_project_assets":
-		return e.getProjectAssets(ctx, params)
 	case "get_draft":
 		return e.getDraft(ctx, params)
-	case "save_draft":
-		return e.saveDraft(ctx, params)
-	case "create_version":
-		return e.createVersion(ctx, params)
-	case "export_pdf":
-		return e.exportPDF(ctx, params)
+	case "apply_edits":
+		return e.applyEdits(ctx, params)
+	case "search_assets":
+		return e.searchAssets(ctx, params)
 	default:
 		return "", fmt.Errorf("unknown tool: %s", toolName)
 	}
 }
 
-// getProjectAssets queries all assets belonging to a project and returns
-// a text summary with full asset details including parsed content for notes.
-func (e *AgentToolExecutor) getProjectAssets(ctx context.Context, params map[string]interface{}) (string, error) {
-	projectID, err := getIntParam(params, "project_id")
-	if err != nil {
-		return "", err
-	}
+// ---------------------------------------------------------------------------
+// get_draft
+// ---------------------------------------------------------------------------
 
-	var assets []models.Asset
-	if err := e.db.WithContext(ctx).Where("project_id = ?", projectID).Find(&assets).Error; err != nil {
-		return "", fmt.Errorf("query assets: %w", err)
-	}
-
-	if len(assets) == 0 {
-		return "该项目暂无资产。", nil
-	}
-
-	var sb strings.Builder
-	sb.WriteString("项目资产列表：\n")
-	for i, a := range assets {
-		label := ""
-		if a.Label != nil {
-			label = *a.Label
-		}
-		idStr := fmt.Sprintf(" (ID:%d)", a.ID)
-		timeStr := a.CreatedAt.Format("2006-01-02T15:04:05Z07:00")
-
-		line := fmt.Sprintf("%d. [%s]%s", i+1, a.Type, idStr)
-		if label != "" {
-			line += " " + label
-		}
-
-		switch a.Type {
-		case "note":
-			content := ""
-			if a.Content != nil {
-				content = *a.Content
-			}
-			line += " - 内容: " + content
-		case "resume_pdf", "resume_docx":
-			if a.URI != nil && *a.URI != "" {
-				line += " - 路径: " + *a.URI
-			}
-			if a.Content != nil && *a.Content != "" {
-				line += " - 解析内容: " + *a.Content
-			}
-		default:
-			if a.URI != nil && *a.URI != "" {
-				line += " - 路径: " + *a.URI
-			}
-			if a.Content != nil && *a.Content != "" {
-				line += " - 内容: " + *a.Content
-			}
-		}
-
-		line += " - 创建时间: " + timeStr
-		sb.WriteString(line)
-		sb.WriteString("\n")
-	}
-
-	// Also include drafts for this project
-	var drafts []models.Draft
-	if err := e.db.WithContext(ctx).Where("project_id = ?", projectID).Find(&drafts).Error; err == nil && len(drafts) > 0 {
-		sb.WriteString("\n项目草稿：\n")
-		for i, d := range drafts {
-			sb.WriteString(fmt.Sprintf("%d. Draft ID:%d - 更新时间:%s\n",
-				i+1, d.ID, d.UpdatedAt.Format("2006-01-02T15:04:05Z07:00")))
-			if d.HTMLContent != "" {
-				sb.WriteString("  HTML内容:\n")
-				sb.WriteString(d.HTMLContent)
-				sb.WriteString("\n")
-			}
-		}
-	}
-
-	return sb.String(), nil
-}
-
-// getDraft retrieves a draft by ID and returns its HTML content.
 func (e *AgentToolExecutor) getDraft(ctx context.Context, params map[string]interface{}) (string, error) {
-	draftID, err := getIntParam(params, "draft_id")
-	if err != nil {
-		return "", err
+	draftID, ok := ctx.Value(draftIDKey).(uint)
+	if !ok {
+		return "", errors.New("draft_id not found in context")
 	}
 
 	var draft models.Draft
-	if err := e.db.WithContext(ctx).First(&draft, draftID).Error; err != nil {
-		return "", fmt.Errorf("query draft: %w", err)
+	if err := e.db.WithContext(ctx).Select("html_content").First(&draft, draftID).Error; err != nil {
+		return "", fmt.Errorf("get draft: %w", err)
 	}
 
-	result := map[string]interface{}{
-		"draft_id":     draft.ID,
-		"html_content": draft.HTMLContent,
-		"updated_at":   draft.UpdatedAt,
+	selector, _ := params["selector"].(string)
+	if selector == "" {
+		return draft.HTMLContent, nil
 	}
 
-	b, err := json.Marshal(result)
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(draft.HTMLContent))
+	if err != nil {
+		return "", fmt.Errorf("parse HTML: %w", err)
+	}
+	html, err := doc.Find(selector).Html()
+	if err != nil {
+		return "", fmt.Errorf("extract selector: %w", err)
+	}
+	return html, nil
+}
+
+// ---------------------------------------------------------------------------
+// apply_edits
+// ---------------------------------------------------------------------------
+
+type editOp struct {
+	OldString   string `json:"old_string"`
+	NewString   string `json:"new_string"`
+	Description string `json:"description"`
+}
+
+func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]interface{}) (string, error) {
+	draftID, ok := ctx.Value(draftIDKey).(uint)
+	if !ok {
+		return "", errors.New("draft_id not found in context")
+	}
+
+	// Parse ops from params
+	opsRaw, ok := params["ops"]
+	if !ok {
+		return "", errors.New("missing required parameter: ops")
+	}
+
+	opsSlice, ok := opsRaw.([]interface{})
+	if !ok {
+		return "", fmt.Errorf("ops must be an array, got %T", opsRaw)
+	}
+
+	var ops []editOp
+	for i, opRaw := range opsSlice {
+		opMap, ok := opRaw.(map[string]interface{})
+		if !ok {
+			return "", fmt.Errorf("ops[%d] must be an object", i)
+		}
+		oldStr, ok := opMap["old_string"].(string)
+		if !ok {
+			return "", fmt.Errorf("ops[%d].old_string must be a string", i)
+		}
+		newStr, ok := opMap["new_string"].(string)
+		if !ok {
+			return "", fmt.Errorf("ops[%d].new_string must be a string", i)
+		}
+		desc, _ := opMap["description"].(string)
+		ops = append(ops, editOp{OldString: oldStr, NewString: newStr, Description: desc})
+	}
+
+	if len(ops) == 0 {
+		return "", errors.New("ops must not be empty")
+	}
+
+	// Use a closure variable to capture the result from within the transaction.
+	var result string
+	err := e.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 1. Get current draft
+		var draft models.Draft
+		if err := tx.Select("id, html_content, current_edit_sequence").First(&draft, draftID).Error; err != nil {
+			return fmt.Errorf("get draft: %w", err)
+		}
+
+		html := draft.HTMLContent
+
+		// 2. Ensure base snapshot exists (sequence 0)
+		var baseCount int64
+		tx.Model(&models.DraftEdit{}).Where("draft_id = ? AND sequence = 0", draftID).Count(&baseCount)
+		if baseCount == 0 {
+			baseEdit := models.DraftEdit{
+				DraftID:      draftID,
+				Sequence:     0,
+				OpType:       "base_snapshot",
+				HtmlSnapshot: html,
+			}
+			if err := tx.Create(&baseEdit).Error; err != nil {
+				return fmt.Errorf("create base snapshot: %w", err)
+			}
+		}
+
+		// 3. Validate all ops first (dry run)
+		for _, op := range ops {
+			if !strings.Contains(html, op.OldString) {
+				return fmt.Errorf("old_string not found: %q", op.OldString)
+			}
+		}
+
+		// 4. Apply all ops for real
+		nextSeq := draft.CurrentEditSequence + 1
+		applied := 0
+		for _, op := range ops {
+			html = strings.ReplaceAll(html, op.OldString, op.NewString)
+
+			// 5. Record each op as DraftEdit with HtmlSnapshot
+			edit := models.DraftEdit{
+				DraftID:      draftID,
+				Sequence:     nextSeq,
+				OpType:       "replace",
+				OldString:    op.OldString,
+				NewString:    op.NewString,
+				Description:  op.Description,
+				HtmlSnapshot: html,
+			}
+			if err := tx.Create(&edit).Error; err != nil {
+				return fmt.Errorf("record edit: %w", err)
+			}
+			nextSeq++
+			applied++
+		}
+
+		// 6. Update draft's HTMLContent and CurrentEditSequence
+		if err := tx.Model(&models.Draft{}).Where("id = ?", draftID).Updates(map[string]interface{}{
+			"html_content":          html,
+			"current_edit_sequence": nextSeq - 1,
+		}).Error; err != nil {
+			return fmt.Errorf("update draft: %w", err)
+		}
+
+		// 7. Build result
+		resultData := map[string]interface{}{
+			"applied":      applied,
+			"new_sequence": nextSeq - 1,
+		}
+		b, err := json.Marshal(resultData)
+		if err != nil {
+			return fmt.Errorf("marshal result: %w", err)
+		}
+		result = string(b)
+		return nil
+	})
+
+	return result, err
+}
+
+// ---------------------------------------------------------------------------
+// search_assets
+// ---------------------------------------------------------------------------
+
+func (e *AgentToolExecutor) searchAssets(ctx context.Context, params map[string]interface{}) (string, error) {
+	projectID, ok := ctx.Value(projectIDKey).(uint)
+	if !ok {
+		return "", errors.New("project_id not found in context")
+	}
+
+	query := e.db.WithContext(ctx)
+	query = query.Model(&models.Asset{}).Where("project_id = ?", projectID)
+
+	// Optional type filter
+	if typeVal, ok := params["type"].(string); ok && typeVal != "" {
+		query = query.Where("type = ?", typeVal)
+	}
+
+	// Optional keyword filter (search in content)
+	if keyword, ok := params["query"].(string); ok && keyword != "" {
+		query = query.Where("content ILIKE ?", "%"+keyword+"%")
+	}
+
+	// Limit
+	limit := 5
+	if _, ok := params["limit"]; ok {
+		if n, err := getIntParam(params, "limit"); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	query = query.Limit(limit)
+
+	var assets []models.Asset
+	if err := query.Find(&assets).Error; err != nil {
+		return "", fmt.Errorf("search assets: %w", err)
+	}
+
+	type assetResult struct {
+		ID        uint   `json:"id"`
+		Type      string `json:"type"`
+		Label     string `json:"label,omitempty"`
+		Content   string `json:"content,omitempty"`
+		CreatedAt string `json:"created_at"`
+	}
+
+	results := make([]assetResult, 0, len(assets))
+	for _, a := range assets {
+		ar := assetResult{
+			ID:        a.ID,
+			Type:      a.Type,
+			CreatedAt: a.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		}
+		if a.Label != nil {
+			ar.Label = *a.Label
+		}
+		if a.Content != nil {
+			content := *a.Content
+			if len(content) > 2000 {
+				content = content[:2000] + "...(truncated)"
+			}
+			ar.Content = content
+		}
+		results = append(results, ar)
+	}
+
+	resultData := map[string]interface{}{
+		"results": results,
+	}
+	b, err := json.Marshal(resultData)
 	if err != nil {
 		return "", fmt.Errorf("marshal result: %w", err)
 	}
 	return string(b), nil
 }
 
-// saveDraft updates a draft's HTML content in the database.
-func (e *AgentToolExecutor) saveDraft(ctx context.Context, params map[string]interface{}) (string, error) {
-	draftID, err := getIntParam(params, "draft_id")
-	if err != nil {
-		return "", err
-	}
-
-	htmlContent, err := getStringParam(params, "html_content")
-	if err != nil {
-		return "", err
-	}
-
-	result := e.db.WithContext(ctx).Model(&models.Draft{}).Where("id = ?", draftID).Update("html_content", htmlContent)
-	if result.Error != nil {
-		return "", fmt.Errorf("update draft: %w", result.Error)
-	}
-	if result.RowsAffected == 0 {
-		return "", fmt.Errorf("draft not found: %d", draftID)
-	}
-
-	out := map[string]interface{}{
-		"draft_id": draftID,
-		"status":   "saved",
-	}
-
-	b, err := json.Marshal(out)
-	if err != nil {
-		return "", fmt.Errorf("marshal result: %w", err)
-	}
-	return string(b), nil
-}
-
-// createVersion creates a version snapshot for the given draft.
-func (e *AgentToolExecutor) createVersion(ctx context.Context, params map[string]interface{}) (string, error) {
-	draftID, err := getIntParam(params, "draft_id")
-	if err != nil {
-		return "", err
-	}
-	label, _ := getStringParam(params, "label")
-
-	version, err := e.versionSvc.Create(uint(draftID), label)
-	if err != nil {
-		return "", err
-	}
-
-	result := map[string]interface{}{
-		"version_id": version.ID,
-		"label":      version.Label,
-		"created_at": version.CreatedAt,
-	}
-	data, _ := json.Marshal(result)
-	return string(data), nil
-}
-
-// exportPDF triggers a PDF export for the given draft.
-func (e *AgentToolExecutor) exportPDF(ctx context.Context, params map[string]interface{}) (string, error) {
-	draftID, err := getIntParam(params, "draft_id")
-	if err != nil {
-		return "", err
-	}
-	htmlContent, err := getStringParam(params, "html_content")
-	if err != nil {
-		return "", err
-	}
-
-	taskID, err := e.exportSvc.CreateTask(uint(draftID), htmlContent)
-	if err != nil {
-		return "", err
-	}
-
-	result := map[string]interface{}{
-		"task_id": taskID,
-	}
-	data, _ := json.Marshal(result)
-	return string(data), nil
-}
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 // getIntParam extracts an integer from params, supporting float64 (from JSON
 // unmarshaling), int, int64, and json.Number types.
@@ -368,18 +403,4 @@ func getIntParam(params map[string]interface{}, name string) (int, error) {
 	default:
 		return 0, fmt.Errorf("parameter %s must be a number, got %T", name, v)
 	}
-}
-
-// getStringParam extracts a string value from params.
-func getStringParam(params map[string]interface{}, name string) (string, error) {
-	v, ok := params[name]
-	if !ok {
-		return "", fmt.Errorf("missing required parameter: %s", name)
-	}
-
-	s, ok := v.(string)
-	if !ok {
-		return "", fmt.Errorf("parameter %s must be a string, got %T", name, v)
-	}
-	return s, nil
 }

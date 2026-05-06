@@ -22,6 +22,10 @@ func createTestDraftDirect(t *testing.T, db *gorm.DB) uint {
 	return draft.ID
 }
 
+// ---------------------------------------------------------------------------
+// SessionService tests
+// ---------------------------------------------------------------------------
+
 func TestSessionService_Create(t *testing.T) {
 	db := SetupTestDB(t)
 	draftID := createTestDraftDirect(t, db)
@@ -150,91 +154,58 @@ func TestSessionService_GetHistory_Empty(t *testing.T) {
 	assert.Len(t, messages, 0)
 }
 
-func TestSessionService_GetDraftContent(t *testing.T) {
-	db := SetupTestDB(t)
-	draftID := createTestDraftDirect(t, db)
-	svc := NewSessionService(db)
+// ---------------------------------------------------------------------------
+// Compaction tests
+// ---------------------------------------------------------------------------
 
-	content, err := svc.GetDraftContent(draftID)
-	assert.NoError(t, err)
-	assert.Contains(t, content, "test resume")
+func TestNeedsCompaction(t *testing.T) {
+	svc := &ChatService{contextWindowSize: 1000}
+
+	short := append([]Message{{Role: "system", Content: "sys"}},
+		Message{Role: "user", Content: strings.Repeat("a", 100)})
+	assert.False(t, svc.needsCompaction(short))
+
+	long := append([]Message{{Role: "system", Content: "sys"}},
+		Message{Role: "user", Content: strings.Repeat("测", 1000)})
+	assert.True(t, svc.needsCompaction(long))
 }
 
-func TestSessionService_GetDraftContent_NotFound(t *testing.T) {
-	db := SetupTestDB(t)
-	svc := NewSessionService(db)
+func TestEstimateTokens(t *testing.T) {
+	svc := &ChatService{contextWindowSize: 1000}
 
-	_, err := svc.GetDraftContent(9999)
-	assert.ErrorIs(t, err, ErrDraftNotFound)
-}
-
-// --- ChatService tests ---
-
-func TestChatService_MockStream(t *testing.T) {
-	t.Setenv("USE_MOCK", "true")
-
-	db := SetupTestDB(t)
-	draftID := createTestDraftDirect(t, db)
-	sessionSvc := NewSessionService(db)
-	chatSvc := NewChatService(db, &MockAdapter{}, nil, 3)
-
-	session, err := sessionSvc.Create(draftID)
-	require.NoError(t, err)
-
-	var events []string
-	err = chatSvc.StreamChat(session.ID, "优化简历", func(e string) { events = append(events, e) })
-
-	assert.NoError(t, err)
-	assert.NotEmpty(t, events)
-	assert.Contains(t, events[0], `"type":"text"`)
-
-	var hasDone bool
-	for _, e := range events {
-		if strings.Contains(e, `"type":"done"`) { hasDone = true }
+	msgs := []Message{
+		{Role: "system", Content: "hello", ToolCallID: "id1", Name: "tool1"},
+		{Role: "user", Content: "world"},
 	}
-	assert.True(t, hasDone)
+	tokens := svc.estimateTokens(msgs)
+	// "hello" (5) + "id1" (3) + "tool1" (5) + "world" (5) = 18, / 2 = 9
+	assert.Equal(t, 9, tokens)
 }
 
-func TestChatService_MockStream_SavesMessages(t *testing.T) {
-	t.Setenv("USE_MOCK", "true")
-
+func TestCompactMessages_TooFewMessages(t *testing.T) {
 	db := SetupTestDB(t)
-	draftID := createTestDraftDirect(t, db)
-	sessionSvc := NewSessionService(db)
-	chatSvc := NewChatService(db, &MockAdapter{}, nil, 3)
+	provider := &MockAdapter{}
+	svc := NewChatService(db, provider, &MockToolExecutor{}, 3)
 
-	session, err := sessionSvc.Create(draftID)
-	require.NoError(t, err)
-
-	chatSvc.StreamChat(session.ID, "优化简历", func(string) {})
-
-	messages, err := sessionSvc.GetHistory(session.ID)
+	msgs := []models.AIMessage{
+		{Role: "user", Content: "hello"},
+		{Role: "assistant", Content: "hi"},
+	}
+	result, err := svc.compactMessages(context.Background(), msgs)
 	assert.NoError(t, err)
-	assert.Len(t, messages, 2)
-	assert.Equal(t, "user", messages[0].Role)
-	assert.Equal(t, "assistant", messages[1].Role)
+	assert.Len(t, result, 2)
+	assert.Equal(t, "hello", result[0].Content)
 }
 
-func TestChatService_SessionNotFound(t *testing.T) {
-	t.Setenv("USE_MOCK", "true")
-
-	db := SetupTestDB(t)
-	chatSvc := NewChatService(db, &MockAdapter{}, nil, 3)
-
-	err := chatSvc.StreamChat(9999, "hello", func(string) {})
-	assert.ErrorIs(t, err, ErrSessionNotFound)
-}
-
-// --- MockToolExecutor for ReAct tests ---
+// ---------------------------------------------------------------------------
+// MockToolExecutor for ReAct tests
+// ---------------------------------------------------------------------------
 
 // MockToolExecutor returns canned results for tool executions in tests.
 type MockToolExecutor struct{}
 
 func (e *MockToolExecutor) Tools() []ToolDef {
-	// Create a minimal mock executor just to get the tool definitions
-	vSvc := new(mockVersionSvc)
-	eSvc := new(mockExportSvc)
-	return NewAgentToolExecutor(nil, vSvc, eSvc).Tools()
+	return NewAgentToolExecutor(nil).Tools()
 }
 
 func (e *MockToolExecutor) Execute(_ context.Context, toolName string, _ map[string]interface{}) (string, error) {
@@ -257,12 +228,83 @@ func (m *ToolCallLoopMock) StreamChatReAct(
 	_ func(string) error,
 ) error {
 	return onToolCall(ToolCallRequest{
-		Name:   "get_project_assets",
-		Params: map[string]interface{}{"project_id": float64(1)},
+		ID:     "call_loop_1",
+		Name:   "get_draft",
+		Params: map[string]interface{}{"selector": ""},
 	})
 }
 
-// --- StreamChatReAct tests ---
+// TextAndToolCallMock sends text + tool_call in first response, then final text in second.
+// This reproduces the real-world bug where AI explains what it's doing AND calls a tool
+// in the same response.
+type TextAndToolCallMock struct {
+	callCount int
+}
+
+func (m *TextAndToolCallMock) StreamChat(_ context.Context, _ []Message, _ func(string) error) error {
+	return nil
+}
+
+func (m *TextAndToolCallMock) StreamChatReAct(
+	_ context.Context,
+	_ []Message,
+	_ []ToolDef,
+	onReasoning func(chunk string) error,
+	onToolCall func(ToolCallRequest) error,
+	onText func(chunk string) error,
+) error {
+	m.callCount++
+	if m.callCount == 1 {
+		// First call: text + tool call (the bug scenario)
+		_ = onText("让我搜索一下你的资料。")
+		return onToolCall(ToolCallRequest{
+			ID:   "call_search_1",
+			Name: "search_assets",
+			Params: map[string]interface{}{"limit": 10},
+		})
+	}
+	// Second call: final text response after seeing tool result
+	return onText("我找到了以下资料：你的旧简历和两份项目笔记。")
+}
+
+func TestChatService_StreamChatReAct_ContinuesAfterTextAndToolCall(t *testing.T) {
+	db := SetupTestDB(t)
+	draftID := createTestDraftDirect(t, db)
+	sessionSvc := NewSessionService(db)
+	mock := &TextAndToolCallMock{}
+	chatSvc := NewChatService(db, mock, &MockToolExecutor{}, 3)
+
+	session, err := sessionSvc.Create(draftID)
+	require.NoError(t, err)
+
+	var events []string
+	err = chatSvc.StreamChatReAct(session.ID, "看看我上传了什么", func(e string) { events = append(events, e) })
+	require.NoError(t, err)
+
+	// Provider should be called twice: first for text+tool, second for final text
+	assert.Equal(t, 2, mock.callCount, "provider should be called twice")
+
+	// Should have done event
+	var hasDone bool
+	for _, e := range events {
+		if strings.Contains(e, `"type":"done"`) {
+			hasDone = true
+		}
+	}
+	assert.True(t, hasDone, "should have done event")
+
+	// Final assistant message should be saved
+	messages, err := sessionSvc.GetHistory(session.ID)
+	require.NoError(t, err)
+	require.Len(t, messages, 2) // user + assistant
+	assert.Equal(t, "user", messages[0].Role)
+	assert.Equal(t, "assistant", messages[1].Role)
+	assert.Contains(t, messages[1].Content, "我找到了以下资料")
+}
+
+// ---------------------------------------------------------------------------
+// StreamChatReAct tests
+// ---------------------------------------------------------------------------
 
 func TestChatService_StreamChatReAct_FullSequence(t *testing.T) {
 	t.Setenv("USE_MOCK", "true")
@@ -276,11 +318,11 @@ func TestChatService_StreamChatReAct_FullSequence(t *testing.T) {
 	require.NoError(t, err)
 
 	var events []string
-	err = chatSvc.StreamChatReAct(session.ID, "帮我生成简历", func(e string) { events = append(events, e) })
+	err = chatSvc.StreamChatReAct(session.ID, "帮我优化简历", func(e string) { events = append(events, e) })
 	require.NoError(t, err)
 
 	// Verify all event types are present
-	var hasThinking, hasToolCall, hasToolResult, hasText, hasDone bool
+	var hasThinking, hasToolCall, hasToolResult, hasText, hasDone, hasEdit bool
 	var thinkingCount, toolCallCount, textCount int
 	for _, e := range events {
 		if strings.Contains(e, `"type":"thinking"`) {
@@ -301,6 +343,9 @@ func TestChatService_StreamChatReAct_FullSequence(t *testing.T) {
 		if strings.Contains(e, `"type":"done"`) {
 			hasDone = true
 		}
+		if strings.Contains(e, `"type":"edit"`) {
+			hasEdit = true
+		}
 	}
 
 	assert.True(t, hasThinking, "should have thinking events")
@@ -308,6 +353,7 @@ func TestChatService_StreamChatReAct_FullSequence(t *testing.T) {
 	assert.True(t, hasToolResult, "should have tool_result events")
 	assert.True(t, hasText, "should have text events")
 	assert.True(t, hasDone, "should have done event")
+	assert.True(t, hasEdit, "should have edit event for apply_edits")
 	assert.Equal(t, 2, thinkingCount, "MockAdapter produces 2 reasoning chunks")
 	assert.Equal(t, 2, toolCallCount, "MockAdapter produces 2 tool calls")
 	assert.Equal(t, 1, textCount, "MockAdapter produces 1 text chunk")
@@ -324,7 +370,7 @@ func TestChatService_StreamChatReAct_SavesUserMessage(t *testing.T) {
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
 
-	err = chatSvc.StreamChatReAct(session.ID, "帮我生成简历", func(string) {})
+	err = chatSvc.StreamChatReAct(session.ID, "帮我优化简历", func(string) {})
 	require.NoError(t, err)
 
 	// Verify user message was saved
@@ -332,7 +378,7 @@ func TestChatService_StreamChatReAct_SavesUserMessage(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, messages, 2)
 	assert.Equal(t, "user", messages[0].Role)
-	assert.Equal(t, "帮我生成简历", messages[0].Content)
+	assert.Equal(t, "帮我优化简历", messages[0].Content)
 }
 
 func TestChatService_StreamChatReAct_SavesAssistantWithThinking(t *testing.T) {
@@ -346,7 +392,7 @@ func TestChatService_StreamChatReAct_SavesAssistantWithThinking(t *testing.T) {
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
 
-	err = chatSvc.StreamChatReAct(session.ID, "帮我生成简历", func(string) {})
+	err = chatSvc.StreamChatReAct(session.ID, "帮我优化简历", func(string) {})
 	require.NoError(t, err)
 
 	// Verify assistant message was saved with thinking
@@ -356,9 +402,9 @@ func TestChatService_StreamChatReAct_SavesAssistantWithThinking(t *testing.T) {
 
 	assistantMsg := messages[1]
 	assert.Equal(t, "assistant", assistantMsg.Role)
-	assert.Contains(t, assistantMsg.Content, "根据你的资料生成了简历")
+	assert.Contains(t, assistantMsg.Content, "完成了简历的修改")
 	require.NotNil(t, assistantMsg.Thinking, "assistant message should have thinking content")
-	assert.Contains(t, *assistantMsg.Thinking, "需要先获取项目中的资料")
+	assert.Contains(t, *assistantMsg.Thinking, "查看当前简历内容")
 }
 
 func TestChatService_StreamChatReAct_SavesToolCalls(t *testing.T) {
@@ -372,19 +418,19 @@ func TestChatService_StreamChatReAct_SavesToolCalls(t *testing.T) {
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
 
-	err = chatSvc.StreamChatReAct(session.ID, "帮我生成简历", func(string) {})
+	err = chatSvc.StreamChatReAct(session.ID, "帮我优化简历", func(string) {})
 	require.NoError(t, err)
 
 	// Verify tool calls were saved
 	var toolCalls []models.AIToolCall
-	err = db.Where("session_id = ?", session.ID).Find(&toolCalls).Error
+	err = db.Where("session_id = ?", session.ID).Order("id ASC").Find(&toolCalls).Error
 	require.NoError(t, err)
 	require.Len(t, toolCalls, 2, "MockAdapter produces 2 tool calls")
 
-	assert.Equal(t, "get_project_assets", toolCalls[0].ToolName)
+	assert.Equal(t, "get_draft", toolCalls[0].ToolName)
 	assert.Equal(t, "completed", toolCalls[0].Status)
 
-	assert.Equal(t, "save_draft", toolCalls[1].ToolName)
+	assert.Equal(t, "apply_edits", toolCalls[1].ToolName)
 	assert.Equal(t, "completed", toolCalls[1].Status)
 }
 
@@ -411,7 +457,19 @@ func TestChatService_StreamChatReAct_MaxIterationsExceeded(t *testing.T) {
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
 
-	err = chatSvc.StreamChatReAct(session.ID, "帮我生成简历", func(string) {})
+	err = chatSvc.StreamChatReAct(session.ID, "帮我优化简历", func(string) {})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "max tool-calling iterations exceeded")
+}
+
+// ---------------------------------------------------------------------------
+// NewChatService defaults
+// ---------------------------------------------------------------------------
+
+func TestNewChatService_Defaults(t *testing.T) {
+	db := SetupTestDB(t)
+	svc := NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, -1)
+
+	assert.Equal(t, 3, svc.maxIterations, "default maxIterations should be 3")
+	assert.Equal(t, 128000, svc.contextWindowSize, "default contextWindowSize should be 128000")
 }

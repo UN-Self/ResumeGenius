@@ -7,8 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-
-	"github.com/UN-Self/ResumeGenius/backend/internal/modules/render"
 )
 
 func normalizeAIURL(raw string) string {
@@ -20,7 +18,7 @@ func normalizeAIURL(raw string) string {
 	return strings.TrimRight(raw, "/") + suffix
 }
 
-func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, versionSvc *render.VersionService, exportSvc *render.ExportService) {
+func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 	sessionSvc := NewSessionService(db)
 
 	var provider ProviderAdapter
@@ -34,7 +32,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, versionSvc *render.Version
 		)
 	}
 
-	toolExecutor := NewAgentToolExecutor(db, versionSvc, exportSvc)
+	toolExecutor := NewAgentToolExecutor(db)
 	maxIterations := 3
 	if v := os.Getenv("AGENT_MAX_ITERATIONS"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
@@ -42,7 +40,8 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, versionSvc *render.Version
 		}
 	}
 	chatSvc := NewChatService(db, provider, toolExecutor, maxIterations)
-	h := NewHandler(sessionSvc, chatSvc)
+	editSvc := NewEditService(db)
+	h := NewHandler(sessionSvc, chatSvc, editSvc)
 
 	rg.POST("/ai/sessions", h.CreateSession)
 	rg.GET("/ai/sessions", h.ListSessions)
@@ -50,6 +49,8 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, versionSvc *render.Version
 	rg.DELETE("/ai/sessions/:session_id", h.DeleteSession)
 	rg.POST("/ai/sessions/:session_id/chat", h.Chat)
 	rg.GET("/ai/sessions/:session_id/history", h.GetHistory)
+	rg.POST("/ai/drafts/:draft_id/undo", h.Undo)
+	rg.POST("/ai/drafts/:draft_id/redo", h.Redo)
 }
 
 func envOrDefault(key, fallback string) string {

@@ -14,10 +14,26 @@ import (
 	"time"
 )
 
+// ToolCallMessage represents a tool call in an assistant message (for OpenAI API format).
+type ToolCallMessage struct {
+	ID       string           `json:"id"`
+	Type     string           `json:"type"`
+	Function ToolCallFunction `json:"function"`
+}
+
+// ToolCallFunction holds the function name and arguments for a tool call.
+type ToolCallFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
 // Message represents a single chat message for the AI provider.
 type Message struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string            `json:"role"`
+	Content    string            `json:"content,omitempty"`
+	ToolCallID string            `json:"tool_call_id,omitempty"`
+	Name       string            `json:"name,omitempty"`
+	ToolCalls  []ToolCallMessage `json:"tool_calls,omitempty"`
 }
 
 // ToolCallRequest represents a tool call the AI wants to make.
@@ -29,7 +45,7 @@ type ToolCallRequest struct {
 
 // ProviderAdapter abstracts AI model invocation.
 type ProviderAdapter interface {
-	// StreamChat is the existing simple streaming method (keep for backward compat).
+	// StreamChat is used for compaction (summarizing conversation history).
 	StreamChat(ctx context.Context, messages []Message, sendChunk func(string) error) error
 
 	// StreamChatReAct supports function calling for the ReAct pattern.
@@ -154,9 +170,22 @@ func (a *OpenAIAdapter) StreamChatReAct(
 	onToolCall func(call ToolCallRequest) error,
 	onText func(chunk string) error,
 ) error {
-	apiMessages := make([]map[string]string, len(messages))
+	apiMessages := make([]map[string]interface{}, len(messages))
 	for i, m := range messages {
-		apiMessages[i] = map[string]string{"role": m.Role, "content": m.Content}
+		msg := map[string]interface{}{"role": m.Role}
+		if m.Content != "" {
+			msg["content"] = m.Content
+		}
+		if m.ToolCallID != "" {
+			msg["tool_call_id"] = m.ToolCallID
+		}
+		if m.Name != "" {
+			msg["name"] = m.Name
+		}
+		if len(m.ToolCalls) > 0 {
+			msg["tool_calls"] = m.ToolCalls
+		}
+		apiMessages[i] = msg
 	}
 
 	reqBodyMap := map[string]interface{}{
@@ -345,13 +374,13 @@ func (a *OpenAIAdapter) StreamChatReAct(
 }
 
 // MockAdapter returns a preset mock response for testing.
-type MockAdapter struct{}
+// It is stateful: first StreamChatReAct call returns reasoning + tool calls,
+// second call returns final text. This matches real API behavior where
+// tool_calls and final text come in separate responses.
+type MockAdapter struct{ callCount int }
 
 func (a *MockAdapter) StreamChat(ctx context.Context, messages []Message, sendChunk func(string) error) error {
-	chunks := []string{
-		"好的，我来帮你优化简历。",
-		"\n<!--RESUME_HTML_START-->\n<html><body><h1>Mock优化简历</h1><p>这是AI生成的优化版本</p></body></html>\n<!--RESUME_HTML_END-->\n",
-	}
+	chunks := []string{"好的，我来帮你处理。"}
 	for _, c := range chunks {
 		if err := sendChunk(c); err != nil {
 			return err
@@ -360,50 +389,44 @@ func (a *MockAdapter) StreamChat(ctx context.Context, messages []Message, sendCh
 	return nil
 }
 
-// StreamChatReAct simulates a complete ReAct sequence with reasoning, tool calls, and final text.
+// StreamChatReAct simulates a complete ReAct sequence across multiple calls.
 func (a *MockAdapter) StreamChatReAct(
 	ctx context.Context,
 	messages []Message,
 	tools []ToolDef,
 	onReasoning func(chunk string) error,
 	onToolCall func(call ToolCallRequest) error,
-	onText func(chunk string) error,
+	onText func(string) error,
 ) error {
-	// Step 1: reasoning
-	if err := onReasoning("我需要先获取项目中的资料。"); err != nil {
-		return err
+	a.callCount++
+	if a.callCount == 1 {
+		// First call: reasoning + tool calls (no text)
+		_ = onReasoning("让我先查看当前简历内容。")
+		_ = onToolCall(ToolCallRequest{
+			ID:   "call_mock_1",
+			Name: "get_draft",
+			Params: map[string]interface{}{
+				"selector": "",
+			},
+		})
+		_ = onReasoning("简历内容已获取，我来应用修改。")
+		_ = onToolCall(ToolCallRequest{
+			ID:   "call_mock_2",
+			Name: "apply_edits",
+			Params: map[string]interface{}{
+				"ops": []interface{}{
+					map[string]interface{}{
+						"old_string":  "<h1>Mock</h1>",
+						"new_string":  "<h1>Updated</h1>",
+						"description": "update heading",
+					},
+				},
+			},
+		})
+		return nil
 	}
-
-	// Step 2: tool call — get_project_assets
-	if err := onToolCall(ToolCallRequest{
-		Name: "get_project_assets",
-		Params: map[string]interface{}{
-			"project_id": float64(1),
-		},
-	}); err != nil {
-		return err
-	}
-
-	// Step 3: more reasoning
-	if err := onReasoning("资料显示用户有3年前端开发经验，我来生成简历。"); err != nil {
-		return err
-	}
-
-	// Step 4: tool call — save_draft
-	if err := onToolCall(ToolCallRequest{
-		Name: "save_draft",
-		Params: map[string]interface{}{
-			"draft_id":     float64(1),
-			"html_content": "<!DOCTYPE html><html><body><h1>简历</h1></body></html>",
-		},
-	}); err != nil {
-		return err
-	}
-
-	// Step 5: final text
-	if err := onText("我已经根据你的资料生成了简历。"); err != nil {
-		return err
-	}
+	// Subsequent calls: final text
+	return onText("我已经完成了简历的修改。")
 
 	return nil
 }

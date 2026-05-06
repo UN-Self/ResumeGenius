@@ -3,60 +3,24 @@ package agent
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 )
-
-// mockVersionSvc mocks the VersionService for testing
-type mockVersionSvc struct {
-	mock.Mock
-}
-
-func (m *mockVersionSvc) Create(draftID uint, label string) (*models.Version, error) {
-	args := m.Called(draftID, label)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*models.Version), args.Error(1)
-}
-
-// mockExportSvc mocks the ExportService for testing
-type mockExportSvc struct {
-	mock.Mock
-}
-
-func (m *mockExportSvc) CreateTask(draftID uint, htmlContent string) (string, error) {
-	args := m.Called(draftID, htmlContent)
-	return args.String(0), args.Error(1)
-}
-
-// Helper to create an executor with mocks for testing
-func newMockExecutor() (*AgentToolExecutor, *mockVersionSvc, *mockExportSvc) {
-	vSvc := new(mockVersionSvc)
-	eSvc := new(mockExportSvc)
-	executor := NewAgentToolExecutor(nil, vSvc, eSvc)
-	return executor, vSvc, eSvc
-}
 
 // ---------------------------------------------------------------------------
 // Tool definition tests
 // ---------------------------------------------------------------------------
 
-func TestToolExecutor_Tools_FiveDefinitions(t *testing.T) {
-	executor, _, _ := newMockExecutor()
+func TestToolExecutor_Tools_ThreeDefinitions(t *testing.T) {
+	executor := NewAgentToolExecutor(nil)
 	tools := executor.Tools()
-	require.Len(t, tools, 5)
+	require.Len(t, tools, 3)
 
-	// Verify each tool has the required fields.
 	for _, tool := range tools {
 		assert.NotEmpty(t, tool.Name, "tool name must not be empty")
 		assert.NotEmpty(t, tool.Description, "tool %s description must not be empty", tool.Name)
@@ -68,17 +32,11 @@ func TestToolExecutor_Tools_FiveDefinitions(t *testing.T) {
 		props, ok := params["properties"].(map[string]interface{})
 		require.True(t, ok, "tool %s must have properties", tool.Name)
 		require.NotEmpty(t, props, "tool %s must have at least one property", tool.Name)
-
-		required, hasRequired := params["required"]
-		assert.True(t, hasRequired, "tool %s must have a required field", tool.Name)
-		requiredList, ok := required.([]interface{})
-		require.True(t, ok, "tool %s required must be an array", tool.Name)
-		assert.NotEmpty(t, requiredList, "tool %s required must not be empty", tool.Name)
 	}
 }
 
 func TestToolExecutor_Tools_NamesAreCorrect(t *testing.T) {
-	executor, _, _ := newMockExecutor()
+	executor := NewAgentToolExecutor(nil)
 	tools := executor.Tools()
 
 	names := make([]string, len(tools))
@@ -87,394 +45,332 @@ func TestToolExecutor_Tools_NamesAreCorrect(t *testing.T) {
 	}
 
 	expected := []string{
-		"get_project_assets",
 		"get_draft",
-		"save_draft",
-		"create_version",
-		"export_pdf",
+		"apply_edits",
+		"search_assets",
 	}
 	assert.Equal(t, expected, names)
 }
 
 func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
-	executor, _, _ := newMockExecutor()
+	executor := NewAgentToolExecutor(nil)
 	tools := executor.Tools()
 	toolByName := make(map[string]ToolDef)
 	for _, tool := range tools {
 		toolByName[tool.Name] = tool
 	}
 
-	// get_project_assets: required = ["project_id"]
-	{
-		tool := toolByName["get_project_assets"]
-		props := tool.Parameters["properties"].(map[string]interface{})
-		assert.Contains(t, props, "project_id")
-		p := props["project_id"].(map[string]interface{})
-		assert.Equal(t, "integer", p["type"])
-		req := tool.Parameters["required"].([]interface{})
-		assert.Contains(t, req, "project_id")
-	}
-
-	// get_draft: required = ["draft_id"]
+	// get_draft: selector is optional, required = []
 	{
 		tool := toolByName["get_draft"]
 		props := tool.Parameters["properties"].(map[string]interface{})
-		assert.Contains(t, props, "draft_id")
-		p := props["draft_id"].(map[string]interface{})
-		assert.Equal(t, "integer", p["type"])
-		req := tool.Parameters["required"].([]interface{})
-		assert.Contains(t, req, "draft_id")
+		assert.Contains(t, props, "selector")
+		p := props["selector"].(map[string]interface{})
+		assert.Equal(t, "string", p["type"])
+		req := tool.Parameters["required"].([]string)
+		assert.Empty(t, req)
 	}
 
-	// save_draft: required = ["draft_id", "html_content"]
+	// apply_edits: required = ["ops"]
 	{
-		tool := toolByName["save_draft"]
+		tool := toolByName["apply_edits"]
 		props := tool.Parameters["properties"].(map[string]interface{})
-		assert.Contains(t, props, "draft_id")
-		assert.Contains(t, props, "html_content")
-		p := props["html_content"].(map[string]interface{})
-		assert.Equal(t, "string", p["type"])
-		req := tool.Parameters["required"].([]interface{})
-		assert.Contains(t, req, "draft_id")
-		assert.Contains(t, req, "html_content")
+		assert.Contains(t, props, "ops")
+		p := props["ops"].(map[string]interface{})
+		assert.Equal(t, "array", p["type"])
+		items := p["items"].(map[string]interface{})
+		itemProps := items["properties"].(map[string]interface{})
+		assert.Contains(t, itemProps, "old_string")
+		assert.Contains(t, itemProps, "new_string")
+		assert.Contains(t, itemProps, "description")
+		req := tool.Parameters["required"].([]string)
+		assert.Equal(t, []string{"ops"}, req)
 	}
 
-	// create_version: required = ["draft_id", "label"]
+	// search_assets: all optional, required = []
 	{
-		tool := toolByName["create_version"]
+		tool := toolByName["search_assets"]
 		props := tool.Parameters["properties"].(map[string]interface{})
-		assert.Contains(t, props, "draft_id")
-		assert.Contains(t, props, "label")
-		p := props["label"].(map[string]interface{})
-		assert.Equal(t, "string", p["type"])
-		req := tool.Parameters["required"].([]interface{})
-		assert.Contains(t, req, "draft_id")
-		assert.Contains(t, req, "label")
+		assert.Contains(t, props, "query")
+		assert.Contains(t, props, "type")
+		assert.Contains(t, props, "limit")
+		req := tool.Parameters["required"].([]string)
+		assert.Empty(t, req)
 	}
+}
 
-	// export_pdf: required = ["draft_id", "html_content"]
-	{
-		tool := toolByName["export_pdf"]
-		props := tool.Parameters["properties"].(map[string]interface{})
-		assert.Contains(t, props, "draft_id")
-		assert.Contains(t, props, "html_content")
-		p := props["html_content"].(map[string]interface{})
-		assert.Equal(t, "string", p["type"])
-		req := tool.Parameters["required"].([]interface{})
-		assert.Contains(t, req, "draft_id")
-		assert.Contains(t, req, "html_content")
-	}
+// ---------------------------------------------------------------------------
+// get_draft
+// ---------------------------------------------------------------------------
+
+func TestGetDraft_Full(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	html := `<html><body><h1>Hello</h1><p>World</p></body></html>`
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	ctx := WithDraftID(context.Background(), draft.ID)
+	result, err := executor.Execute(ctx, "get_draft", nil)
+	require.NoError(t, err)
+	assert.Equal(t, html, result)
+}
+
+func TestGetDraft_Selector(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	html := `<html><body><h1>Hello</h1><p>World</p></body></html>`
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	ctx := WithDraftID(context.Background(), draft.ID)
+	result, err := executor.Execute(ctx, "get_draft", map[string]interface{}{
+		"selector": "h1",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Hello", result)
+}
+
+func TestGetDraft_ContextMissing(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db)
+
+	_, err := executor.Execute(context.Background(), "get_draft", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "draft_id not found in context")
+}
+
+// ---------------------------------------------------------------------------
+// apply_edits
+// ---------------------------------------------------------------------------
+
+func TestApplyEdits_Success(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	html := `<html><body><h1>Old Title</h1><p>Old paragraph</p></body></html>`
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	ctx := WithDraftID(context.Background(), draft.ID)
+	result, err := executor.Execute(ctx, "apply_edits", map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string":  "Old Title",
+				"new_string":  "New Title",
+				"description": "update heading",
+			},
+			map[string]interface{}{
+				"old_string":  "Old paragraph",
+				"new_string":  "New paragraph",
+				"description": "update text",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Verify result JSON
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &data))
+	assert.Equal(t, float64(2), data["applied"])
+	assert.NotNil(t, data["new_sequence"])
+
+	// Verify DB state
+	var updated models.Draft
+	require.NoError(t, db.First(&updated, draft.ID).Error)
+	assert.Contains(t, updated.HTMLContent, "New Title")
+	assert.Contains(t, updated.HTMLContent, "New paragraph")
+	assert.NotContains(t, updated.HTMLContent, "Old Title")
+	assert.NotContains(t, updated.HTMLContent, "Old paragraph")
+	assert.Equal(t, 2, updated.CurrentEditSequence)
+
+	// Verify DraftEdit records (1 base snapshot + 2 edits)
+	var edits []models.DraftEdit
+	require.NoError(t, db.Where("draft_id = ?", draft.ID).Order("sequence ASC").Find(&edits).Error)
+	require.Len(t, edits, 3)
+
+	// Check base snapshot (sequence 0)
+	assert.Equal(t, 0, edits[0].Sequence)
+	assert.Equal(t, "base_snapshot", edits[0].OpType)
+	assert.Contains(t, edits[0].HtmlSnapshot, "Old Title")
+
+	// Check edit 1 (sequence 1)
+	assert.Equal(t, 1, edits[1].Sequence)
+	assert.Equal(t, "replace", edits[1].OpType)
+	assert.Equal(t, "Old Title", edits[1].OldString)
+	assert.Equal(t, "New Title", edits[1].NewString)
+	assert.Equal(t, "update heading", edits[1].Description)
+	// HtmlSnapshot should be after this edit
+	assert.Contains(t, edits[1].HtmlSnapshot, "New Title")
+	assert.Contains(t, edits[1].HtmlSnapshot, "Old paragraph")
+
+	// Check edit 2 (sequence 2)
+	assert.Equal(t, 2, edits[2].Sequence)
+	assert.Equal(t, "replace", edits[2].OpType)
+	assert.Equal(t, "Old paragraph", edits[2].OldString)
+	assert.Equal(t, "New paragraph", edits[2].NewString)
+	assert.Equal(t, "update text", edits[2].Description)
+	assert.Contains(t, edits[2].HtmlSnapshot, "New Title")
+	assert.Contains(t, edits[2].HtmlSnapshot, "New paragraph")
+}
+
+func TestApplyEdits_OldStringNotFound(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	html := `<html><body><h1>Title</h1></body></html>`
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	ctx := WithDraftID(context.Background(), draft.ID)
+	_, err := executor.Execute(ctx, "apply_edits", map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string": "NonExistent",
+				"new_string": "Replacement",
+			},
+		},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "old_string not found")
+
+	// Verify DB state unchanged
+	var unchanged models.Draft
+	require.NoError(t, db.First(&unchanged, draft.ID).Error)
+	assert.Equal(t, html, unchanged.HTMLContent)
+	assert.Equal(t, 0, unchanged.CurrentEditSequence)
+
+	// No DraftEdit records created
+	var edits []models.DraftEdit
+	require.NoError(t, db.Where("draft_id = ?", draft.ID).Find(&edits).Error)
+	assert.Empty(t, edits)
+}
+
+func TestApplyEdits_BaseSnapshot(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	html := `<html><body><p>Original</p></body></html>`
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	ctx := WithDraftID(context.Background(), draft.ID)
+	_, err := executor.Execute(ctx, "apply_edits", map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string": "Original",
+				"new_string": "Modified",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Base snapshot should exist at sequence 0
+	var baseEdit models.DraftEdit
+	require.NoError(t, db.Where("draft_id = ? AND sequence = 0", draft.ID).First(&baseEdit).Error)
+	assert.Equal(t, "base_snapshot", baseEdit.OpType)
+	assert.Equal(t, html, baseEdit.HtmlSnapshot)
+}
+
+// ---------------------------------------------------------------------------
+// search_assets
+// ---------------------------------------------------------------------------
+
+func TestSearchAssets(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	c1 := "Resume content for John"
+	require.NoError(t, db.Create(&models.Asset{
+		ProjectID: proj.ID,
+		Type:      "resume",
+		Content:   &c1,
+		Label:     strPtr("john.pdf"),
+	}).Error)
+
+	c2 := "Git summary for frontend"
+	require.NoError(t, db.Create(&models.Asset{
+		ProjectID: proj.ID,
+		Type:      "git_summary",
+		Content:   &c2,
+		Label:     strPtr("repo"),
+	}).Error)
+
+	c3 := "Some note content"
+	require.NoError(t, db.Create(&models.Asset{
+		ProjectID: proj.ID,
+		Type:      "note",
+		Content:   &c3,
+		Label:     strPtr("note1"),
+	}).Error)
+
+	ctx := WithProjectID(context.Background(), proj.ID)
+	result, err := executor.Execute(ctx, "search_assets", map[string]interface{}{
+		"query": "John",
+	})
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &data))
+	results, ok := data["results"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, results, 1)
+}
+
+func TestSearchAssets_Empty(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	ctx := WithProjectID(context.Background(), proj.ID)
+	result, err := executor.Execute(ctx, "search_assets", map[string]interface{}{
+		"query": "nonexistent",
+	})
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &data))
+	results, ok := data["results"].([]interface{})
+	require.True(t, ok)
+	assert.Empty(t, results)
 }
 
 // ---------------------------------------------------------------------------
 // Unknown tool
 // ---------------------------------------------------------------------------
 
-func TestToolExecutor_Execute_UnknownTool_ReturnsError(t *testing.T) {
-	executor, _, _ := newMockExecutor()
+func TestExecute_UnknownTool(t *testing.T) {
+	executor := NewAgentToolExecutor(nil)
 	_, err := executor.Execute(context.Background(), "nonexistent_tool", nil)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown tool")
 }
 
 // ---------------------------------------------------------------------------
-// Missing / invalid parameters
+// getIntParam helper
 // ---------------------------------------------------------------------------
-
-func TestToolExecutor_Execute_MissingRequiredParams(t *testing.T) {
-	executor, _, _ := newMockExecutor()
-
-	_, err := executor.Execute(context.Background(), "get_project_assets", map[string]interface{}{})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "project_id")
-
-	_, err = executor.Execute(context.Background(), "save_draft", map[string]interface{}{"draft_id": float64(1)})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "html_content")
-
-	_, err = executor.Execute(context.Background(), "save_draft", map[string]interface{}{"html_content": "hi"})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "draft_id")
-
-	_, err = executor.Execute(context.Background(), "get_draft", map[string]interface{}{})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "draft_id")
-
-	_, err = executor.Execute(context.Background(), "export_pdf", map[string]interface{}{"draft_id": float64(1)})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "html_content")
-}
-
-func TestToolExecutor_Execute_InvalidParamType(t *testing.T) {
-	executor, _, _ := newMockExecutor()
-
-	_, err := executor.Execute(context.Background(), "get_project_assets", map[string]interface{}{"project_id": "not-a-number"})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "project_id")
-
-	_, err = executor.Execute(context.Background(), "save_draft", map[string]interface{}{
-		"draft_id":     float64(1),
-		"html_content": float64(42),
-	})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "html_content")
-}
-
-// ---------------------------------------------------------------------------
-// DB-backed tool tests (require PostgreSQL, skip if unavailable)
-// ---------------------------------------------------------------------------
-
-func TestToolExecutor_GetProjectAssets(t *testing.T) {
-	db := SetupTestDB(t)
-	db.AutoMigrate(&models.Asset{})
-	executor, _, _ := newMockExecutor()
-	executor.db = db
-
-	proj := models.Project{Title: "Test Project", Status: "active"}
-	require.NoError(t, db.Create(&proj).Error)
-
-	content := "张三 | 前端工程师\n工作经历\nABC科技 2022-至今"
-	asset := models.Asset{
-		ProjectID: proj.ID,
-		Type:      "resume_pdf",
-		Content:   &content,
-		Label:     strPtr("resume.pdf"),
-	}
-	require.NoError(t, db.Create(&asset).Error)
-
-	result, err := executor.Execute(context.Background(), "get_project_assets", map[string]interface{}{"project_id": float64(proj.ID)})
-	require.NoError(t, err)
-
-	assert.Contains(t, result, "项目资产列表")
-	assert.Contains(t, result, "[resume_pdf]")
-	assert.Contains(t, result, "resume.pdf")
-	assert.Contains(t, result, fmt.Sprintf("ID:%d", asset.ID))
-}
-
-func TestToolExecutor_GetProjectAssets_EmptyList(t *testing.T) {
-	db := SetupTestDB(t)
-	db.AutoMigrate(&models.Asset{})
-	executor, _, _ := newMockExecutor()
-	executor.db = db
-
-	proj := models.Project{Title: "Empty Project", Status: "active"}
-	require.NoError(t, db.Create(&proj).Error)
-
-	result, err := executor.Execute(context.Background(), "get_project_assets", map[string]interface{}{"project_id": float64(proj.ID)})
-	require.NoError(t, err)
-	assert.Equal(t, "该项目暂无资产。", result)
-}
-
-func TestToolExecutor_GetProjectAssets_HasMultipleAssets(t *testing.T) {
-	db := SetupTestDB(t)
-	db.AutoMigrate(&models.Asset{})
-	executor, _, _ := newMockExecutor()
-	executor.db = db
-
-	proj := models.Project{Title: "Multi Assets", Status: "active"}
-	require.NoError(t, db.Create(&proj).Error)
-
-	c1 := "content1"
-	c2 := "content2"
-	require.NoError(t, db.Create(&models.Asset{ProjectID: proj.ID, Type: "pdf", Content: &c1}).Error)
-	require.NoError(t, db.Create(&models.Asset{ProjectID: proj.ID, Type: "docx", Content: &c2}).Error)
-
-	result, err := executor.Execute(context.Background(), "get_project_assets", map[string]interface{}{"project_id": float64(proj.ID)})
-	require.NoError(t, err)
-
-	assert.Contains(t, result, "pdf")
-	assert.Contains(t, result, "docx")
-	assert.Contains(t, result, "content1")
-	assert.Contains(t, result, "content2")
-}
-
-func TestToolExecutor_GetDraft(t *testing.T) {
-	db := SetupTestDB(t)
-	executor, _, _ := newMockExecutor()
-	executor.db = db
-
-	proj := models.Project{Title: "Test", Status: "active"}
-	require.NoError(t, db.Create(&proj).Error)
-
-	draft := models.Draft{ProjectID: proj.ID, HTMLContent: "<html><body>Hello</body></html>"}
-	require.NoError(t, db.Create(&draft).Error)
-
-	result, err := executor.Execute(context.Background(), "get_draft", map[string]interface{}{"draft_id": float64(draft.ID)})
-	require.NoError(t, err)
-
-	var data map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(result), &data))
-	assert.Equal(t, float64(draft.ID), data["draft_id"])
-	assert.Equal(t, "<html><body>Hello</body></html>", data["html_content"])
-	assert.NotEmpty(t, data["updated_at"])
-}
-
-func TestToolExecutor_GetDraft_NotFound(t *testing.T) {
-	db := SetupTestDB(t)
-	executor, _, _ := newMockExecutor()
-	executor.db = db
-
-	_, err := executor.Execute(context.Background(), "get_draft", map[string]interface{}{"draft_id": float64(99999)})
-	assert.Error(t, err)
-	assert.True(t, errors.Is(err, gorm.ErrRecordNotFound))
-}
-
-func TestToolExecutor_SaveDraft(t *testing.T) {
-	db := SetupTestDB(t)
-	executor, _, _ := newMockExecutor()
-	executor.db = db
-
-	proj := models.Project{Title: "Test", Status: "active"}
-	require.NoError(t, db.Create(&proj).Error)
-
-	draft := models.Draft{ProjectID: proj.ID, HTMLContent: "<html>original</html>"}
-	require.NoError(t, db.Create(&draft).Error)
-
-	result, err := executor.Execute(context.Background(), "save_draft", map[string]interface{}{
-		"draft_id":     float64(draft.ID),
-		"html_content": "<html>updated</html>",
-	})
-	require.NoError(t, err)
-
-	var data map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(result), &data))
-	assert.Equal(t, float64(draft.ID), data["draft_id"])
-	assert.Equal(t, "saved", data["status"])
-
-	// Verify the database was actually updated.
-	var updated models.Draft
-	require.NoError(t, db.First(&updated, draft.ID).Error)
-	assert.Equal(t, "<html>updated</html>", updated.HTMLContent)
-}
-
-func TestToolExecutor_SaveDraft_NotFound(t *testing.T) {
-	db := SetupTestDB(t)
-	executor, _, _ := newMockExecutor()
-	executor.db = db
-
-	_, err := executor.Execute(context.Background(), "save_draft", map[string]interface{}{
-		"draft_id":     float64(99999),
-		"html_content": "<html>nope</html>",
-	})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
-}
-
-func TestToolExecutor_SaveDraft_EmptyContent(t *testing.T) {
-	db := SetupTestDB(t)
-	executor, _, _ := newMockExecutor()
-	executor.db = db
-
-	proj := models.Project{Title: "Test", Status: "active"}
-	require.NoError(t, db.Create(&proj).Error)
-
-	draft := models.Draft{ProjectID: proj.ID, HTMLContent: "<html>original</html>"}
-	require.NoError(t, db.Create(&draft).Error)
-
-	result, err := executor.Execute(context.Background(), "save_draft", map[string]interface{}{
-		"draft_id":     float64(draft.ID),
-		"html_content": "",
-	})
-	require.NoError(t, err)
-
-	var data map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(result), &data))
-	assert.Equal(t, float64(draft.ID), data["draft_id"])
-	assert.Equal(t, "saved", data["status"])
-
-	var updated models.Draft
-	require.NoError(t, db.First(&updated, draft.ID).Error)
-	assert.Equal(t, "", updated.HTMLContent)
-}
-
-// ---------------------------------------------------------------------------
-// Service-based tool tests (use mocks)
-// ---------------------------------------------------------------------------
-
-func TestToolExecutor_CreateVersion(t *testing.T) {
-	executor, vSvc, _ := newMockExecutor()
-
-	now := time.Now()
-	label := "v1.0"
-	vSvc.On("Create", uint(5), "v1.0").Return(&models.Version{
-		ID:        10,
-		DraftID:   5,
-		Label:     &label,
-		CreatedAt: now,
-	}, nil)
-
-	result, err := executor.Execute(context.Background(), "create_version", map[string]interface{}{
-		"draft_id": float64(5),
-		"label":    "v1.0",
-	})
-	require.NoError(t, err)
-
-	var data map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(result), &data))
-	assert.Equal(t, float64(10), data["version_id"])
-	assert.Equal(t, "v1.0", data["label"])
-	vSvc.AssertCalled(t, "Create", uint(5), "v1.0")
-}
-
-func TestToolExecutor_ExportPDF(t *testing.T) {
-	executor, _, eSvc := newMockExecutor()
-
-	eSvc.On("CreateTask", uint(3), "<html>resume</html>").Return("task_abc", nil)
-
-	result, err := executor.Execute(context.Background(), "export_pdf", map[string]interface{}{
-		"draft_id":     float64(3),
-		"html_content": "<html>resume</html>",
-	})
-	require.NoError(t, err)
-
-	var data map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(result), &data))
-	assert.Equal(t, "task_abc", data["task_id"])
-	eSvc.AssertCalled(t, "CreateTask", uint(3), "<html>resume</html>")
-}
-
-func TestToolExecutor_ExportPDF_EmptyHTML(t *testing.T) {
-	executor, _, eSvc := newMockExecutor()
-
-	eSvc.On("CreateTask", uint(3), "").Return("task_xyz", nil)
-
-	result, err := executor.Execute(context.Background(), "export_pdf", map[string]interface{}{
-		"draft_id":     float64(3),
-		"html_content": "",
-	})
-	require.NoError(t, err)
-	assert.Contains(t, result, "task_xyz")
-}
-
-// ---------------------------------------------------------------------------
-// Service error handling
-// ---------------------------------------------------------------------------
-
-func TestToolExecutor_CreateVersion_ServiceError(t *testing.T) {
-	executor, vSvc, _ := newMockExecutor()
-
-	vSvc.On("Create", uint(1), "test").Return(nil, errors.New("draft not found"))
-
-	_, err := executor.Execute(context.Background(), "create_version", map[string]interface{}{
-		"draft_id": float64(1),
-		"label":    "test",
-	})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "draft not found")
-}
-
-func TestToolExecutor_ExportPDF_ServiceError(t *testing.T) {
-	executor, _, eSvc := newMockExecutor()
-
-	eSvc.On("CreateTask", uint(1), "<html></html>").Return("", errors.New("export failed"))
-
-	_, err := executor.Execute(context.Background(), "export_pdf", map[string]interface{}{
-		"draft_id":     float64(1),
-		"html_content": "<html></html>",
-	})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "export failed")
-}
 
 func TestToolExecutor_GetIntParam_Float64(t *testing.T) {
 	n, err := getIntParam(map[string]interface{}{"x": float64(42)}, "x")
@@ -502,3 +398,5 @@ func strPtr(s string) *string {
 	return &s
 }
 
+// Ensure DraftEdit model is properly used in tests
+var _ time.Time

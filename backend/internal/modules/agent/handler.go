@@ -24,10 +24,11 @@ const (
 type Handler struct {
 	sessionSvc *SessionService
 	chatSvc    *ChatService
+	editSvc    *EditService
 }
 
-func NewHandler(sessionSvc *SessionService, chatSvc *ChatService) *Handler {
-	return &Handler{sessionSvc: sessionSvc, chatSvc: chatSvc}
+func NewHandler(sessionSvc *SessionService, chatSvc *ChatService, editSvc *EditService) *Handler {
+	return &Handler{sessionSvc: sessionSvc, chatSvc: chatSvc, editSvc: editSvc}
 }
 
 type createSessionReq struct {
@@ -160,4 +161,32 @@ func (h *Handler) GetHistory(c *gin.Context) {
 		return
 	}
 	response.Success(c, gin.H{"items": messages})
+}
+
+func (h *Handler) Undo(c *gin.Context) {
+	draftID, err := strconv.ParseUint(c.Param("draft_id"), 10, 64)
+	if err != nil {
+		response.Error(c, CodeParamInvalid, "invalid draft_id")
+		return
+	}
+	html, err := h.editSvc.Undo(uint(draftID))
+	if err != nil {
+		response.Error(c, CodeInternalError, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"html_content": html})
+}
+
+func (h *Handler) Redo(c *gin.Context) {
+	draftID, err := strconv.ParseUint(c.Param("draft_id"), 10, 64)
+	if err != nil {
+		response.Error(c, CodeParamInvalid, "invalid draft_id")
+		return
+	}
+	html, err := h.editSvc.Redo(uint(draftID))
+	if err != nil {
+		response.Error(c, CodeInternalError, err.Error())
+		return
+	}
+	response.Success(c, gin.H{"html_content": html})
 }

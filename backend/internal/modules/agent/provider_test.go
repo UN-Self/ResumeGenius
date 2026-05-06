@@ -58,45 +58,61 @@ func TestOpenAIAdapter_MessageFormat(t *testing.T) {
 func TestMockAdapter_StreamChatReAct(t *testing.T) {
 	adapter := &MockAdapter{}
 
-	var reasoningChunks []string
-	var toolCalls []ToolCallRequest
-	var textChunks []string
+	// Call 1: reasoning + tool calls
+	var reasoningChunks1 []string
+	var toolCalls1 []ToolCallRequest
+	var textChunks1 []string
 
 	err := adapter.StreamChatReAct(
 		context.Background(),
 		nil,
 		nil,
 		func(chunk string) error {
-			reasoningChunks = append(reasoningChunks, chunk)
+			reasoningChunks1 = append(reasoningChunks1, chunk)
 			return nil
 		},
 		func(call ToolCallRequest) error {
-			toolCalls = append(toolCalls, call)
+			toolCalls1 = append(toolCalls1, call)
 			return nil
 		},
 		func(chunk string) error {
-			textChunks = append(textChunks, chunk)
+			textChunks1 = append(textChunks1, chunk)
 			return nil
 		},
 	)
+	require.NoError(t, err)
 
-	assert.NoError(t, err)
+	require.Len(t, reasoningChunks1, 2)
+	assert.Contains(t, reasoningChunks1[0], "查看当前简历内容")
+	assert.Contains(t, reasoningChunks1[1], "简历内容已获取")
+	require.Len(t, toolCalls1, 2)
+	assert.Equal(t, "get_draft", toolCalls1[0].Name)
+	assert.Equal(t, "apply_edits", toolCalls1[1].Name)
+	assert.Empty(t, textChunks1, "first call should not have text")
 
-	// Verify reasoning
-	require.Len(t, reasoningChunks, 2)
-	assert.Contains(t, reasoningChunks[0], "需要先获取项目中的资料")
-	assert.Contains(t, reasoningChunks[1], "3年前端开发经验")
+	// Call 2: final text
+	var reasoningChunks2 []string
+	var textChunks2 []string
 
-	// Verify tool calls
-	require.Len(t, toolCalls, 2)
-	assert.Equal(t, "get_project_assets", toolCalls[0].Name)
-	assert.Equal(t, float64(1), toolCalls[0].Params["project_id"])
-	assert.Equal(t, "save_draft", toolCalls[1].Name)
-	assert.Equal(t, float64(1), toolCalls[1].Params["draft_id"])
+	err = adapter.StreamChatReAct(
+		context.Background(),
+		nil,
+		nil,
+		func(chunk string) error {
+			reasoningChunks2 = append(reasoningChunks2, chunk)
+			return nil
+		},
+		func(call ToolCallRequest) error { return nil },
+		func(chunk string) error {
+			textChunks2 = append(textChunks2, chunk)
+			return nil
+		},
+	)
+	require.NoError(t, err)
 
-	// Verify final text
-	require.Len(t, textChunks, 1)
-	assert.Equal(t, "我已经根据你的资料生成了简历。", textChunks[0])
+	assert.Empty(t, reasoningChunks2)
+	require.Len(t, textChunks2, 1)
+	assert.Equal(t, "我已经完成了简历的修改。", textChunks2[0])
 }
 
 func TestMockAdapter_StreamChatReAct_ContextCancelled(t *testing.T) {
@@ -245,6 +261,94 @@ func TestOpenAIAdapter_StreamChatReAct_ParseToolCalls(t *testing.T) {
 
 	// No text content since finish_reason was "tool_calls"
 	assert.Empty(t, text)
+}
+
+func TestMessage_ToolResultFields(t *testing.T) {
+	msg := Message{Role: "tool", Content: "result", ToolCallID: "call_123", Name: "get_draft"}
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+
+	var parsed map[string]interface{}
+	json.Unmarshal(data, &parsed)
+	assert.Equal(t, "tool", parsed["role"])
+	assert.Equal(t, "call_123", parsed["tool_call_id"])
+	assert.Equal(t, "get_draft", parsed["name"])
+}
+
+func TestMessage_ContentOmitEmpty(t *testing.T) {
+	msg := Message{Role: "tool", ToolCallID: "call_1", Name: "apply_edits"}
+	data, err := json.Marshal(msg)
+	require.NoError(t, err)
+	var parsed map[string]interface{}
+	json.Unmarshal(data, &parsed)
+	_, hasContent := parsed["content"]
+	assert.False(t, hasContent)
+}
+
+func TestOpenAIAdapter_StreamChatReAct_PreservesToolFields(t *testing.T) {
+	var capturedBody map[string]interface{}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &capturedBody)
+
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"content\":\"OK\"},\"finish_reason\":\"stop\"}]}\n\n")
+		_, _ = fmt.Fprintf(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	adapter := NewOpenAIAdapter(server.URL, "test-key", "test-model")
+
+	messages := []Message{
+		{Role: "user", Content: "hello"},
+		{
+			Role: "assistant",
+			ToolCalls: []ToolCallMessage{
+				{ID: "call_1", Type: "function", Function: ToolCallFunction{Name: "get_draft", Arguments: "{}"}},
+			},
+		},
+		{Role: "tool", Content: `{"html":"<p>test</p>"}`, ToolCallID: "call_1", Name: "get_draft"},
+	}
+
+	err := adapter.StreamChatReAct(
+		context.Background(),
+		messages,
+		[]ToolDef{{Name: "get_draft", Description: "Get draft"}},
+		func(chunk string) error { return nil },
+		func(call ToolCallRequest) error { return nil },
+		func(chunk string) error { return nil },
+	)
+
+	require.NoError(t, err)
+
+	apiMsgs, ok := capturedBody["messages"].([]interface{})
+	require.True(t, ok)
+	require.Len(t, apiMsgs, 3)
+
+	// Verify user message
+	userMsg := apiMsgs[0].(map[string]interface{})
+	assert.Equal(t, "user", userMsg["role"])
+	assert.Equal(t, "hello", userMsg["content"])
+
+	// Verify assistant message has tool_calls
+	asstMsg := apiMsgs[1].(map[string]interface{})
+	assert.Equal(t, "assistant", asstMsg["role"])
+	asstToolCalls, ok := asstMsg["tool_calls"].([]interface{})
+	require.True(t, ok, "assistant message should have tool_calls")
+	require.Len(t, asstToolCalls, 1)
+	tc := asstToolCalls[0].(map[string]interface{})
+	assert.Equal(t, "call_1", tc["id"])
+	fn := tc["function"].(map[string]interface{})
+	assert.Equal(t, "get_draft", fn["name"])
+
+	// Verify tool message has tool_call_id and name
+	toolMsg := apiMsgs[2].(map[string]interface{})
+	assert.Equal(t, "tool", toolMsg["role"])
+	assert.Equal(t, "call_1", toolMsg["tool_call_id"], "tool message should have tool_call_id")
+	assert.Equal(t, "get_draft", toolMsg["name"], "tool message should have name")
+	assert.Equal(t, `{"html":"<p>test</p>"}`, toolMsg["content"])
 }
 
 func TestOpenAIAdapter_StreamChatReAct_HttpError(t *testing.T) {
