@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
@@ -86,6 +86,7 @@ export default function EditorPage() {
   const {
     versions,
     loading: versionsLoading,
+    error: versionsError,
     previewMode,
     previewVersion,
     previewHtml,
@@ -93,10 +94,44 @@ export default function EditorPage() {
     exitPreview,
     createSnapshot,
     rollback: rollbackVersion,
+    refreshList,
   } = useVersions(draftId ? Number(draftId) : null)
 
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
   const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false)
+  const [savingSnapshot, setSavingSnapshot] = useState(false)
+
+  // Save editor content before preview so we can restore it on exit
+  const savedContentBeforePreview = useRef<string | null>(null)
+  const didRecenterAfterPreviewRef = useRef(false)
+
+  // When preview HTML is ready, load it into the editor and make read-only
+  useLayoutEffect(() => {
+    if (previewMode === 'previewing' && previewHtml && editor) {
+      editor.commands.setContent(previewHtml)
+      editor.setEditable(false)
+      didRecenterAfterPreviewRef.current = false
+    }
+  }, [previewMode, previewHtml, editor])
+
+  const handleStartPreview = useCallback(async (version: Parameters<typeof startPreview>[0]) => {
+    if (editor) {
+      savedContentBeforePreview.current = editor.getHTML()
+    }
+    await startPreview(version)
+  }, [editor, startPreview])
+
+  const handleExitPreview = useCallback(() => {
+    if (editor) {
+      editor.setEditable(true)
+      const saved = savedContentBeforePreview.current
+      if (saved) {
+        editor.commands.setContent(saved)
+      }
+      savedContentBeforePreview.current = null
+    }
+    exitPreview()
+  }, [editor, exitPreview])
 
   const reloadAssets = useCallback(async () => {
     const nextAssets = await intakeApi.listAssets(pid)
@@ -113,10 +148,10 @@ export default function EditorPage() {
     try {
       const html = await rollbackVersion()
       editor?.commands.setContent(html)
+      setRollbackDialogOpen(false)
     } catch (e) {
       console.error('Rollback failed:', e)
     }
-    setRollbackDialogOpen(false)
   }
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -318,42 +353,36 @@ export default function EditorPage() {
               <VersionDropdown
                 versions={versions}
                 loading={versionsLoading}
-                onPreview={startPreview}
+                error={versionsError}
+                onPreview={handleStartPreview}
                 onSaveSnapshot={() => setSaveDialogOpen(true)}
+                onRetry={refreshList}
               />
             </ActionBar>
           </div>
           <div className="flex-1 overflow-auto" onContextMenu={handleContextMenu}>
-            {previewMode === 'previewing' && previewHtml && previewVersion ? (
-              <>
-                <VersionPreviewBanner
-                  version={previewVersion}
-                  onRollback={() => setRollbackDialogOpen(true)}
-                  onClose={exitPreview}
-                />
-                <A4Canvas>
-                  <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
-                </A4Canvas>
-              </>
-            ) : (
-              <>
-                <A4Canvas editor={editor} />
-                {editor && (
-                  <BubbleMenu
-                    editor={editor}
-                    options={{
-                      placement: 'top',
-                      arrow: false,
-                    }}
-                    shouldShow={({ editor: e }) => {
-                      const { from, to } = e.state.selection
-                      return from !== to
-                    }}
-                  >
-                    <BubbleToolbar editor={editor} />
-                  </BubbleMenu>
-                )}
-              </>
+            {previewMode === 'previewing' && previewVersion && (
+              <VersionPreviewBanner
+                version={previewVersion}
+                onRollback={() => setRollbackDialogOpen(true)}
+                onClose={handleExitPreview}
+              />
+            )}
+            <A4Canvas editor={editor} />
+            {editor && previewMode !== 'previewing' && (
+              <BubbleMenu
+                editor={editor}
+                options={{
+                  placement: 'top',
+                  arrow: false,
+                }}
+                shouldShow={({ editor: e }) => {
+                  const { from, to } = e.state.selection
+                  return from !== to
+                }}
+              >
+                <BubbleToolbar editor={editor} />
+              </BubbleMenu>
             )}
           </div>
         </div>
@@ -408,10 +437,18 @@ export default function EditorPage() {
       />
       <SaveSnapshotDialog
         open={saveDialogOpen}
+        saving={savingSnapshot}
         onClose={() => setSaveDialogOpen(false)}
-        onConfirm={(label) => {
-          createSnapshot(label)
-          setSaveDialogOpen(false)
+        onConfirm={async (label) => {
+          setSavingSnapshot(true)
+          try {
+            await createSnapshot(label)
+            setSaveDialogOpen(false)
+          } catch {
+            // error is handled by useVersions
+          } finally {
+            setSavingSnapshot(false)
+          }
         }}
       />
       <RollbackConfirmDialog

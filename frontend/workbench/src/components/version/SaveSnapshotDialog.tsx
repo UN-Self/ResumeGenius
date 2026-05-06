@@ -5,11 +5,12 @@ import { Input } from '@/components/ui/input'
 
 interface SaveSnapshotDialogProps {
   open: boolean
+  saving?: boolean
   onClose: () => void
   onConfirm: (label: string) => void
 }
 
-export function SaveSnapshotDialog({ open, onClose, onConfirm }: SaveSnapshotDialogProps) {
+export function SaveSnapshotDialog({ open, saving, onClose, onConfirm }: SaveSnapshotDialogProps) {
   const [label, setLabel] = useState('')
 
   const handleConfirm = () => {
@@ -18,6 +19,7 @@ export function SaveSnapshotDialog({ open, onClose, onConfirm }: SaveSnapshotDia
   }
 
   const handleClose = () => {
+    if (saving) return
     setLabel('')
     onClose()
   }
@@ -31,16 +33,16 @@ export function SaveSnapshotDialog({ open, onClose, onConfirm }: SaveSnapshotDia
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') handleConfirm()
+            if (e.key === 'Enter' && !saving) handleConfirm()
           }}
         />
       </ModalBody>
       <ModalFooter>
-        <Button variant="secondary" size="sm" onClick={handleClose}>
+        <Button variant="secondary" size="sm" onClick={handleClose} disabled={saving}>
           取消
         </Button>
-        <Button size="sm" onClick={handleConfirm}>
-          确认
+        <Button size="sm" onClick={handleConfirm} disabled={saving}>
+          {saving ? '保存中...' : '确认'}
         </Button>
       </ModalFooter>
     </Modal>
