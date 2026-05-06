@@ -13,6 +13,7 @@ import (
 
 // Error code constants for the render module (5xxxx series).
 const (
+	CodeInternalError   = 50000
 	CodeExportFailed    = 5001
 	CodeDraftNotFound   = 5002
 	CodeVersionNotFound = 5004
@@ -91,7 +92,7 @@ func (h *Handler) ListVersions(c *gin.Context) {
 
 	versions, err := h.versionSvc.ListByDraft(draftID)
 	if err != nil {
-		response.Error(c, CodeExportFailed, "failed to list versions")
+		response.Error(c, CodeInternalError, "failed to list versions")
 		return
 	}
 
@@ -134,7 +135,7 @@ func (h *Handler) GetVersion(c *gin.Context) {
 			response.ErrorWithStatus(c, http.StatusNotFound, CodeVersionNotFound, "version not found")
 			return
 		}
-		response.Error(c, CodeExportFailed, "failed to get version")
+		response.Error(c, CodeInternalError, "failed to get version")
 		return
 	}
 
@@ -161,7 +162,12 @@ func (h *Handler) CreateVersion(c *gin.Context) {
 
 	var req createVersionReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, CodeExportFailed, "invalid request body")
+		response.ErrorWithStatus(c, http.StatusBadRequest, CodeInternalError, "invalid request body")
+		return
+	}
+
+	if len(req.Label) > 200 {
+		response.ErrorWithStatus(c, http.StatusBadRequest, CodeInternalError, "label too long (max 200 characters)")
 		return
 	}
 
@@ -171,7 +177,7 @@ func (h *Handler) CreateVersion(c *gin.Context) {
 			response.ErrorWithStatus(c, http.StatusNotFound, CodeDraftNotFound, "draft not found")
 			return
 		}
-		response.Error(c, CodeExportFailed, "failed to create version")
+		response.Error(c, CodeInternalError, "failed to create version")
 		return
 	}
 
@@ -197,7 +203,7 @@ func (h *Handler) Rollback(c *gin.Context) {
 
 	var req rollbackReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, CodeExportFailed, "invalid request body")
+		response.ErrorWithStatus(c, http.StatusBadRequest, CodeInternalError, "invalid request body")
 		return
 	}
 
@@ -211,7 +217,7 @@ func (h *Handler) Rollback(c *gin.Context) {
 			response.ErrorWithStatus(c, http.StatusNotFound, CodeVersionNotFound, "version not found")
 			return
 		}
-		response.Error(c, CodeExportFailed, "failed to rollback")
+		response.Error(c, CodeInternalError, "failed to rollback")
 		return
 	}
 
@@ -232,7 +238,7 @@ func (h *Handler) CreateExport(c *gin.Context) {
 
 	var req createExportReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		response.Error(c, CodeExportFailed, "invalid request body")
+		response.ErrorWithStatus(c, http.StatusBadRequest, CodeInternalError, "invalid request body")
 		return
 	}
 
@@ -242,7 +248,7 @@ func (h *Handler) CreateExport(c *gin.Context) {
 			response.ErrorWithStatus(c, http.StatusNotFound, CodeDraftNotFound, "draft not found")
 			return
 		}
-		response.Error(c, CodeExportFailed, "failed to create export task")
+		response.Error(c, CodeInternalError, "failed to create export task")
 		return
 	}
 
@@ -262,7 +268,7 @@ func (h *Handler) GetTask(c *gin.Context) {
 			response.ErrorWithStatus(c, http.StatusNotFound, CodeTaskNotFound, "task not found")
 			return
 		}
-		response.Error(c, CodeExportFailed, "failed to get task")
+		response.Error(c, CodeInternalError, "failed to get task")
 		return
 	}
 
@@ -283,7 +289,7 @@ func (h *Handler) DownloadFile(c *gin.Context) {
 			response.ErrorWithStatus(c, http.StatusBadRequest, CodeExportFailed, "task not completed yet")
 			return
 		}
-		response.Error(c, CodeExportFailed, "failed to get file")
+		response.Error(c, CodeInternalError, "failed to get file")
 		return
 	}
 
