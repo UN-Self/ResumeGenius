@@ -1,4 +1,6 @@
 ---
+import AnimatedBrandTitle from './AnimatedBrandTitle.astro'
+
 const steps = ['读取资料', '生成简历 HTML', '优化排版', '准备预览']
 const typedResumeRows = [
   { title: '项目经历', line: 'ResumeGenius 工作台重构' },
@@ -23,13 +25,11 @@ const features = [
 <section class="relative overflow-hidden px-6 pb-16 pt-14 md:pb-24 md:pt-20">
   <div class="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
     <div class="animate-on-scroll">
-      <div class="mb-5 inline-flex items-center gap-2 rounded-full border border-border bg-white/70 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur-xl">
+      <div class="hero-kicker mb-5 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium backdrop-blur-xl">
         <span class="h-2 w-2 rounded-full bg-[#20c997] shadow-[0_0_18px_rgba(32,201,151,0.75)]"></span>
         Futuristic AI resume workspace
       </div>
-      <h1 class="gradient-text text-5xl font-semibold tracking-tight md:text-6xl">
-        ResumeGenius
-      </h1>
+      <AnimatedBrandTitle class="text-5xl font-semibold md:text-6xl" />
       <p class="mt-6 max-w-xl text-base leading-7 text-muted-foreground md:text-lg">
         把散乱资料变成可编辑简历。上传文件、接入 Git、补充经历，AI 会生成结构清晰、可以继续微调的 A4 简历。
       </p>

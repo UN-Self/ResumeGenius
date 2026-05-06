@@ -267,6 +267,108 @@ button:disabled {
   color: transparent;
 }
 
+.brand-kicker {
+  border: 1px solid color-mix(in srgb, var(--color-primary), transparent 58%);
+  background: color-mix(in srgb, var(--color-card), var(--color-primary) 10%);
+  color: color-mix(in srgb, var(--color-foreground), var(--color-primary) 18%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 0 22px color-mix(in srgb, var(--color-primary), transparent 88%);
+}
+
+.animated-brand-title {
+  display: flex;
+  align-items: baseline;
+  width: fit-content;
+  max-width: 100%;
+  color: var(--color-foreground);
+  letter-spacing: 0;
+  line-height: 0.98;
+  transform-origin: 50% 58%;
+  cursor: default;
+}
+
+.animated-brand-title:hover {
+  animation: brand-title-wobble 680ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  filter: drop-shadow(0 0 18px color-mix(in srgb, var(--color-primary), transparent 58%));
+}
+
+.brand-letter {
+  display: inline-block;
+  position: relative;
+  color: currentColor;
+  line-height: inherit;
+  transform-origin: 50% 78%;
+  will-change: transform, filter;
+}
+
+.brand-letter:nth-child(n+7) {
+  color: var(--color-primary);
+}
+
+.brand-letter:nth-child(n+10) {
+  color: var(--color-accent);
+}
+
+.brand-letter-rise {
+  animation: brand-letter-rise 2.8s cubic-bezier(0.2, 0.9, 0.2, 1) infinite;
+  animation-delay: var(--motion-delay, 0ms);
+}
+
+.brand-letter-roll {
+  animation: brand-letter-roll 3.1s cubic-bezier(0.2, 0.9, 0.2, 1) infinite;
+  animation-delay: var(--motion-delay, 0ms);
+}
+
+.brand-letter-sway {
+  animation: brand-letter-sway 2.7s cubic-bezier(0.2, 0.9, 0.2, 1) infinite;
+  animation-delay: var(--motion-delay, 0ms);
+}
+
+.brand-letter-pulse {
+  animation: brand-letter-pulse 2.9s cubic-bezier(0.2, 0.9, 0.2, 1) infinite;
+  animation-delay: var(--motion-delay, 0ms);
+}
+
+.brand-letter-nod {
+  animation: brand-letter-nod 2.6s cubic-bezier(0.2, 0.9, 0.2, 1) infinite;
+  animation-delay: var(--motion-delay, 0ms);
+}
+
+.brand-letter-i {
+  align-self: baseline;
+  width: 0.22em;
+  height: 0.78em;
+  margin-inline: 0.015em;
+  transform: translateY(0.035em);
+}
+
+.brand-i-stem,
+.brand-i-dot {
+  position: absolute;
+  left: 50%;
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--color-primary), var(--color-accent));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--color-accent), transparent 52%);
+}
+
+.brand-i-stem {
+  bottom: 0;
+  width: 0.14em;
+  height: 0.52em;
+  transform: translateX(-50%);
+}
+
+.brand-i-dot {
+  top: 0;
+  width: 0.14em;
+  height: 0.14em;
+  transform: translateX(-50%);
+  animation: brand-i-dot-hop 2.2s cubic-bezier(0.2, 0.9, 0.2, 1) infinite;
+  animation-delay: var(--motion-delay, 0ms);
+}
+
 .stagger-in {
   animation: stagger-in 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: var(--delay, 0ms);
@@ -334,6 +436,102 @@ button:disabled {
   50% {
     opacity: 1;
     transform: scale(1.04);
+  }
+}
+
+@keyframes brand-title-wobble {
+  0%, 100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  18% {
+    transform: translateX(-2px) rotate(-2.2deg);
+  }
+  38% {
+    transform: translateX(3px) rotate(1.8deg);
+  }
+  58% {
+    transform: translateX(-2px) rotate(-1.1deg);
+  }
+  78% {
+    transform: translateX(1px) rotate(0.55deg);
+  }
+}
+
+@keyframes brand-letter-rise {
+  0%, 55%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  18% {
+    transform: translateY(-0.18em) rotate(-4deg);
+  }
+  32% {
+    transform: translateY(0.025em) rotate(1.8deg);
+  }
+}
+
+@keyframes brand-letter-roll {
+  0%, 58%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  20% {
+    transform: translateY(-0.05em) rotate(-7deg);
+  }
+  38% {
+    transform: translateY(0.018em) rotate(3deg);
+  }
+}
+
+@keyframes brand-letter-sway {
+  0%, 62%, 100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  20% {
+    transform: translateX(0.04em) rotate(4deg);
+  }
+  42% {
+    transform: translateX(-0.026em) rotate(-2.5deg);
+  }
+}
+
+@keyframes brand-letter-pulse {
+  0%, 62%, 100% {
+    transform: scale(1);
+    filter: none;
+  }
+  24% {
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 16px color-mix(in srgb, var(--color-primary), transparent 48%));
+  }
+  44% {
+    transform: scale(0.99);
+    filter: none;
+  }
+}
+
+@keyframes brand-letter-nod {
+  0%, 60%, 100% {
+    transform: translateY(0) skewX(0deg);
+  }
+  22% {
+    transform: translateY(-0.085em) skewX(-6deg);
+  }
+  40% {
+    transform: translateY(0.018em) skewX(2.2deg);
+  }
+}
+
+@keyframes brand-i-dot-hop {
+  0%, 58%, 100% {
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  20% {
+    transform: translateX(-50%) translateY(-0.44em) scale(1.1);
+  }
+  36% {
+    transform: translateX(-50%) translateY(0.055em) scale(0.9, 1.12);
+  }
+  48% {
+    transform: translateX(-50%) translateY(0) scale(1);
   }
 }
 
@@ -414,6 +612,14 @@ button:disabled {
   .typing-cursor {
     opacity: 0;
     animation: none !important;
+  }
+
+  .animated-brand-title,
+  .animated-brand-title:hover,
+  .brand-letter,
+  .brand-i-dot {
+    animation: none !important;
+    filter: none;
   }
 
   .app-shell::before,
