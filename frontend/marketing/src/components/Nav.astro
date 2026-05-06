@@ -4,12 +4,20 @@ const navLinks = [
   { href: '/pricing', label: '定价' },
   { href: '/help', label: '帮助文档' },
 ]
+
+const themePresets = [
+  { id: 'futuristic-dark', label: '科技夜' },
+  { id: 'futuristic-light', label: '银白' },
+  { id: 'warm-editorial', label: '暖驼' },
+  { id: 'quiet-luxury', label: '静奢' },
+  { id: 'professional-blue', label: '企业蓝' },
+]
 ---
 
-<nav class="nav-bar fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm border-b border-transparent">
+<nav class="nav-bar fixed top-0 left-0 right-0 z-50 border-b border-transparent bg-white/62 backdrop-blur-xl">
   <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
     <a href="/" class="flex items-center gap-2 no-underline">
-      <span class="text-xl font-serif font-semibold text-foreground">ResumeGenius</span>
+      <span class="text-xl font-semibold tracking-tight text-foreground">ResumeGenius</span>
     </a>
 
     <!-- Desktop nav -->
@@ -19,8 +27,23 @@ const navLinks = [
           {link.label}
         </a>
       ))}
+      <div class="theme-menu relative" data-theme-menu>
+        <button type="button" class="theme-menu-trigger" data-theme-menu-button aria-expanded="false">
+          <span class="theme-menu-dot"></span>
+          <span data-theme-current>科技夜</span>
+          <svg class="theme-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="theme-menu-panel hidden" data-theme-menu-panel>
+          {themePresets.map(preset => (
+            <button type="button" class="theme-menu-option" data-theme-option={preset.id} data-theme-label={preset.label}>
+              <span>{preset.label}</span>
+              <span class="theme-menu-check">✓</span>
+            </button>
+          ))}
+        </div>
+      </div>
       <a href="/app"
-        class="btn-primary inline-flex items-center justify-center h-10 px-5 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 active:bg-primary-800 no-underline">
+        class="btn-primary inline-flex h-10 items-center justify-center rounded-full bg-[#007aff] px-5 text-sm font-medium text-white no-underline hover:bg-[#0067d8] active:bg-[#005bbf]">
         开始使用
       </a>
     </div>
@@ -32,14 +55,31 @@ const navLinks = [
   </div>
 
   <!-- Mobile menu (hidden by default) -->
-  <div id="mobile-menu" class="hidden md:hidden border-t border-border bg-background px-6 py-4 flex flex-col gap-3">
+  <div id="mobile-menu" class="hidden md:hidden border-t border-border bg-white/90 px-6 py-4 flex flex-col gap-3 backdrop-blur-xl">
     {navLinks.map(link => (
       <a href={link.href} class="text-sm text-muted-foreground hover:text-foreground transition-colors duration-150 no-underline py-1">
         {link.label}
       </a>
     ))}
+    <div class="theme-menu relative" data-theme-menu>
+      <button type="button" class="theme-menu-trigger w-full justify-between" data-theme-menu-button aria-expanded="false">
+        <span class="inline-flex items-center gap-2">
+          <span class="theme-menu-dot"></span>
+          <span data-theme-current>科技夜</span>
+        </span>
+        <svg class="theme-menu-chevron" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="theme-menu-panel hidden" data-theme-menu-panel>
+        {themePresets.map(preset => (
+          <button type="button" class="theme-menu-option" data-theme-option={preset.id} data-theme-label={preset.label}>
+            <span>{preset.label}</span>
+            <span class="theme-menu-check">✓</span>
+          </button>
+        ))}
+      </div>
+    </div>
     <a href="/app"
-      class="btn-primary inline-flex items-center justify-center h-10 px-5 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 active:bg-primary-800 no-underline mt-2">
+      class="btn-primary mt-2 inline-flex h-10 items-center justify-center rounded-full bg-[#007aff] px-5 text-sm font-medium text-white no-underline hover:bg-[#0067d8]">
       开始使用
     </a>
   </div>

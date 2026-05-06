@@ -433,7 +433,7 @@ export default function EditorPage() {
               }}
             />
           ) : (
-            <p className="mt-8 text-center text-xs text-[var(--color-text-secondary)]">
+            <p className="mt-8 text-center text-xs text-muted-foreground">
               {'\u7b49\u5f85\u8349\u7a3f\u52a0\u8f7d...'}
             </p>
           )}

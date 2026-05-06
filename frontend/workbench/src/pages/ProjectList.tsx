@@ -1,16 +1,22 @@
 import { useState, useEffect, useCallback } from 'react'
+import type { CSSProperties } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { LogOut, Search, Sparkles } from 'lucide-react'
 import { intakeApi, ApiError, authApi, type Project } from '@/lib/api-client'
-import ProjectCard from '@/components/intake/ProjectCard'
+import ProjectCard, { NewResumeCard } from '@/components/intake/ProjectCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert } from '@/components/ui/alert'
+import { Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/ui/modal'
+import { ThemeSwitcher } from '@/components/ui/theme-switcher'
 
 export default function ProjectList() {
   const navigate = useNavigate()
   const location = useLocation()
   const [projects, setProjects] = useState<Project[]>([])
   const [title, setTitle] = useState('')
+  const [query, setQuery] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -27,7 +33,13 @@ export default function ProjectList() {
     }
   }, [])
 
-  useEffect(() => { loadProjects() }, [loadProjects, location.key])
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      void loadProjects()
+    }, 0)
+
+    return () => window.clearTimeout(timeout)
+  }, [loadProjects, location.key])
 
   const handleCreate = async () => {
     const trimmed = title.trim()
@@ -36,6 +48,7 @@ export default function ProjectList() {
       setError('')
       await intakeApi.createProject(trimmed)
       setTitle('')
+      setCreateOpen(false)
       await loadProjects()
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '创建失败')
@@ -46,15 +59,31 @@ export default function ProjectList() {
     if (e.key === 'Enter') handleCreate()
   }
 
+  const visibleProjects = projects.filter((project) =>
+    project.title.toLowerCase().includes(query.trim().toLowerCase())
+  )
+
   return (
-    <div className="min-h-screen bg-background">
-      <div className="max-w-2xl mx-auto px-6 py-10">
-        <div className="mb-8">
-          <div className="flex items-start justify-between gap-3">
-            <h1 className="font-serif text-2xl font-semibold text-foreground">
+    <div className="app-shell min-h-screen">
+      <div className="relative z-10 mx-auto max-w-7xl px-5 py-6 sm:px-8 lg:px-10">
+        <header className="stagger-in relative z-50 mb-10 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur-xl">
+              <Sparkles size={14} className="text-primary" />
+              AI resume workspace
+            </div>
+            <h1 className="gradient-text text-4xl font-semibold tracking-tight sm:text-5xl">
               ResumeGenius
             </h1>
-            <button
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+              从资料接入、AI 生成到可视化编辑，把每一份简历整理成可直接交付的作品。
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <ThemeSwitcher />
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={async () => {
                 try {
                   await authApi.logout()
@@ -62,51 +91,47 @@ export default function ProjectList() {
                   window.location.assign('/login')
                 }
               }}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              退出登录
-            </button>
+              <LogOut size={14} className="mr-1.5" />
+              退出
+            </Button>
           </div>
-          <p className="text-sm text-muted-foreground mt-1">
-            AI 辅助简历编辑，从项目开始
-          </p>
-        </div>
-
-        <div className="flex gap-2 mb-6">
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="输入项目名称，按 Enter 创建"
-            className="flex-1"
-          />
-          <Button
-            size="lg"
-            onClick={handleCreate}
-            disabled={!title.trim()}
-          >
-            创建
-          </Button>
-        </div>
+        </header>
 
         {error && (
-          <Alert className="mb-4">{error}</Alert>
+          <Alert className="stagger-in mb-5">{error}</Alert>
         )}
 
-        {loading ? (
-          <div className="text-center py-12 text-muted-foreground text-sm">
-            加载中...
+        <section className="glass-panel stagger-in relative z-10 mb-6 rounded-3xl p-4" style={{ '--delay': '80ms' } as CSSProperties}>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-foreground">所有简历</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {projects.length} 个项目 · 模板预览式工作区
+              </p>
+            </div>
+            <label className="relative block w-full md:w-80">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="搜索简历"
+                className="pl-9"
+              />
+            </label>
           </div>
-        ) : projects.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-muted-foreground text-sm">还没有项目</p>
-            <p className="text-muted-foreground text-xs mt-1">
-              在上方输入框创建你的第一个简历项目
-            </p>
+        </section>
+
+        {loading ? (
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="glass-panel min-h-[320px] animate-pulse rounded-2xl" />
+            ))}
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            {projects.map((project) => (
+          <div className="stagger-in grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" style={{ '--delay': '140ms' } as CSSProperties}>
+            <NewResumeCard onClick={() => setCreateOpen(true)} />
+            {visibleProjects.map((project) => (
               <ProjectCard
                 key={project.id}
                 project={project}
@@ -117,7 +142,37 @@ export default function ProjectList() {
             ))}
           </div>
         )}
+
+        {!loading && visibleProjects.length === 0 && projects.length > 0 && (
+          <p className="mt-8 text-center text-sm text-muted-foreground">
+            没有找到匹配的简历。
+          </p>
+        )}
       </div>
+
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)}>
+        <ModalHeader>新建简历</ModalHeader>
+        <ModalBody>
+          <p className="mb-4 text-sm text-muted-foreground">
+            先给这份简历起一个项目名，之后可以上传文件、接入 Git 或直接补充经历。
+          </p>
+          <Input
+            autoFocus
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="例如：MEOwj 的前端简历"
+          />
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setCreateOpen(false)}>
+            取消
+          </Button>
+          <Button onClick={handleCreate} disabled={!title.trim()}>
+            创建简历
+          </Button>
+        </ModalFooter>
+      </Modal>
     </div>
   )
 }

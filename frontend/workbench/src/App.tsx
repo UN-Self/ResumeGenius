@@ -6,11 +6,24 @@ import LoginPage from '@/pages/LoginPage'
 import EditorPage from '@/pages/EditorPage'
 import { authApi } from '@/lib/api-client'
 import { FullPageState } from '@/components/ui/full-page-state'
+import { applyPreset, getInitialPreset, getPresetById, THEME_STORAGE_KEY } from '@/lib/theme'
 
 type AuthState = 'checking' | 'authed' | 'guest'
 
 export default function App() {
   const [authState, setAuthState] = useState<AuthState>('checking')
+
+  useEffect(() => {
+    applyPreset(getInitialPreset())
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== THEME_STORAGE_KEY) return
+      applyPreset(getPresetById(event.newValue))
+    }
+
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [])
 
   useEffect(() => {
     let cancelled = false

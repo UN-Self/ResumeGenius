@@ -14,20 +14,25 @@ export function FullPageState({
   return (
     <div
       className={cn(
-        "h-screen bg-background flex items-center justify-center",
+        "app-shell h-screen flex items-center justify-center",
         className
       )}
     >
-      <p
-        className={cn(
-          "text-sm",
-          variant === "loading"
-            ? "text-muted-foreground"
-            : "text-destructive"
+      <div className="glass-panel relative z-10 rounded-2xl px-8 py-6 text-center">
+        {variant === "loading" && (
+          <div className="mx-auto mb-3 h-8 w-8 rounded-full border-2 border-primary/20 border-t-primary animate-spin" />
         )}
-      >
-        {message}
-      </p>
+        <p
+          className={cn(
+            "text-sm",
+            variant === "loading"
+              ? "text-muted-foreground"
+              : "text-destructive"
+          )}
+        >
+          {message}
+        </p>
+      </div>
     </div>
   )
 }

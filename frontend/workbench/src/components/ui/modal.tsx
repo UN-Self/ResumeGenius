@@ -57,11 +57,11 @@ function Modal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/40" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/45 backdrop-blur-md" onClick={onClose} />
       {/* Content */}
       <div
         className={cn(
-          "relative bg-card rounded-lg border border-border shadow-lg p-6 w-full mx-4",
+          "relative glass-panel rounded-2xl p-6 w-full mx-4 stagger-in",
           maxWidth,
           className
         )}

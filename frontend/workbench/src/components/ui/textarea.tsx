@@ -10,8 +10,8 @@ const Textarea = React.forwardRef<
     className={cn(
       "flex w-full px-4 py-3 text-sm rounded-lg border border-border bg-card text-foreground",
       "placeholder:text-muted-foreground",
-      "focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent",
-      "transition-shadow resize-none",
+      "focus:outline-none focus:ring-4 focus:ring-ring/20 focus:border-border-glow",
+      "transition-all duration-200 resize-none backdrop-blur-xl",
       className
     )}
     {...props}

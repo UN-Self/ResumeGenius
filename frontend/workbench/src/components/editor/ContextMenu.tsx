@@ -148,11 +148,11 @@ export function ContextMenu({ editor, isOpen, x, y, onClose }: ContextMenuProps)
     <div
       ref={menuRef}
       role="menu"
-      className="fixed z-20 min-w-[180px] bg-white border border-border rounded-lg shadow-sm py-1"
+      className="fixed z-40 min-w-[190px] overflow-hidden rounded-xl border border-border bg-popover/95 py-1 text-popover-foreground shadow-[0_18px_54px_rgba(2,8,23,0.22)] backdrop-blur-xl"
       style={{ left: position.x, top: position.y }}
     >
       {clipboardError && (
-        <div className="px-3 py-1.5 text-xs text-red-600 border-b border-border">
+        <div className="border-b border-border px-3 py-1.5 text-xs text-destructive">
           {clipboardError}
         </div>
       )}
@@ -165,7 +165,7 @@ export function ContextMenu({ editor, isOpen, x, y, onClose }: ContextMenuProps)
             className={`w-full flex items-center gap-3 px-3 min-h-9 text-sm ${
               item.disabled
                 ? 'opacity-50 cursor-not-allowed'
-                : 'hover:bg-surface-hover'
+                : 'hover:bg-surface-hover hover:text-foreground'
             }`}
             onClick={() => {
               if (!item.disabled) {

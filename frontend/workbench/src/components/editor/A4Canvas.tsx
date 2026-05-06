@@ -44,7 +44,7 @@ export function A4Canvas({ editor, children }: A4CanvasProps) {
     <div ref={containerRef} className="canvas-area bg-canvas-bg">
       <div
         data-testid="a4-canvas"
-        className="bg-white shadow-[0_2px_12px_rgba(0,0,0,0.08)] p-[18mm_20mm] relative"
+        className="resume-document relative bg-resume-paper p-[18mm_20mm] shadow-[0_22px_80px_rgba(2,8,23,0.24)] ring-1 ring-black/5"
         style={{
           width: '210mm',
           minHeight: '297mm',
