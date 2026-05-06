@@ -100,10 +100,12 @@ export default function EditorPage() {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
   const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false)
   const [savingSnapshot, setSavingSnapshot] = useState(false)
+  const [rollbacking, setRollbacking] = useState(false)
 
   // Save editor content before preview so we can restore it on exit
   const savedContentBeforePreview = useRef<string | null>(null)
   const didRecenterAfterPreviewRef = useRef(false)
+  const restoringContent = useRef(false)
 
   // When preview HTML is ready, load it into the editor and make read-only
   useLayoutEffect(() => {
@@ -126,7 +128,9 @@ export default function EditorPage() {
       editor.setEditable(true)
       const saved = savedContentBeforePreview.current
       if (saved) {
+        restoringContent.current = true
         editor.commands.setContent(saved)
+        restoringContent.current = false
       }
       savedContentBeforePreview.current = null
     }
@@ -145,12 +149,16 @@ export default function EditorPage() {
   }
 
   const handleRollback = async () => {
+    setRollbacking(true)
     try {
+      await flush()
       const html = await rollbackVersion()
       editor?.commands.setContent(html)
       setRollbackDialogOpen(false)
     } catch (e) {
       console.error('Rollback failed:', e)
+    } finally {
+      setRollbacking(false)
     }
   }
 
@@ -266,7 +274,11 @@ export default function EditorPage() {
   useEffect(() => {
     if (!editor) return
 
-    const handleUpdate = () => scheduleSave(editor.getHTML())
+    const handleUpdate = () => {
+      if (!restoringContent.current) {
+        scheduleSave(editor.getHTML())
+      }
+    }
     editor.on('update', handleUpdate)
 
     return () => {
@@ -454,6 +466,7 @@ export default function EditorPage() {
       />
       <RollbackConfirmDialog
         open={rollbackDialogOpen}
+        rollbacking={rollbacking}
         onClose={() => setRollbackDialogOpen(false)}
         onConfirm={handleRollback}
       />

@@ -37,6 +37,14 @@ func NewVersionService(db *gorm.DB) *VersionService {
 
 // ListByDraft returns all versions for the given draft, ordered by created_at DESC.
 func (s *VersionService) ListByDraft(draftID uint) ([]models.Version, error) {
+	var draft models.Draft
+	if err := s.db.First(&draft, draftID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrDraftNotFound
+		}
+		return nil, err
+	}
+
 	var versions []models.Version
 	err := s.db.Where("draft_id = ?", draftID).
 		Order("created_at DESC").

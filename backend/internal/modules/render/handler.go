@@ -92,6 +92,10 @@ func (h *Handler) ListVersions(c *gin.Context) {
 
 	versions, err := h.versionSvc.ListByDraft(draftID)
 	if err != nil {
+		if errors.Is(err, ErrDraftNotFound) {
+			response.ErrorWithStatus(c, http.StatusNotFound, CodeDraftNotFound, "draft not found")
+			return
+		}
 		response.Error(c, CodeInternalError, "failed to list versions")
 		return
 	}
