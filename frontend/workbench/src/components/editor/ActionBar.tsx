@@ -10,6 +10,7 @@ interface ActionBarProps {
   exportStatus: ExportStatus
   onExport: () => void
   onBack?: () => void
+  children?: ReactNode
 }
 
 const EXPORT_LABEL: Record<ExportStatus, string> = {
@@ -26,6 +27,7 @@ export function ActionBar({
   exportStatus,
   onExport,
   onBack,
+  children,
 }: ActionBarProps) {
   return (
     <div className="action-bar">
@@ -46,10 +48,8 @@ export function ActionBar({
         {saveIndicator}
       </div>
 
-      {/* Version History Button */}
-      <Button variant="secondary" size="sm" type="button">
-        版本历史
-      </Button>
+      {/* Version History */}
+      {children}
 
       {/* Export Button */}
       <Button

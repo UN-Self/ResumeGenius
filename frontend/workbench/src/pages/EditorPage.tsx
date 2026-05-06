@@ -17,6 +17,11 @@ import { useExport } from '@/hooks/useExport'
 import { FullPageState } from '@/components/ui/full-page-state'
 import { ContextMenu } from '@/components/editor/ContextMenu'
 import { BubbleToolbar } from '@/components/editor/BubbleToolbar'
+import { useVersions } from '@/hooks/useVersions'
+import { VersionDropdown } from '@/components/version/VersionDropdown'
+import { VersionPreviewBanner } from '@/components/version/VersionPreviewBanner'
+import { SaveSnapshotDialog } from '@/components/version/SaveSnapshotDialog'
+import { RollbackConfirmDialog } from '@/components/version/RollbackConfirmDialog'
 
 export default function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -78,6 +83,21 @@ export default function EditorPage() {
 
   const { exportPdf, status: exportStatus } = useExport()
 
+  const {
+    versions,
+    loading: versionsLoading,
+    previewMode,
+    previewVersion,
+    previewHtml,
+    startPreview,
+    exitPreview,
+    createSnapshot,
+    rollback: rollbackVersion,
+  } = useVersions(draftId ? Number(draftId) : null)
+
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+  const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false)
+
   const reloadAssets = useCallback(async () => {
     const nextAssets = await intakeApi.listAssets(pid)
     setAssets(nextAssets)
@@ -87,6 +107,16 @@ export default function EditorPage() {
     if (draftId && editor) {
       exportPdf(Number(draftId), editor.getHTML())
     }
+  }
+
+  const handleRollback = async () => {
+    try {
+      const html = await rollbackVersion()
+      editor?.commands.setContent(html)
+    } catch (e) {
+      console.error('Rollback failed:', e)
+    }
+    setRollbackDialogOpen(false)
   }
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -284,24 +314,46 @@ export default function EditorPage() {
               exportStatus={exportStatus}
               onExport={handleExport}
               onBack={() => navigate(`/projects/${pid}`)}
-            />
+            >
+              <VersionDropdown
+                versions={versions}
+                loading={versionsLoading}
+                onPreview={startPreview}
+                onSaveSnapshot={() => setSaveDialogOpen(true)}
+              />
+            </ActionBar>
           </div>
           <div className="flex-1 overflow-auto" onContextMenu={handleContextMenu}>
-            <A4Canvas editor={editor} />
-            {editor && (
-              <BubbleMenu
-                editor={editor}
-                options={{
-                  placement: 'top',
-                  arrow: false,
-                }}
-                shouldShow={({ editor: e }) => {
-                  const { from, to } = e.state.selection
-                  return from !== to
-                }}
-              >
-                <BubbleToolbar editor={editor} />
-              </BubbleMenu>
+            {previewMode === 'previewing' && previewHtml && previewVersion ? (
+              <>
+                <VersionPreviewBanner
+                  version={previewVersion}
+                  onRollback={() => setRollbackDialogOpen(true)}
+                  onClose={exitPreview}
+                />
+                <A4Canvas>
+                  <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                </A4Canvas>
+              </>
+            ) : (
+              <>
+                <A4Canvas editor={editor} />
+                {editor && (
+                  <BubbleMenu
+                    editor={editor}
+                    options={{
+                      placement: 'top',
+                      arrow: false,
+                    }}
+                    shouldShow={({ editor: e }) => {
+                      const { from, to } = e.state.selection
+                      return from !== to
+                    }}
+                  >
+                    <BubbleToolbar editor={editor} />
+                  </BubbleMenu>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -353,6 +405,19 @@ export default function EditorPage() {
         x={contextMenu.x}
         y={contextMenu.y}
         onClose={closeContextMenu}
+      />
+      <SaveSnapshotDialog
+        open={saveDialogOpen}
+        onClose={() => setSaveDialogOpen(false)}
+        onConfirm={(label) => {
+          createSnapshot(label)
+          setSaveDialogOpen(false)
+        }}
+      />
+      <RollbackConfirmDialog
+        open={rollbackDialogOpen}
+        onClose={() => setRollbackDialogOpen(false)}
+        onConfirm={handleRollback}
       />
     </div>
   )
