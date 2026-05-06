@@ -50,6 +50,7 @@ export default function ProjectDetail() {
     setAssetActionError('')
     try {
       await intakeApi.createGitRepo(pid, repoUrl)
+      await parsingApi.parseProject(pid)
     } catch (createGitError) {
       setAssetActionError(createGitError instanceof Error ? createGitError.message : '创建 Git 素材失败')
     } finally {
