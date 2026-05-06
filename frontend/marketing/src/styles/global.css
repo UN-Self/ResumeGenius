@@ -133,6 +133,8 @@
 
 .site-shell {
   position: relative;
+  isolation: isolate;
+  min-height: 100vh;
   background:
     linear-gradient(color-mix(in srgb, var(--color-border), transparent 72%) 1px, transparent 1px),
     linear-gradient(90deg, color-mix(in srgb, var(--color-border), transparent 74%) 1px, transparent 1px);
@@ -143,12 +145,37 @@
   content: "";
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
   pointer-events: none;
   background:
     radial-gradient(circle at 50% -10%, color-mix(in srgb, var(--color-primary), transparent 74%), transparent 34rem),
     linear-gradient(180deg, color-mix(in srgb, var(--color-background), transparent 8%), var(--color-background));
   mask-image: linear-gradient(to bottom, black, transparent 78%);
+  animation: ambient-glow-drift 18s ease-in-out infinite alternate;
+}
+
+.site-shell::after {
+  content: "";
+  position: fixed;
+  inset: -12vmax;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.72;
+  background:
+    radial-gradient(circle at 12% 24%, color-mix(in srgb, var(--color-primary), transparent 86%) 0 5.75rem, transparent 5.95rem),
+    radial-gradient(circle at 86% 18%, color-mix(in srgb, var(--color-accent), transparent 88%) 0 8.5rem, transparent 8.75rem),
+    radial-gradient(circle at 78% 78%, color-mix(in srgb, var(--color-primary), transparent 91%) 0 6.2rem, transparent 6.45rem),
+    radial-gradient(circle at 22% 76%, transparent 0 4.7rem, color-mix(in srgb, var(--color-accent), transparent 82%) 4.85rem 5.1rem, transparent 5.25rem),
+    radial-gradient(ellipse at 52% 44%, color-mix(in srgb, var(--color-primary), transparent 94%) 0 19rem, transparent 19.5rem);
+  filter: blur(0.3px) saturate(128%);
+  transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  animation: ambient-orbit 26s ease-in-out infinite alternate;
+}
+
+.site-shell > main,
+.site-shell > footer {
+  position: relative;
+  z-index: 1;
 }
 
 .glass-panel {
@@ -438,6 +465,29 @@
   }
 }
 
+@keyframes ambient-orbit {
+  0% {
+    transform: translate3d(-1.5vw, -1vh, 0) rotate(0deg) scale(1);
+  }
+  45% {
+    transform: translate3d(1.8vw, 1.2vh, 0) rotate(4deg) scale(1.025);
+  }
+  100% {
+    transform: translate3d(-0.8vw, 2vh, 0) rotate(-3deg) scale(1.04);
+  }
+}
+
+@keyframes ambient-glow-drift {
+  0% {
+    transform: translate3d(0, -1vh, 0) scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate3d(0, 1.5vh, 0) scale(1.03);
+    opacity: 1;
+  }
+}
+
 .animate-on-scroll {
   opacity: 0;
   transform: translateY(20px);
@@ -501,6 +551,8 @@
     opacity: 0;
   }
 
+  .site-shell::before,
+  .site-shell::after,
   [class*="animate-float"] {
     animation: none !important;
   }
