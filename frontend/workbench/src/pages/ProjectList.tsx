@@ -105,7 +105,7 @@ export default function ProjectList() {
                 try {
                   await authApi.logout()
                 } finally {
-                  window.location.assign('/login')
+                  window.location.assign('/app/login')
                 }
               }}
             >
