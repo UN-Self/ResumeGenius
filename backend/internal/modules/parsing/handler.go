@@ -12,18 +12,15 @@ import (
 )
 
 const (
-	CodeParsePDFFailed     = 2001
-	CodeParseDOCXFailed    = 2002
-	CodeProjectNotFound    = 2003
-	CodeNoUsableAssets     = 2004
-	CodeAIGenerateFailed   = 2005
-	CodeInvalidAssetData   = 2006
-	CodeGitExtractFailed   = 2007
+	CodeParsePDFFailed   = 2001
+	CodeParseDOCXFailed  = 2002
+	CodeProjectNotFound  = 2003
+	CodeNoUsableAssets   = 2004
+	CodeGitExtractFailed = 2007
 )
 
 type parseService interface {
 	ParseForUser(userID string, projectID uint) ([]ParsedContent, error)
-	GenerateForUser(userID string, projectID uint) (*GenerateResult, error)
 }
 
 // Handler handles parsing HTTP requests.
@@ -69,29 +66,6 @@ func (h *Handler) Parse(c *gin.Context) {
 	})
 }
 
-// Generate handles POST /api/v1/parsing/generate.
-func (h *Handler) Generate(c *gin.Context) {
-	userID := middleware.UserIDFromContext(c)
-	if userID == "" {
-		response.Error(c, 40100, "unauthorized")
-		return
-	}
-
-	var req ParseRequest
-	if err := c.ShouldBindJSON(&req); err != nil || req.ProjectID == 0 {
-		response.Error(c, 40000, "invalid request body")
-		return
-	}
-
-	result, err := h.service.GenerateForUser(userID, req.ProjectID)
-	if err != nil {
-		h.respondParseError(c, err)
-		return
-	}
-
-	response.Success(c, result)
-}
-
 func (h *Handler) respondParseError(c *gin.Context, err error) {
 	log.Printf("[parsing] error: %v", err)
 	switch {
@@ -100,17 +74,13 @@ func (h *Handler) respondParseError(c *gin.Context, err error) {
 	case errors.Is(err, ErrNoUsableAssets):
 		response.Error(c, CodeNoUsableAssets, "project has no usable assets")
 	case errors.Is(err, ErrAssetURIMissing), errors.Is(err, ErrAssetContentMissing):
-		response.Error(c, CodeInvalidAssetData, "project contains invalid asset data")
-	case errors.Is(err, ErrNoGeneratableText):
-		response.Error(c, CodeInvalidAssetData, "project has no usable text content")
+		response.Error(c, 2006, "project contains invalid asset data")
 	case errors.Is(err, ErrPDFParseFailed):
 		response.Error(c, CodeParsePDFFailed, "pdf parse failed")
 	case errors.Is(err, ErrDOCXParseFailed):
 		response.Error(c, CodeParseDOCXFailed, "docx parse failed")
 	case errors.Is(err, ErrGitExtractFailed):
 		response.Error(c, CodeGitExtractFailed, "git repository extract failed")
-	case errors.Is(err, ErrAIGenerateFailed):
-		response.ErrorWithStatus(c, http.StatusInternalServerError, CodeAIGenerateFailed, "ai draft generation failed")
 	default:
 		response.Error(c, 50000, "internal server error")
 	}

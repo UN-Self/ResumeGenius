@@ -22,8 +22,6 @@ export default function ProjectDetail() {
   const { project, assets, loading, error, reload } = useProjectData(pid)
 
   // UI state
-  const [parseLoading, setParseLoading] = useState(false)
-  const [parseError, setParseError] = useState('')
   const [assetActionError, setAssetActionError] = useState('')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [gitOpen, setGitOpen] = useState(false)
@@ -116,25 +114,6 @@ export default function ProjectDetail() {
     setNoteOpen(true)
   }
 
-  // --- Primary action handler ---
-  const handleParse = async () => {
-    if (project?.current_draft_id) {
-      navigate(`/projects/${pid}/edit`)
-      return
-    }
-
-    try {
-      setParseLoading(true)
-      setParseError('')
-      await parsingApi.generateProject(pid)
-      navigate(`/projects/${pid}/edit`)
-    } catch (err) {
-      setParseError(err instanceof ApiError ? err.message : '生成初稿失败')
-    } finally {
-      setParseLoading(false)
-    }
-  }
-
   // --- Loading / error states ---
   if (loading) {
     return <FullPageState variant="loading" />
@@ -171,9 +150,6 @@ export default function ProjectDetail() {
 
       {error && (
         <Alert className="mb-4">{error}</Alert>
-      )}
-      {parseError && (
-        <Alert className="mb-4">生成初稿失败：{parseError}</Alert>
       )}
       {assetActionError && (
         <Alert className="mb-4">{assetActionError}</Alert>
@@ -215,18 +191,13 @@ export default function ProjectDetail() {
         canEditAsset={(asset) => asset.type === 'note'}
       />
 
-      {(assets.length > 0 || project.current_draft_id) && (
+      {assets.length > 0 && (
         <Button
           size="lg"
           className="mt-6 w-full h-11"
-          onClick={handleParse}
-          disabled={parseLoading}
+          onClick={() => navigate(`/projects/${pid}/edit`)}
         >
-          {parseLoading
-            ? '生成中...'
-            : project.current_draft_id
-              ? '进入编辑页'
-              : '下一步：生成初稿'}
+          {project.current_draft_id ? '继续编辑' : '开始编辑'}
         </Button>
       )}
 

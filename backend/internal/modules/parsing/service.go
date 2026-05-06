@@ -18,7 +18,6 @@ type ParsingService struct {
 	pdfParser    PdfParser
 	docxParser   DocxParser
 	gitExtractor GitExtractor
-	generator    DraftGeneratorInterface
 	storage      storage.FileStorage
 
 	projectExists     func(projectID uint) (bool, error)
@@ -26,19 +25,14 @@ type ParsingService struct {
 }
 
 func NewParsingService(db *gorm.DB, pdfParser PdfParser, docxParser DocxParser, gitExtractor GitExtractor) *ParsingService {
-	return NewParsingServiceWithGeneratorAndStorage(db, pdfParser, docxParser, gitExtractor, nil, nil)
+	return NewParsingServiceWithStorage(db, pdfParser, docxParser, gitExtractor, nil)
 }
 
-func NewParsingServiceWithGenerator(db *gorm.DB, pdfParser PdfParser, docxParser DocxParser, gitExtractor GitExtractor, generator DraftGeneratorInterface) *ParsingService {
-	return NewParsingServiceWithGeneratorAndStorage(db, pdfParser, docxParser, gitExtractor, generator, nil)
-}
-
-func NewParsingServiceWithGeneratorAndStorage(
+func NewParsingServiceWithStorage(
 	db *gorm.DB,
 	pdfParser PdfParser,
 	docxParser DocxParser,
 	gitExtractor GitExtractor,
-	generator DraftGeneratorInterface,
 	store storage.FileStorage,
 ) *ParsingService {
 	svc := &ParsingService{
@@ -46,7 +40,6 @@ func NewParsingServiceWithGeneratorAndStorage(
 		pdfParser:    pdfParser,
 		docxParser:   docxParser,
 		gitExtractor: gitExtractor,
-		generator:    generator,
 		storage:      store,
 	}
 	svc.projectExists = svc.defaultProjectExists
@@ -118,157 +111,6 @@ func (s *ParsingService) Parse(projectID uint) ([]ParsedContent, error) {
 	}
 
 	return parsedContents, nil
-}
-
-type GenerateResult struct {
-	DraftID     uint   `json:"draft_id"`
-	VersionID   uint   `json:"version_id"`
-	HTMLContent string `json:"html_content"`
-}
-
-// GenerateForUser verifies project ownership before generating a draft.
-func (s *ParsingService) GenerateForUser(userID string, projectID uint) (*GenerateResult, error) {
-	if err := s.ensureOwnedProject(userID, projectID); err != nil {
-		return nil, err
-	}
-	return s.Generate(projectID)
-}
-
-// Generate runs parse -> HTML generation -> drafts persistence.
-func (s *ParsingService) Generate(projectID uint) (*GenerateResult, error) {
-	if s.db == nil {
-		return nil, ErrDatabaseNotConfigured
-	}
-	if s.generator == nil {
-		return nil, ErrDraftGeneratorNotConfigured
-	}
-
-	parsedContents, err := s.loadParsedContentsForGenerate(projectID)
-	if err != nil {
-		return nil, err
-	}
-
-	aggregatedText := aggregateParsedContents(parsedContents)
-	if aggregatedText == "" {
-		return nil, ErrNoGeneratableText
-	}
-	htmlContent, err := s.generator.GenerateHTML(aggregatedText)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrAIGenerateFailed, err)
-	}
-
-	const initialGeneratedVersionLabel = "AI 初始生成"
-
-	result := &GenerateResult{}
-	err = s.db.Transaction(func(tx *gorm.DB) error {
-		draft := models.Draft{
-			ProjectID:   projectID,
-			HTMLContent: htmlContent,
-		}
-		if err := tx.Create(&draft).Error; err != nil {
-			return err
-		}
-
-		versionLabel := initialGeneratedVersionLabel
-		version := models.Version{
-			DraftID:      draft.ID,
-			HTMLSnapshot: draft.HTMLContent,
-			Label:        &versionLabel,
-		}
-		if err := tx.Create(&version).Error; err != nil {
-			return err
-		}
-
-		update := tx.Model(&models.Project{}).
-			Where("id = ?", projectID).
-			Update("current_draft_id", draft.ID)
-		if update.Error != nil {
-			return update.Error
-		}
-		if update.RowsAffected == 0 {
-			return ErrProjectNotFound
-		}
-
-		result.DraftID = draft.ID
-		result.VersionID = version.ID
-		result.HTMLContent = draft.HTMLContent
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-func (s *ParsingService) loadParsedContentsForGenerate(projectID uint) ([]ParsedContent, error) {
-	exists, err := s.projectExists(projectID)
-	if err != nil {
-		return nil, err
-	}
-	if !exists {
-		return nil, ErrProjectNotFound
-	}
-
-	assets, err := s.listProjectAssets(projectID)
-	if err != nil {
-		return nil, err
-	}
-
-	parsedContents := make([]ParsedContent, 0, len(assets))
-	var firstRecoverableErr error
-	for _, asset := range assets {
-		parsed, err := s.loadAssetParsedContentForGenerate(asset)
-		if err != nil {
-			if isRecoverableAssetError(err) {
-				if firstRecoverableErr == nil {
-					firstRecoverableErr = err
-				}
-				continue
-			}
-			return nil, err
-		}
-		if parsed != nil {
-			parsedContents = append(parsedContents, *parsed)
-		}
-	}
-
-	if len(parsedContents) == 0 {
-		if firstRecoverableErr != nil {
-			return nil, firstRecoverableErr
-		}
-		return nil, ErrNoUsableAssets
-	}
-
-	return parsedContents, nil
-}
-
-func (s *ParsingService) loadAssetParsedContentForGenerate(asset models.Asset) (*ParsedContent, error) {
-	switch asset.Type {
-	case AssetTypeResumeImage:
-		return nil, ErrAssetTypeSkipped
-	case AssetTypeNote:
-		return s.parseNoteAsset(asset)
-	case AssetTypeResumePDF, AssetTypeResumeDOCX, AssetTypeGitRepo:
-		if hasPersistedAssetContent(asset) {
-			return buildParsedContentFromPersistedText(asset)
-		}
-		if s.shouldSkipAssetInParseFlow(asset) {
-			return nil, ErrAssetTypeSkipped
-		}
-		parsed, err := s.parseAsset(asset)
-		if err != nil {
-			return nil, err
-		}
-		if parsed != nil && !shouldUsePersistedTextFallback(asset) {
-			if err := s.persistParsedAsset(asset, parsed); err != nil {
-				return nil, err
-			}
-		}
-		return parsed, nil
-	default:
-		return nil, fmt.Errorf("%w: %s", ErrUnsupportedAssetType, asset.Type)
-	}
 }
 
 func (s *ParsingService) ensureOwnedProject(userID string, projectID uint) error {
@@ -942,17 +784,4 @@ func isRecoverableAssetError(err error) bool {
 	default:
 		return false
 	}
-}
-
-func aggregateParsedContents(parsedContents []ParsedContent) string {
-	parts := make([]string, 0, len(parsedContents))
-	for _, parsed := range parsedContents {
-		text := strings.TrimSpace(parsed.Text)
-		if text == "" {
-			continue
-		}
-		parts = append(parts, text)
-	}
-
-	return strings.Join(parts, "\n\n")
 }

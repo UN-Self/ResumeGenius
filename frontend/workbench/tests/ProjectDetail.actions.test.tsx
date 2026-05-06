@@ -17,7 +17,6 @@ vi.mock('@/lib/api-client', () => ({
   },
   parsingApi: {
     parseProject: vi.fn(),
-    generateProject: vi.fn(),
   },
   ApiError: class extends Error {
     code: number

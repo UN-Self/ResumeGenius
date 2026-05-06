@@ -227,23 +227,6 @@ describe('apiClient', () => {
     expect(result).toEqual({ parsed_contents: [] })
   })
 
-  it('generateProject calls POST /parsing/generate', async () => {
-    const mock = vi.fn().mockResolvedValue({
-      json: () => Promise.resolve({
-        code: 0,
-        data: { draft_id: 1, version_id: 2, html_content: '<p>Generated</p>' },
-      }),
-    })
-    vi.stubGlobal('fetch', mock)
-
-    const result = await parsingApi.generateProject(1)
-    expect(mock).toHaveBeenCalledWith('/api/v1/parsing/generate', expect.objectContaining({
-      method: 'POST',
-      body: JSON.stringify({ project_id: 1 }),
-    }))
-    expect(result.html_content).toBe('<p>Generated</p>')
-  })
-
   it('throws ApiError on non-zero code', async () => {
     const mock = vi.fn().mockResolvedValue({
       json: () => Promise.resolve({ code: 1004, message: 'project not found' }),

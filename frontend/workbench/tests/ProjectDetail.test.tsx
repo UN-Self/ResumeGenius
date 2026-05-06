@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { intakeApi, parsingApi } from '@/lib/api-client'
+import { intakeApi } from '@/lib/api-client'
 import ProjectDetail from '@/pages/ProjectDetail'
 
 vi.mock('@/lib/api-client', () => ({
@@ -18,7 +18,6 @@ vi.mock('@/lib/api-client', () => ({
   },
   parsingApi: {
     parseProject: vi.fn(),
-    generateProject: vi.fn(),
   },
   request: vi.fn(),
   ApiError: class extends Error {
@@ -106,7 +105,6 @@ describe('ProjectDetail', () => {
     const deleteBtn = screen.getByText('删除项目')
     await user.click(deleteBtn)
 
-    // First click shows the dialog, second click enters confirming state
     const dialogDeleteBtn = screen.getAllByRole('button', { name: '删除' }).pop()!
     await user.click(dialogDeleteBtn)
 
@@ -115,15 +113,10 @@ describe('ProjectDetail', () => {
     })
   })
 
-  it('calls generateProject and navigates to edit page when no draft exists', async () => {
+  it('navigates to edit page when clicking start editing button', async () => {
     const user = userEvent.setup()
     vi.mocked(intakeApi.getProject).mockResolvedValue(mockProject)
     vi.mocked(intakeApi.listAssets).mockResolvedValue(mockAssets)
-    vi.mocked(parsingApi.generateProject).mockResolvedValue({
-      draft_id: 99,
-      version_id: 101,
-      html_content: '<p>Generated</p>',
-    })
 
     render(
       <MemoryRouter initialEntries={['/projects/1']}>
@@ -138,16 +131,15 @@ describe('ProjectDetail', () => {
       expect(screen.getByText('前端工程师简历')).toBeInTheDocument()
     })
 
-    const parseBtn = screen.getByText('下一步：生成初稿')
-    await user.click(parseBtn)
+    const editBtn = screen.getByText('开始编辑')
+    await user.click(editBtn)
 
     await waitFor(() => {
-      expect(parsingApi.generateProject).toHaveBeenCalledWith(1)
       expect(screen.getByText('Editor Page')).toBeInTheDocument()
     })
   })
 
-  it('navigates directly to edit page when current draft already exists', async () => {
+  it('shows continue editing button when current draft already exists', async () => {
     const user = userEvent.setup()
     vi.mocked(intakeApi.getProject).mockResolvedValue({ ...mockProject, current_draft_id: 88 })
     vi.mocked(intakeApi.listAssets).mockResolvedValue(mockAssets)
@@ -162,13 +154,12 @@ describe('ProjectDetail', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getByText('进入编辑页')).toBeInTheDocument()
+      expect(screen.getByText('继续编辑')).toBeInTheDocument()
     })
 
-    await user.click(screen.getByText('进入编辑页'))
+    await user.click(screen.getByText('继续编辑'))
 
     await waitFor(() => {
-      expect(parsingApi.generateProject).not.toHaveBeenCalled()
       expect(screen.getByText('Editor Page')).toBeInTheDocument()
     })
   })

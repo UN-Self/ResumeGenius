@@ -18,20 +18,12 @@ type stubParseService struct {
 	calledWith     uint
 	parseResult    []ParsedContent
 	parseErr       error
-	generateResult *GenerateResult
-	generateErr    error
 }
 
 func (s *stubParseService) ParseForUser(userID string, projectID uint) ([]ParsedContent, error) {
 	s.calledWithUser = userID
 	s.calledWith = projectID
 	return s.parseResult, s.parseErr
-}
-
-func (s *stubParseService) GenerateForUser(userID string, projectID uint) (*GenerateResult, error) {
-	s.calledWithUser = userID
-	s.calledWith = projectID
-	return s.generateResult, s.generateErr
 }
 
 func TestParse_SucceedsAndReturnsParsedContents(t *testing.T) {
@@ -191,7 +183,6 @@ func TestParse_Returns400ForInvalidAssetDataErrors(t *testing.T) {
 	}{
 		{name: "missing asset uri", err: ErrAssetURIMissing, wantMsg: "project contains invalid asset data"},
 		{name: "missing asset content", err: ErrAssetContentMissing, wantMsg: "project contains invalid asset data"},
-		{name: "no generatable text", err: ErrNoGeneratableText, wantMsg: "project has no usable text content"},
 	}
 
 	for _, tc := range tests {
@@ -205,8 +196,8 @@ func TestParse_Returns400ForInvalidAssetDataErrors(t *testing.T) {
 			}
 
 			resp := decodeHandlerResponse(t, w)
-			if resp["code"].(float64) != float64(CodeInvalidAssetData) {
-				t.Fatalf("expected code %d, got %v", CodeInvalidAssetData, resp["code"])
+			if resp["code"].(float64) != float64(2006) {
+				t.Fatalf("expected code %d, got %v", 2006, resp["code"])
 			}
 			if resp["message"] != tc.wantMsg {
 				t.Fatalf("expected message %q, got %v", tc.wantMsg, resp["message"])
@@ -219,130 +210,6 @@ func TestParse_Returns500ForUnexpectedErrors(t *testing.T) {
 	service := &stubParseService{parseErr: errors.New("boom")}
 	router := newParseTestRouter(service)
 	w := performParseRequest(router, `{"project_id": 9}`)
-
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", w.Code)
-	}
-
-	resp := decodeHandlerResponse(t, w)
-	if resp["code"].(float64) != 50000 {
-		t.Fatalf("expected code 50000, got %v", resp["code"])
-	}
-}
-
-func TestGenerate_SucceedsAndReturnsDraftData(t *testing.T) {
-	service := &stubParseService{
-		generateResult: &GenerateResult{
-			DraftID:     5,
-			VersionID:   8,
-			HTMLContent: "<!DOCTYPE html><html><body>mock</body></html>",
-		},
-	}
-
-	router := newGenerateTestRouter(service)
-	w := performGenerateRequest(router, `{"project_id": 7}`)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", w.Code)
-	}
-	if service.calledWith != 7 {
-		t.Fatalf("expected service to be called with project_id 7, got %d", service.calledWith)
-	}
-	if service.calledWithUser != "user-1" {
-		t.Fatalf("expected service to be called with user user-1, got %q", service.calledWithUser)
-	}
-
-	resp := decodeHandlerResponse(t, w)
-	if resp["code"].(float64) != 0 {
-		t.Fatalf("expected code 0, got %v", resp["code"])
-	}
-
-	data := resp["data"].(map[string]interface{})
-	if data["draft_id"].(float64) != 5 {
-		t.Fatalf("expected draft_id 5, got %v", data["draft_id"])
-	}
-	if data["version_id"].(float64) != 8 {
-		t.Fatalf("expected version_id 8, got %v", data["version_id"])
-	}
-	if data["html_content"].(string) != "<!DOCTYPE html><html><body>mock</body></html>" {
-		t.Fatalf("unexpected html_content: %v", data["html_content"])
-	}
-}
-
-func TestGenerate_Returns401WhenUnauthorized(t *testing.T) {
-	service := &stubParseService{}
-	router := newUnauthorizedGenerateTestRouter(service)
-	w := performGenerateRequest(router, `{"project_id": 7}`)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", w.Code)
-	}
-
-	resp := decodeHandlerResponse(t, w)
-	if resp["code"].(float64) != 40100 {
-		t.Fatalf("expected code 40100, got %v", resp["code"])
-	}
-}
-
-func TestGenerate_Returns400WhenRequestBodyInvalid(t *testing.T) {
-	service := &stubParseService{}
-	router := newGenerateTestRouter(service)
-
-	tests := []string{
-		`invalid json`,
-		`{}`,
-		`{"project_id": 0}`,
-	}
-
-	for _, body := range tests {
-		w := performGenerateRequest(router, body)
-		if w.Code != http.StatusBadRequest {
-			t.Fatalf("expected 400 for body %s, got %d", body, w.Code)
-		}
-
-		resp := decodeHandlerResponse(t, w)
-		if resp["code"].(float64) != 40000 {
-			t.Fatalf("expected code 40000 for body %s, got %v", body, resp["code"])
-		}
-	}
-}
-
-func TestGenerate_ReturnsMappedErrors(t *testing.T) {
-	tests := []struct {
-		name       string
-		err        error
-		wantStatus int
-		wantCode   int
-	}{
-		{name: "project not found", err: ErrProjectNotFound, wantStatus: http.StatusNotFound, wantCode: CodeProjectNotFound},
-		{name: "no usable assets", err: ErrNoUsableAssets, wantStatus: http.StatusBadRequest, wantCode: CodeNoUsableAssets},
-		{name: "ai generation failed", err: ErrAIGenerateFailed, wantStatus: http.StatusInternalServerError, wantCode: CodeAIGenerateFailed},
-		{name: "invalid asset data", err: ErrAssetContentMissing, wantStatus: http.StatusBadRequest, wantCode: CodeInvalidAssetData},
-		{name: "no generatable text", err: ErrNoGeneratableText, wantStatus: http.StatusBadRequest, wantCode: CodeInvalidAssetData},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			service := &stubParseService{generateErr: tc.err}
-			router := newGenerateTestRouter(service)
-			w := performGenerateRequest(router, `{"project_id": 9}`)
-
-			if w.Code != tc.wantStatus {
-				t.Fatalf("expected %d, got %d", tc.wantStatus, w.Code)
-			}
-
-			resp := decodeHandlerResponse(t, w)
-			if resp["code"].(float64) != float64(tc.wantCode) {
-				t.Fatalf("expected code %d, got %v", tc.wantCode, resp["code"])
-			}
-		})
-	}
-}
-
-func TestGenerate_Returns500ForUnexpectedErrors(t *testing.T) {
-	service := &stubParseService{generateErr: errors.New("boom")}
-	router := newGenerateTestRouter(service)
-	w := performGenerateRequest(router, `{"project_id": 9}`)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", w.Code)
@@ -368,14 +235,6 @@ func TestRoutePaths_CorrectlyMounted(t *testing.T) {
 		t.Fatal("resource path should be mounted")
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/api/v1/parsing/generate", strings.NewReader(`{"project_id": 1}`))
-	req.Header.Set("Content-Type", "application/json")
-	w = httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	if w.Code == http.StatusNotFound {
-		t.Fatal("generate route should be mounted in B8")
-	}
-
 	req = httptest.NewRequest(http.MethodPost, "/api/v1/b_parsing/parse", strings.NewReader(`{"project_id": 1}`))
 	req.Header.Set("Content-Type", "application/json")
 	w = httptest.NewRecorder()
@@ -397,18 +256,6 @@ func newParseTestRouter(service parseService) *gin.Engine {
 	return router
 }
 
-func newGenerateTestRouter(service parseService) *gin.Engine {
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	router.Use(func(c *gin.Context) {
-		c.Set(middleware.ContextUserID, "user-1")
-		c.Next()
-	})
-	handler := NewHandler(service)
-	router.POST("/parsing/generate", handler.Generate)
-	return router
-}
-
 func newUnauthorizedParseTestRouter(service parseService) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -417,24 +264,8 @@ func newUnauthorizedParseTestRouter(service parseService) *gin.Engine {
 	return router
 }
 
-func newUnauthorizedGenerateTestRouter(service parseService) *gin.Engine {
-	gin.SetMode(gin.TestMode)
-	router := gin.New()
-	handler := NewHandler(service)
-	router.POST("/parsing/generate", handler.Generate)
-	return router
-}
-
 func performParseRequest(router *gin.Engine, body string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, "/parsing/parse", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	return w
-}
-
-func performGenerateRequest(router *gin.Engine, body string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodPost, "/parsing/generate", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)

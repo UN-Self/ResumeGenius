@@ -45,17 +45,6 @@ func (s *stubGitExtractor) Extract(repoURL string) (*ParsedContent, error) {
 	return s.result, s.err
 }
 
-type stubDraftGenerator struct {
-	calledWith string
-	result     string
-	err        error
-}
-
-func (s *stubDraftGenerator) GenerateHTML(parsedText string) (string, error) {
-	s.calledWith = parsedText
-	return s.result, s.err
-}
-
 func TestNewParsingServiceStoresDependencies(t *testing.T) {
 	pdfParser := &stubPdfParser{}
 	docxParser := &stubDocxParser{}
@@ -80,20 +69,10 @@ func TestNewParsingServiceStoresDependencies(t *testing.T) {
 	}
 }
 
-func TestNewParsingServiceWithGeneratorStoresGenerator(t *testing.T) {
-	generator := &stubDraftGenerator{}
-
-	svc := NewParsingServiceWithGenerator(nil, nil, nil, nil, generator)
-
-	if svc.generator != generator {
-		t.Error("expected draft generator to be stored")
-	}
-}
-
-func TestNewParsingServiceWithGeneratorAndStorageStoresStorage(t *testing.T) {
+func TestNewParsingServiceWithStorageStoresStorage(t *testing.T) {
 	store := newTestStorage(t)
 
-	svc := NewParsingServiceWithGeneratorAndStorage(nil, nil, nil, nil, nil, store)
+	svc := NewParsingServiceWithStorage(nil, nil, nil, nil, store)
 
 	if svc.storage != store {
 		t.Error("expected storage to be stored")
@@ -529,7 +508,7 @@ func TestParsePersistsDerivedImageAssetsForParsedImages(t *testing.T) {
 		},
 	}
 
-	svc := NewParsingServiceWithGeneratorAndStorage(db, pdfParser, nil, nil, nil, store)
+	svc := NewParsingServiceWithStorage(db, pdfParser, nil, nil, store)
 
 	parsedContents, err := svc.Parse(project.ID)
 	if err != nil {
@@ -617,7 +596,7 @@ func TestParseRetainsDerivedImageAssetsAfterSourceDeletionFallback(t *testing.T)
 			},
 		},
 	}
-	svc := NewParsingServiceWithGeneratorAndStorage(db, pdfParser, nil, nil, nil, store)
+	svc := NewParsingServiceWithStorage(db, pdfParser, nil, nil, store)
 
 	if _, err := svc.Parse(project.ID); err != nil {
 		t.Fatalf("first parse: %v", err)
@@ -726,7 +705,7 @@ func TestParseDeletesOriginalSourceFileAfterPersistence(t *testing.T) {
 		},
 	}
 
-	svc := NewParsingServiceWithGeneratorAndStorage(db, pdfParser, nil, nil, nil, store)
+	svc := NewParsingServiceWithStorage(db, pdfParser, nil, nil, store)
 
 	parsedContents, err := svc.Parse(project.ID)
 	if err != nil {
@@ -827,7 +806,7 @@ func TestParseKeepsOriginalSourceFileWhenImagePersistenceFails(t *testing.T) {
 		},
 	}
 
-	svc := NewParsingServiceWithGeneratorAndStorage(db, pdfParser, nil, nil, nil, store)
+	svc := NewParsingServiceWithStorage(db, pdfParser, nil, nil, store)
 
 	_, err := svc.Parse(project.ID)
 	if err == nil {
@@ -850,486 +829,6 @@ func TestParseKeepsOriginalSourceFileWhenImagePersistenceFails(t *testing.T) {
 	parsing := getParsingMetadataMap(t, storedPDF.Metadata)
 	if got := parsing["original_filename"]; got != "resume.pdf" {
 		t.Fatalf("expected original_filename resume.pdf to remain on failure, got %+v", got)
-	}
-}
-
-func TestGenerateCreatesDraftVersionAndUpdatesCurrentDraftID(t *testing.T) {
-	db := setupParsingTestDB(t)
-	project := models.Project{
-		UserID: "test-user-1",
-		Title:  "Test project",
-		Status: "active",
-	}
-	if err := db.Create(&project).Error; err != nil {
-		t.Fatalf("create project: %v", err)
-	}
-
-	noteContent := "Focus on React and TypeScript experience"
-	noteLabel := "Target role"
-	generator := &stubDraftGenerator{
-		result: "<!DOCTYPE html><html><body>mock resume</body></html>",
-	}
-	svc := NewParsingServiceWithGenerator(db, nil, nil, nil, generator)
-	svc.projectExists = func(projectID uint) (bool, error) {
-		return true, nil
-	}
-	svc.listProjectAssets = func(projectID uint) ([]models.Asset, error) {
-		return []models.Asset{
-			{ID: 1, Type: AssetTypeNote, Content: &noteContent, Label: &noteLabel},
-		}, nil
-	}
-
-	result, err := svc.Generate(project.ID)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil {
-		t.Fatal("expected generate result")
-	}
-	if result.DraftID == 0 {
-		t.Fatal("expected non-zero draft id")
-	}
-	if result.VersionID == 0 {
-		t.Fatal("expected non-zero version id")
-	}
-	if result.HTMLContent != generator.result {
-		t.Fatalf("expected html content to match generator output, got %q", result.HTMLContent)
-	}
-	if !strings.Contains(generator.calledWith, "Target role\nFocus on React and TypeScript experience") {
-		t.Fatalf("expected aggregated parsed text to be passed to generator, got %q", generator.calledWith)
-	}
-
-	var draft models.Draft
-	if err := db.First(&draft, result.DraftID).Error; err != nil {
-		t.Fatalf("fetch draft: %v", err)
-	}
-	if draft.HTMLContent != generator.result {
-		t.Fatalf("expected stored draft html to match generator output, got %q", draft.HTMLContent)
-	}
-
-	var version models.Version
-	if err := db.First(&version, result.VersionID).Error; err != nil {
-		t.Fatalf("fetch version: %v", err)
-	}
-	if version.DraftID != draft.ID {
-		t.Fatalf("expected version draft_id %d, got %d", draft.ID, version.DraftID)
-	}
-	if version.HTMLSnapshot != generator.result {
-		t.Fatalf("expected version snapshot to match generator output, got %q", version.HTMLSnapshot)
-	}
-	if version.Label == nil || *version.Label != "AI 初始生成" {
-		t.Fatalf("expected version label %q, got %+v", "AI 初始生成", version.Label)
-	}
-
-	var updatedProject models.Project
-	if err := db.First(&updatedProject, project.ID).Error; err != nil {
-		t.Fatalf("fetch project: %v", err)
-	}
-	if updatedProject.CurrentDraftID == nil || *updatedProject.CurrentDraftID != draft.ID {
-		t.Fatalf("expected current_draft_id to point at draft %d, got %+v", draft.ID, updatedProject.CurrentDraftID)
-	}
-}
-
-func TestGenerateForUserReturnsProjectNotFoundWhenOwnershipCheckFails(t *testing.T) {
-	db := setupParsingTestDB(t)
-	project := models.Project{
-		UserID: "owner-user",
-		Title:  "Owned project",
-		Status: "active",
-	}
-	if err := db.Create(&project).Error; err != nil {
-		t.Fatalf("create project: %v", err)
-	}
-
-	generator := &stubDraftGenerator{
-		result: "<!DOCTYPE html><html><body>mock resume</body></html>",
-	}
-	svc := NewParsingServiceWithGenerator(db, nil, nil, nil, generator)
-
-	_, err := svc.GenerateForUser("another-user", project.ID)
-	if !errors.Is(err, ErrProjectNotFound) {
-		t.Fatalf("expected ErrProjectNotFound, got %v", err)
-	}
-}
-
-func TestGenerateAggregatesGitAssetTextWhenExtractorConfigured(t *testing.T) {
-	db := setupParsingTestDB(t)
-	project := models.Project{
-		UserID: "test-user-1",
-		Title:  "Test project",
-		Status: "active",
-	}
-	if err := db.Create(&project).Error; err != nil {
-		t.Fatalf("create project: %v", err)
-	}
-
-	gitURL := "https://github.com/example/project"
-	gitExtractor := &stubGitExtractor{
-		result: &ParsedContent{Text: "Repository: project\n\nREADME:\nResume generator"},
-	}
-	generator := &stubDraftGenerator{
-		result: "<!DOCTYPE html><html><body>mock resume</body></html>",
-	}
-	svc := NewParsingServiceWithGenerator(db, nil, nil, gitExtractor, generator)
-	svc.projectExists = func(projectID uint) (bool, error) {
-		return true, nil
-	}
-	svc.listProjectAssets = func(projectID uint) ([]models.Asset, error) {
-		return []models.Asset{
-			{ID: 1, Type: AssetTypeGitRepo, URI: &gitURL},
-		}, nil
-	}
-
-	result, err := svc.Generate(project.ID)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result == nil || result.DraftID == 0 {
-		t.Fatalf("expected generated draft result, got %+v", result)
-	}
-	if gitExtractor.calledWith != gitURL {
-		t.Fatalf("expected git extractor url %s, got %s", gitURL, gitExtractor.calledWith)
-	}
-	if !strings.Contains(generator.calledWith, "Repository: project") {
-		t.Fatalf("expected generator input to include git summary, got %q", generator.calledWith)
-	}
-	if !strings.Contains(generator.calledWith, "README:\nResume generator") {
-		t.Fatalf("expected generator input to include git readme summary, got %q", generator.calledWith)
-	}
-}
-
-func TestGeneratePrefersPersistedFileContentWithoutInvokingParser(t *testing.T) {
-	db := setupParsingTestDB(t)
-	project := models.Project{
-		UserID: "test-user-1",
-		Title:  "Persisted file content project",
-		Status: "active",
-	}
-	if err := db.Create(&project).Error; err != nil {
-		t.Fatalf("create project: %v", err)
-	}
-
-	persistedText := "- React engineering\n\nBuilt scalable UI systems"
-	metadata := models.JSONB{
-		"parsing": map[string]interface{}{
-			"status":            "success",
-			"content_persisted": true,
-			"source_deleted":    true,
-		},
-	}
-	pdfAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeResumePDF, Content: &persistedText, Metadata: metadata}
-	if err := db.Create(&pdfAsset).Error; err != nil {
-		t.Fatalf("create pdf asset: %v", err)
-	}
-
-	pdfParser := &stubPdfParser{err: errors.New("parser should not be called")}
-	generator := &stubDraftGenerator{result: "<!DOCTYPE html><html><body>mock resume</body></html>"}
-	svc := NewParsingServiceWithGenerator(db, pdfParser, nil, nil, generator)
-
-	result, err := svc.Generate(project.ID)
-	if err != nil {
-		t.Fatalf("generate with persisted content: %v", err)
-	}
-	if result == nil || result.DraftID == 0 {
-		t.Fatalf("expected generated draft result, got %+v", result)
-	}
-	if pdfParser.calledWith != "" {
-		t.Fatalf("expected pdf parser not to be called, got %q", pdfParser.calledWith)
-	}
-	if generator.calledWith != persistedText {
-		t.Fatalf("expected generator to use persisted file content, got %q", generator.calledWith)
-	}
-}
-
-func TestGenerateUsesPersistedGitContentWithoutExtractor(t *testing.T) {
-	db := setupParsingTestDB(t)
-	project := models.Project{
-		UserID: "test-user-1",
-		Title:  "Persisted git content project",
-		Status: "active",
-	}
-	if err := db.Create(&project).Error; err != nil {
-		t.Fatalf("create project: %v", err)
-	}
-
-	gitURL := "https://github.com/example/project"
-	persistedText := "Repository: project\n\nREADME:\nResume generator"
-	gitAsset := models.Asset{ProjectID: project.ID, Type: AssetTypeGitRepo, URI: &gitURL, Content: &persistedText}
-	if err := db.Create(&gitAsset).Error; err != nil {
-		t.Fatalf("create git asset: %v", err)
-	}
-
-	generator := &stubDraftGenerator{result: "<!DOCTYPE html><html><body>mock resume</body></html>"}
-	svc := NewParsingServiceWithGenerator(db, nil, nil, nil, generator)
-
-	result, err := svc.Generate(project.ID)
-	if err != nil {
-		t.Fatalf("generate with persisted git content: %v", err)
-	}
-	if result == nil || result.DraftID == 0 {
-		t.Fatalf("expected generated draft result, got %+v", result)
-	}
-	if !strings.Contains(generator.calledWith, "Repository: project") {
-		t.Fatalf("expected generator input to include persisted git content, got %q", generator.calledWith)
-	}
-}
-
-func TestGenerateFallsBackToParseAndPersistsMissingFileContent(t *testing.T) {
-	db := setupParsingTestDB(t)
-	store := newTestStorage(t)
-	project := models.Project{
-		UserID: "test-user-1",
-		Title:  "Fallback parse project",
-		Status: "active",
-	}
-	if err := db.Create(&project).Error; err != nil {
-		t.Fatalf("create project: %v", err)
-	}
-
-	originalKey := saveTestStorageFile(t, store, project.UserID, "resume.pdf", []byte("pdf-bytes"))
-
-	pdfAsset := models.Asset{
-		ProjectID: project.ID,
-		Type:      AssetTypeResumePDF,
-		URI:       &originalKey,
-		Metadata: models.JSONB{
-			"parsing": map[string]interface{}{
-				"original_filename": "resume.pdf",
-			},
-		},
-	}
-	if err := db.Create(&pdfAsset).Error; err != nil {
-		t.Fatalf("create pdf asset: %v", err)
-	}
-
-	pdfParser := &stubPdfParser{
-		result: &ParsedContent{
-			Text: "Page 1 of 1\n* React   engineering",
-		},
-	}
-	generator := &stubDraftGenerator{result: "<!DOCTYPE html><html><body>mock resume</body></html>"}
-	svc := NewParsingServiceWithGeneratorAndStorage(db, pdfParser, nil, nil, generator, store)
-
-	result, err := svc.Generate(project.ID)
-	if err != nil {
-		t.Fatalf("generate with parse fallback: %v", err)
-	}
-	if result == nil || result.DraftID == 0 {
-		t.Fatalf("expected generated draft result, got %+v", result)
-	}
-	if pdfParser.calledWith == "" {
-		t.Fatal("expected pdf parser to be called for missing persisted content")
-	}
-	if generator.calledWith != "- React engineering" {
-		t.Fatalf("expected generator to receive cleaned parsed text, got %q", generator.calledWith)
-	}
-
-	var storedPDF models.Asset
-	if err := db.First(&storedPDF, pdfAsset.ID).Error; err != nil {
-		t.Fatalf("fetch stored pdf asset: %v", err)
-	}
-	if storedPDF.Content == nil || *storedPDF.Content != "- React engineering" {
-		t.Fatalf("expected parsed content to be persisted after fallback, got %+v", storedPDF.Content)
-	}
-	parsing := getParsingMetadataMap(t, storedPDF.Metadata)
-	if got := parsing["source_deleted"]; got != true {
-		t.Fatalf("expected source_deleted true after fallback persistence, got %+v", got)
-	}
-	if store.Exists(originalKey) {
-		t.Fatalf("expected original source file %q to be deleted after fallback persistence", originalKey)
-	}
-}
-
-func TestGenerateRollsBackWhenVersionCreationFails(t *testing.T) {
-	db := setupParsingTestDB(t)
-	project := models.Project{
-		UserID: "test-user-1",
-		Title:  "Test project",
-		Status: "active",
-	}
-	if err := db.Create(&project).Error; err != nil {
-		t.Fatalf("create project: %v", err)
-	}
-
-	noteContent := "Focus on React and TypeScript experience"
-	generator := &stubDraftGenerator{
-		result: "<!DOCTYPE html><html><body>mock resume</body></html>",
-	}
-	svc := NewParsingServiceWithGenerator(db, nil, nil, nil, generator)
-	svc.projectExists = func(projectID uint) (bool, error) {
-		return true, nil
-	}
-	svc.listProjectAssets = func(projectID uint) ([]models.Asset, error) {
-		return []models.Asset{
-			{ID: 1, Type: AssetTypeNote, Content: &noteContent},
-		}, nil
-	}
-
-	const callbackName = "parsing:test_fail_version_create"
-	if err := db.Callback().Create().Before("gorm:create").Register(callbackName, func(tx *gorm.DB) {
-		if tx.Statement == nil || tx.Statement.Schema == nil {
-			return
-		}
-		if tx.Statement.Schema.Name == "Version" {
-			tx.AddError(errors.New("forced version insert failure"))
-		}
-	}); err != nil {
-		t.Fatalf("register callback: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = db.Callback().Create().Remove(callbackName)
-	})
-
-	_, err := svc.Generate(project.ID)
-	if err == nil || !strings.Contains(err.Error(), "forced version insert failure") {
-		t.Fatalf("expected forced version insert failure, got %v", err)
-	}
-
-	var draftCount int64
-	if err := db.Model(&models.Draft{}).Where("project_id = ?", project.ID).Count(&draftCount).Error; err != nil {
-		t.Fatalf("count drafts: %v", err)
-	}
-	if draftCount != 0 {
-		t.Fatalf("expected no drafts to remain after rollback, got %d", draftCount)
-	}
-
-	var versionCount int64
-	if err := db.Model(&models.Version{}).Count(&versionCount).Error; err != nil {
-		t.Fatalf("count versions: %v", err)
-	}
-	if versionCount != 0 {
-		t.Fatalf("expected no versions to remain after rollback, got %d", versionCount)
-	}
-
-	var updatedProject models.Project
-	if err := db.First(&updatedProject, project.ID).Error; err != nil {
-		t.Fatalf("fetch project: %v", err)
-	}
-	if updatedProject.CurrentDraftID != nil {
-		t.Fatalf("expected current_draft_id to remain nil, got %+v", updatedProject.CurrentDraftID)
-	}
-}
-
-func TestGenerateDoesNotCreateDirtyDraftWhenGeneratorFails(t *testing.T) {
-	db := setupParsingTestDB(t)
-	project := models.Project{
-		UserID: "test-user-1",
-		Title:  "Test project",
-		Status: "active",
-	}
-	if err := db.Create(&project).Error; err != nil {
-		t.Fatalf("create project: %v", err)
-	}
-
-	noteContent := "Focus on React and TypeScript experience"
-	generator := &stubDraftGenerator{err: errors.New("mock failed")}
-	svc := NewParsingServiceWithGenerator(db, nil, nil, nil, generator)
-	svc.projectExists = func(projectID uint) (bool, error) {
-		return true, nil
-	}
-	svc.listProjectAssets = func(projectID uint) ([]models.Asset, error) {
-		return []models.Asset{
-			{ID: 1, Type: AssetTypeNote, Content: &noteContent},
-		}, nil
-	}
-
-	_, err := svc.Generate(project.ID)
-	if !errors.Is(err, ErrAIGenerateFailed) {
-		t.Fatalf("expected ErrAIGenerateFailed, got %v", err)
-	}
-
-	var draftCount int64
-	if err := db.Model(&models.Draft{}).Where("project_id = ?", project.ID).Count(&draftCount).Error; err != nil {
-		t.Fatalf("count drafts: %v", err)
-	}
-	if draftCount != 0 {
-		t.Fatalf("expected no drafts to be created, got %d", draftCount)
-	}
-
-	var updatedProject models.Project
-	if err := db.First(&updatedProject, project.ID).Error; err != nil {
-		t.Fatalf("fetch project: %v", err)
-	}
-	if updatedProject.CurrentDraftID != nil {
-		t.Fatalf("expected current_draft_id to remain nil, got %+v", updatedProject.CurrentDraftID)
-	}
-}
-
-func TestGenerateReturnsDatabaseNotConfiguredWhenDBMissing(t *testing.T) {
-	svc := NewParsingService(nil, nil, nil, nil)
-
-	_, err := svc.Generate(1)
-	if !errors.Is(err, ErrDatabaseNotConfigured) {
-		t.Fatalf("expected ErrDatabaseNotConfigured before DB-backed generate flow, got %v", err)
-	}
-}
-
-func TestGenerateReturnsDraftGeneratorNotConfiguredWhenMissing(t *testing.T) {
-	db := setupParsingTestDB(t)
-	svc := NewParsingService(db, nil, nil, nil)
-
-	_, err := svc.Generate(1)
-	if !errors.Is(err, ErrDraftGeneratorNotConfigured) {
-		t.Fatalf("expected ErrDraftGeneratorNotConfigured, got %v", err)
-	}
-}
-
-func TestGenerateReturnsNoGeneratableTextWhenParsedContentsHaveNoText(t *testing.T) {
-	db := setupParsingTestDB(t)
-	project := models.Project{
-		UserID: "test-user-1",
-		Title:  "Empty text project",
-		Status: "active",
-	}
-	if err := db.Create(&project).Error; err != nil {
-		t.Fatalf("create project: %v", err)
-	}
-
-	docxPath := "fixtures/sample_resume.docx"
-	docxParser := &stubDocxParser{
-		result: &ParsedContent{Text: "   "},
-	}
-	generator := &stubDraftGenerator{
-		result: "<!DOCTYPE html><html><body>mock resume</body></html>",
-	}
-	svc := NewParsingServiceWithGenerator(db, nil, docxParser, nil, generator)
-	svc.projectExists = func(projectID uint) (bool, error) {
-		return true, nil
-	}
-	svc.listProjectAssets = func(projectID uint) ([]models.Asset, error) {
-		return []models.Asset{
-			{ID: 1, Type: AssetTypeResumeDOCX, URI: &docxPath},
-		}, nil
-	}
-
-	_, err := svc.Generate(project.ID)
-	if !errors.Is(err, ErrNoGeneratableText) {
-		t.Fatalf("expected ErrNoGeneratableText, got %v", err)
-	}
-	if generator.calledWith != "" {
-		t.Fatalf("expected generator not to be called when no text is available, got %q", generator.calledWith)
-	}
-
-	var draftCount int64
-	if err := db.Model(&models.Draft{}).Where("project_id = ?", project.ID).Count(&draftCount).Error; err != nil {
-		t.Fatalf("count drafts: %v", err)
-	}
-	if draftCount != 0 {
-		t.Fatalf("expected no drafts to be created, got %d", draftCount)
-	}
-}
-
-func TestAggregateParsedContents(t *testing.T) {
-	parsedContents := []ParsedContent{
-		{Text: " first "},
-		{Text: ""},
-		{Text: "second"},
-	}
-
-	aggregated := aggregateParsedContents(parsedContents)
-	expected := "first\n\nsecond"
-	if aggregated != expected {
-		t.Fatalf("expected %q, got %q", expected, aggregated)
 	}
 }
 

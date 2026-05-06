@@ -143,7 +143,16 @@ export default function EditorPage() {
         if (cancelled) return
 
         if (!project.current_draft_id) {
-          navigate(`/projects/${pid}`, { replace: true })
+          try {
+            const draft = await workbenchApi.createDraft(pid)
+            if (cancelled) return
+            setDraftId(String(draft.id))
+            setPendingHtml(draft.html_content || '')
+          } catch (createErr) {
+            if (cancelled) return
+            setError(createErr instanceof ApiError ? createErr.message : '创建草稿失败')
+          }
+          setLoading(false)
           return
         }
 

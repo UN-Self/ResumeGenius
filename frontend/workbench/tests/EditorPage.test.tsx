@@ -64,12 +64,27 @@ function mockEditorLoad(overrides?: {
 
 describe('EditorPage', () => {
   describe('Route guard', () => {
-    it('redirects to project detail when no current_draft_id', async () => {
+    it('auto-creates a draft when no current_draft_id', async () => {
       mockEditorLoad({ currentDraftId: null })
+
+      server.use(
+        http.post('/api/v1/drafts', () => {
+          return HttpResponse.json({
+            code: 0,
+            data: {
+              id: 2,
+              project_id: 1,
+              html_content: '',
+              updated_at: '2026-04-28T12:00:00Z',
+            },
+            message: 'ok',
+          })
+        })
+      )
 
       renderWithRouter()
       await waitFor(() => {
-        expect(screen.getByTestId('project-detail')).toBeInTheDocument()
+        expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
       })
     })
   })
