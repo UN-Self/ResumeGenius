@@ -19,7 +19,13 @@ const MENU_HEIGHT = 216
 const MENU_GAP = 8
 const VIEWPORT_PADDING = 12
 
-export function ThemeSwitcher({ className }: { className?: string }) {
+export function ThemeSwitcher({
+  className,
+  compact = false,
+}: {
+  className?: string
+  compact?: boolean
+}) {
   const [choiceId, setChoiceId] = useState(() => getInitialThemeChoiceId())
   const [systemPresetId, setSystemPresetId] = useState(() => getSystemPreset().id)
   const [open, setOpen] = useState(false)
@@ -112,7 +118,12 @@ export function ThemeSwitcher({ className }: { className?: string }) {
         className,
       )}
     >
-      <div className="hidden items-center gap-1 px-2 text-[11px] font-medium text-muted-foreground sm:flex">
+      <div
+        className={cn(
+          'hidden items-center gap-1 px-2 text-[11px] font-medium text-muted-foreground sm:flex',
+          compact && 'sm:hidden',
+        )}
+      >
         <Palette size={13} />
         <span>主题</span>
       </div>
@@ -121,7 +132,10 @@ export function ThemeSwitcher({ className }: { className?: string }) {
         aria-label="选择主题"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex h-8 min-w-20 items-center justify-between gap-2 rounded-full border border-transparent bg-transparent px-2 text-xs font-medium text-foreground outline-none transition-colors hover:bg-surface-hover focus:border-border-glow"
+        className={cn(
+          'inline-flex h-8 items-center justify-between gap-2 rounded-full border border-transparent bg-transparent px-2 text-xs font-medium text-foreground outline-none transition-colors hover:bg-surface-hover focus:border-border-glow',
+          compact ? 'min-w-0' : 'min-w-20',
+        )}
       >
         <span>{activeChoice.label}</span>
         <ChevronDown size={13} className={cn('transition-transform', open && 'rotate-180')} />

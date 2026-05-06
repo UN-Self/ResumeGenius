@@ -60,13 +60,13 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
             </div>
           </section>
 
-          <div className="glass-panel stagger-in w-full rounded-3xl p-6">
-            <div className="mb-6 flex items-start justify-between gap-4">
-              <div>
+          <div className="glass-panel stagger-in w-full min-w-0 rounded-3xl p-6">
+            <div className="mb-6 flex items-start justify-between gap-3">
+              <div className="min-w-0">
                 <h1 className="text-2xl font-semibold text-foreground">ResumeGenius</h1>
                 <p className="mt-2 text-sm text-muted-foreground">输入用户名和密码后继续</p>
               </div>
-              <ThemeSwitcher className="shrink-0" />
+              <ThemeSwitcher compact className="shrink-0" />
             </div>
 
             <form id="login-form" onSubmit={handleSubmit} className="space-y-3">
