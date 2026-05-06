@@ -4,9 +4,10 @@ import { setupServer } from 'msw/node'
 import { draftHandlers } from '@/mocks/handlers/drafts'
 import { projectHandlers } from '@/mocks/handlers/projects'
 import { agentHandlers } from '@/mocks/handlers/agent'
+import { versionHandlers } from '@/mocks/handlers/versions'
 
 // Setup MSW server for tests
-export const server = setupServer(...projectHandlers, ...draftHandlers, ...agentHandlers)
+export const server = setupServer(...projectHandlers, ...draftHandlers, ...agentHandlers, ...versionHandlers)
 
 // Start server before all tests
 beforeAll(() => server.listen({ onUnhandledRequest: 'error' }))

@@ -29,3 +29,9 @@ export const sampleProject = {
   current_draft_id: 1,
   created_at: '2026-04-28T12:00:00Z',
 }
+
+export const sampleVersions = [
+  { id: 3, label: 'AI 修改：精简项目经历', created_at: '2026-05-06T10:15:00Z' },
+  { id: 2, label: '手动保存', created_at: '2026-05-06T10:10:00Z' },
+  { id: 1, label: 'AI 初始生成', created_at: '2026-05-06T10:00:00Z' },
+]

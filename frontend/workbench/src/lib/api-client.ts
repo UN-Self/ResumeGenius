@@ -223,3 +223,38 @@ export const parsingApi = {
       body: JSON.stringify({ project_id: projectId }),
     }),
 }
+
+// --- Render API ---
+
+export interface Version {
+  id: number
+  label: string
+  created_at: string
+}
+
+export interface VersionDetail extends Version {
+  html_snapshot: string
+}
+
+export const renderApi = {
+  listVersions: (draftId: number) =>
+    request<{ items: Version[]; total: number }>(`/drafts/${draftId}/versions`),
+  getVersion: (draftId: number, versionId: number) =>
+    request<VersionDetail>(`/drafts/${draftId}/versions/${versionId}`),
+  createVersion: (draftId: number, label: string) =>
+    request<Version>(`/drafts/${draftId}/versions`, {
+      method: 'POST',
+      body: JSON.stringify({ label }),
+    }),
+  rollback: (draftId: number, versionId: number) =>
+    request<{
+      draft_id: number
+      updated_at: string
+      new_version_id: number
+      new_version_label: string
+      new_version_created_at: string
+    }>(`/drafts/${draftId}/rollback`, {
+      method: 'POST',
+      body: JSON.stringify({ version_id: versionId }),
+    }),
+}

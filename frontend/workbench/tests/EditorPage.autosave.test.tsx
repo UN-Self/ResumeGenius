@@ -29,6 +29,21 @@ vi.mock('@/hooks/useExport', () => ({
   }),
 }))
 
+vi.mock('@/hooks/useVersions', () => ({
+  useVersions: () => ({
+    versions: [],
+    loading: false,
+    previewMode: 'editing' as const,
+    previewVersion: null,
+    previewHtml: null,
+    refreshList: vi.fn(),
+    startPreview: vi.fn(),
+    exitPreview: vi.fn(),
+    createSnapshot: vi.fn(),
+    rollback: vi.fn(),
+  }),
+}))
+
 vi.mock('@tiptap/react', () => ({
   useEditor: () => ({
     commands: { setContent: vi.fn() },
@@ -78,6 +93,9 @@ vi.mock('@/lib/api-client', () => ({
   },
   workbenchApi: {
     getDraft: vi.fn(),
+  },
+  renderApi: {
+    listVersions: vi.fn(),
   },
   ApiError: class extends Error {
     code: number
