@@ -58,6 +58,7 @@ const { title, description = 'ResumeGenius - AI 辅助简历生成与优化平�
     <title>{title} | ResumeGenius</title>
   </head>
   <body class="site-shell bg-background text-foreground font-sans antialiased">
+    <canvas class="grid-ripple-canvas" aria-hidden="true"></canvas>
     <Nav />
     <main>
       <slot />
@@ -77,6 +78,118 @@ const { title, description = 'ResumeGenius - AI 辅助简历生成与优化平�
         { threshold: 0.1, rootMargin: '0px 0px -50px 0px' }
       );
       document.querySelectorAll('.animate-on-scroll').forEach((el) => animObserver.observe(el));
+
+      const rippleCanvas = document.querySelector('.grid-ripple-canvas');
+      const rippleContext = rippleCanvas?.getContext('2d');
+      const rippleGridSize = 64;
+      const rippleRadius = 280;
+      const rippleDuration = 920;
+      const rippleSampleStep = 8;
+      const rippleMinInfluence = 0.006;
+      const rippleInfluencePower = 1.55;
+
+      if (rippleCanvas && rippleContext) {
+        let animationFrame = 0;
+        let lastMoveAt = 0;
+        let pointerX = window.innerWidth / 2;
+        let pointerY = window.innerHeight / 2;
+        let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+        const resizeRippleCanvas = () => {
+          dpr = Math.min(window.devicePixelRatio || 1, 2);
+          rippleCanvas.width = Math.floor(window.innerWidth * dpr);
+          rippleCanvas.height = Math.floor(window.innerHeight * dpr);
+          rippleCanvas.style.width = `${window.innerWidth}px`;
+          rippleCanvas.style.height = `${window.innerHeight}px`;
+          rippleContext.setTransform(dpr, 0, 0, dpr, 0, 0);
+        };
+
+        const drawSegment = (from, to, strokeStyle, alpha, lineWidth) => {
+          rippleContext.globalAlpha = alpha;
+          rippleContext.strokeStyle = strokeStyle;
+          rippleContext.lineWidth = lineWidth;
+          rippleContext.beginPath();
+          rippleContext.moveTo(from[0], from[1]);
+          rippleContext.lineTo(to[0], to[1]);
+          rippleContext.stroke();
+        };
+
+        const drawRippleGrid = (time) => {
+          const elapsed = time - lastMoveAt;
+          const fade = Math.max(0, 1 - elapsed / rippleDuration);
+          rippleContext.clearRect(0, 0, rippleCanvas.width / dpr, rippleCanvas.height / dpr);
+
+          if (fade <= 0) {
+            animationFrame = 0;
+            return;
+          }
+
+          const styles = getComputedStyle(document.documentElement);
+          const isLightTheme = document.documentElement.dataset.theme === 'light';
+          const lineColor = styles.getPropertyValue('--color-primary').trim()
+            || styles.getPropertyValue('--color-border-glow').trim()
+            || '#6bdcff';
+          const amplitude = 11 * fade;
+          const verticalAlpha = isLightTheme ? 0.34 : 0.3;
+          const horizontalAlpha = isLightTheme ? 0.28 : 0.24;
+          const left = Math.floor((pointerX - rippleRadius) / rippleGridSize) * rippleGridSize;
+          const right = pointerX + rippleRadius;
+          const top = Math.floor((pointerY - rippleRadius) / rippleGridSize) * rippleGridSize;
+          const bottom = pointerY + rippleRadius;
+
+          rippleContext.save();
+          rippleContext.lineCap = 'round';
+          rippleContext.lineJoin = 'round';
+
+          for (let x = left; x <= right; x += rippleGridSize) {
+            let previous = null;
+            for (let y = pointerY - rippleRadius; y <= pointerY + rippleRadius; y += rippleSampleStep) {
+              const dx = x - pointerX;
+              const dy = y - pointerY;
+              const distance = Math.hypot(dx, dy);
+              const influence = Math.max(0, 1 - distance / rippleRadius) ** rippleInfluencePower;
+              const bend = Math.sin(dy * 0.055 + time * 0.006) * amplitude * influence;
+              const current = [x + bend, y, influence];
+              if (previous && previous[2] > rippleMinInfluence && influence > rippleMinInfluence) {
+                const segmentInfluence = ((previous[2] + influence) / 2) ** 1.08;
+                drawSegment(previous, current, lineColor, verticalAlpha * fade * segmentInfluence, 1.05);
+              }
+              previous = current;
+            }
+          }
+
+          for (let y = top; y <= bottom; y += rippleGridSize) {
+            let previous = null;
+            for (let x = pointerX - rippleRadius; x <= pointerX + rippleRadius; x += rippleSampleStep) {
+              const dx = x - pointerX;
+              const dy = y - pointerY;
+              const distance = Math.hypot(dx, dy);
+              const influence = Math.max(0, 1 - distance / rippleRadius) ** rippleInfluencePower;
+              const bend = Math.sin(dx * 0.055 + time * 0.006) * amplitude * influence;
+              const current = [x, y + bend, influence];
+              if (previous && previous[2] > rippleMinInfluence && influence > rippleMinInfluence) {
+                const segmentInfluence = ((previous[2] + influence) / 2) ** 1.08;
+                drawSegment(previous, current, lineColor, horizontalAlpha * fade * segmentInfluence, 1);
+              }
+              previous = current;
+            }
+          }
+
+          rippleContext.restore();
+          animationFrame = window.requestAnimationFrame(drawRippleGrid);
+        };
+
+        const handleGridRipplePointer = (event) => {
+          pointerX = event.clientX;
+          pointerY = event.clientY;
+          lastMoveAt = performance.now();
+          if (!animationFrame) animationFrame = window.requestAnimationFrame(drawRippleGrid);
+        };
+
+        resizeRippleCanvas();
+        window.addEventListener('resize', resizeRippleCanvas);
+        window.addEventListener('pointermove', handleGridRipplePointer, { passive: true });
+      }
 
       const themePresets = {
         'futuristic-dark': { mode: 'dark', palette: 'futuristic-apple' },
@@ -154,7 +267,7 @@ const { title, description = 'ResumeGenius - AI 辅助简历生成与优化平�
         document.querySelectorAll('[data-theme-menu]').forEach((menu) => {
           const activeOption = menu.querySelector(`[data-theme-option="${id}"]`);
           const current = menu.querySelector('[data-theme-current]');
-          if (current && activeOption) current.textContent = activeOption.getAttribute('data-theme-label') || '科技夜';
+          if (current && activeOption) current.textContent = activeOption.getAttribute('data-theme-label') || '月光';
           menu.querySelectorAll('[data-theme-option]').forEach((option) => {
             option.classList.toggle('is-active', option.getAttribute('data-theme-option') === id);
           });

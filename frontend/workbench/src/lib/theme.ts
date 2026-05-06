@@ -6,7 +6,7 @@ export type ThemePreset = {
 }
 
 export const THEME_PRESETS: ThemePreset[] = [
-  { id: 'futuristic-dark', label: '科技夜', mode: 'dark', palette: 'futuristic-apple' },
+  { id: 'futuristic-dark', label: '月光', mode: 'dark', palette: 'futuristic-apple' },
   { id: 'futuristic-light', label: '银白', mode: 'light', palette: 'futuristic-apple' },
   { id: 'warm-editorial', label: '暖驼', mode: 'light', palette: 'warm-editorial' },
   { id: 'quiet-luxury', label: '静奢', mode: 'dark', palette: 'quiet-luxury' },

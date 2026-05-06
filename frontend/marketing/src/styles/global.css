@@ -141,6 +141,16 @@
   background-size: 64px 64px;
 }
 
+.grid-ripple-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  opacity: 0.82;
+}
+
 .site-shell::before {
   content: "";
   position: fixed;

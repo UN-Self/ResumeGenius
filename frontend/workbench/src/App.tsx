@@ -6,6 +6,7 @@ import LoginPage from '@/pages/LoginPage'
 import EditorPage from '@/pages/EditorPage'
 import { authApi } from '@/lib/api-client'
 import { FullPageState } from '@/components/ui/full-page-state'
+import { GridRippleCanvas } from '@/components/ui/GridRippleCanvas'
 import { applyPreset, getInitialPreset, hasStoredPreset, THEME_MANUAL_STORAGE_KEY, THEME_STORAGE_KEY } from '@/lib/theme'
 
 type AuthState = 'checking' | 'authed' | 'guest'
@@ -61,6 +62,7 @@ export default function App() {
 
   return (
     <BrowserRouter basename="/app">
+      <GridRippleCanvas />
       <Routes>
         <Route
           path="/login"
