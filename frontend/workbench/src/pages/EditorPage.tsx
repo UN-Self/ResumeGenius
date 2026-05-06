@@ -22,6 +22,8 @@ import { VersionDropdown } from '@/components/version/VersionDropdown'
 import { VersionPreviewBanner } from '@/components/version/VersionPreviewBanner'
 import { SaveSnapshotDialog } from '@/components/version/SaveSnapshotDialog'
 import { RollbackConfirmDialog } from '@/components/version/RollbackConfirmDialog'
+import { useToast } from '@/hooks/useToast'
+import { ToastContainer } from '@/components/ui/toast'
 
 export default function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -101,6 +103,7 @@ export default function EditorPage() {
   const [rollbackDialogOpen, setRollbackDialogOpen] = useState(false)
   const [savingSnapshot, setSavingSnapshot] = useState(false)
   const [rollbacking, setRollbacking] = useState(false)
+  const { toasts, toast, dismissToast } = useToast()
 
   // Save editor content before preview so we can restore it on exit
   const savedContentBeforePreview = useRef<string | null>(null)
@@ -156,7 +159,7 @@ export default function EditorPage() {
       editor?.commands.setContent(html)
       setRollbackDialogOpen(false)
     } catch (e) {
-      console.error('Rollback failed:', e)
+      toast(e instanceof Error ? e.message : '回滚失败')
     } finally {
       setRollbacking(false)
     }
@@ -457,8 +460,8 @@ export default function EditorPage() {
             await flush()
             await createSnapshot(label)
             setSaveDialogOpen(false)
-          } catch {
-            // error is handled by useVersions
+          } catch (e) {
+            toast(e instanceof Error ? e.message : '保存快照失败')
           } finally {
             setSavingSnapshot(false)
           }
@@ -470,6 +473,7 @@ export default function EditorPage() {
         onClose={() => setRollbackDialogOpen(false)}
         onConfirm={handleRollback}
       />
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
 }
