@@ -1,159 +1,104 @@
 ---
+const steps = ['读取资料', '生成简历 HTML', '优化排版', '准备预览']
 const features = [
   {
     title: 'AI 主动生成',
-    description: '不只是润色文字，而是直接操作 HTML，重构整个简历的结构、排版与表达',
+    description: '不只是润色文字，而是重构简历结构、排版与表达。',
   },
   {
-    title: '自由编辑',
-    description: 'TipTap 所见即所得编辑器，像编辑 Word 一样无表单约束',
+    title: '模板预览工作台',
+    description: '用简历图库管理项目，生成结果从第一屏就可感知。',
   },
   {
     title: '所见即所得',
-    description: 'chromedp 服务端渲染，导出 PDF 与屏幕完全一致',
+    description: 'A4 画布编辑，服务端导出 PDF 与屏幕保持一致。',
   },
 ]
 ---
 
-<section class="relative overflow-hidden pt-12 pb-16 md:pt-20 md:pb-24 bg-gradient-to-b from-primary-50 to-background">
-  <!-- Decorative blobs -->
-  <div class="absolute top-10 right-10 w-[400px] h-[400px] rounded-full bg-primary-200/30 blur-[80px] animate-float pointer-events-none -z-10" aria-hidden="true"></div>
-  <div class="absolute bottom-10 left-10 w-[300px] h-[300px] rounded-full bg-accent/20 blur-[60px] animate-float-delayed pointer-events-none -z-10" aria-hidden="true"></div>
-  <div class="max-w-4xl mx-auto px-6 text-center">
-    <h1 class="hero-title font-serif font-semibold text-4xl md:text-5xl lg:text-[3rem] leading-normal text-foreground mb-3">
-      <span class="sr-only">ResumeGenius — 有简历？AI 帮你优化细节。没简历？AI 帮你从零生成。</span>
-      <span class="handwriting-text" data-index="0" aria-hidden="true">ResumeGenius</span>
-      <span class="handwriting-text hidden" data-index="1" aria-hidden="true">有简历？AI 帮你优化细节。</span>
-      <span class="handwriting-text hidden" data-index="2" aria-hidden="true">没简历？AI 帮你从零生成。</span>
-    </h1>
-    <p class="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mb-10 leading-relaxed">
-      不需要面对空白模板发呆。只需提供你的原始材料——哪怕是散乱的项目经历、GitHub 仓库、几份文件——AI 会主动搜集和组织，结合行业最佳实践直接生成可用简历。
-    </p>
-    <div class="flex flex-col sm:flex-row gap-4 justify-center mb-16">
-      <a href="/app"
-        class="btn-primary inline-flex items-center justify-center h-12 px-8 text-base font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 active:bg-primary-800 no-underline">
-        免费开始使用
-      </a>
-      <a href="#features"
-        class="btn-secondary inline-flex items-center justify-center h-12 px-8 text-base font-medium text-primary-600 border border-primary-300 rounded-md hover:bg-primary-50 no-underline">
-        了解更多
-      </a>
+<section class="relative overflow-hidden px-6 pb-16 pt-14 md:pb-24 md:pt-20">
+  <div class="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+    <div class="animate-on-scroll">
+      <div class="mb-5 inline-flex items-center gap-2 rounded-full border border-border bg-white/70 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur-xl">
+        <span class="h-2 w-2 rounded-full bg-[#20c997] shadow-[0_0_18px_rgba(32,201,151,0.75)]"></span>
+        Futuristic AI resume workspace
+      </div>
+      <h1 class="gradient-text text-5xl font-semibold tracking-tight md:text-6xl">
+        ResumeGenius
+      </h1>
+      <p class="mt-6 max-w-xl text-base leading-7 text-muted-foreground md:text-lg">
+        把散乱资料变成可编辑简历。上传文件、接入 Git、补充经历，AI 会生成结构清晰、可以继续微调的 A4 简历。
+      </p>
+      <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+        <a href="/app"
+          class="btn-primary inline-flex h-12 items-center justify-center rounded-full bg-[#007aff] px-8 text-base font-medium text-white no-underline hover:bg-[#0067d8]">
+          免费开始使用
+        </a>
+        <a href="#features"
+          class="btn-secondary inline-flex h-12 items-center justify-center rounded-full border border-[#007aff]/25 bg-white/65 px-8 text-base font-medium text-[#007aff] no-underline backdrop-blur-xl hover:bg-white">
+          了解更多
+        </a>
+      </div>
     </div>
 
-    <!-- Mini feature cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
-      {features.map(f => (
-        <div class="card-hover bg-card border border-border rounded-lg px-6 py-5 text-left">
-          <h3 class="font-sans font-semibold text-foreground mb-2">{f.title}</h3>
-          <p class="text-sm text-muted-foreground leading-relaxed">{f.description}</p>
+    <div class="glass-panel animate-on-scroll rounded-[28px] p-4" style="--delay: 100ms">
+      <div class="grid min-h-[480px] gap-4 lg:grid-cols-[0.85fr_1fr]">
+        <div class="hero-console rounded-2xl border border-border p-4 text-white">
+          <div class="mb-4 flex items-center justify-between">
+            <span class="text-sm font-semibold">AI 生成管线</span>
+            <span class="rounded-full bg-white/10 px-2 py-1 text-[11px] text-white/70">Generating</span>
+          </div>
+          <div class="space-y-3">
+            {steps.map((step, index) => (
+              <div class="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.06] px-3 py-3">
+                <span class={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] ${index === steps.length - 1 ? 'bg-[#6bdcff]/20 text-[#6bdcff]' : 'bg-[#9dffb0]/18 text-[#9dffb0]'}`}>
+                  {index === steps.length - 1 ? '·' : '✓'}
+                </span>
+                <span class="text-sm text-white/86">{step}</span>
+              </div>
+            ))}
+          </div>
+          <div class="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+            <div class="mb-2 h-2 w-24 rounded bg-white/30"></div>
+            <div class="h-2 w-full rounded bg-white/15"></div>
+            <div class="mt-2 h-2 w-4/5 rounded bg-white/15"></div>
+          </div>
         </div>
-      ))}
+
+        <div class="hero-preview-shell rounded-2xl p-5">
+          <div class="hero-preview-paper mx-auto h-full max-w-[310px] rounded-xl p-5 shadow-[0_22px_70px_rgba(15,23,42,0.22)]">
+            <div class="hero-preview-divider mb-4 flex items-start justify-between border-b pb-3">
+              <div>
+                <div class="hero-preview-accent mb-2 h-3 w-28 rounded"></div>
+                <div class="hero-preview-line h-2 w-40 rounded"></div>
+              </div>
+              <div class="hero-preview-line h-12 w-10 rounded opacity-60"></div>
+            </div>
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div class="mb-4">
+                <div class="mb-2 flex items-center gap-2">
+                  <span class="hero-preview-accent h-2.5 w-2.5 rounded-full"></span>
+                  <span class="hero-preview-accent h-2 w-24 rounded opacity-80"></span>
+                </div>
+                <div class="space-y-1.5">
+                  <div class="hero-preview-line h-1.5 w-full rounded"></div>
+                  <div class="hero-preview-line h-1.5 w-4/5 rounded"></div>
+                  <div class="hero-preview-line h-1.5 w-3/5 rounded"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+
+  <div id="features" class="mx-auto mt-10 grid max-w-6xl grid-cols-1 gap-4 md:grid-cols-3">
+    {features.map((f, index) => (
+      <div class="card-hover glass-panel animate-on-scroll rounded-2xl px-6 py-5 text-left" style={`--delay: ${160 + index * 70}ms`}>
+        <h3 class="font-sans font-semibold text-foreground mb-2">{f.title}</h3>
+        <p class="text-sm text-muted-foreground leading-relaxed">{f.description}</p>
+      </div>
+    ))}
+  </div>
 </section>
-
-<script>
-  const texts = document.querySelectorAll<HTMLElement>('.handwriting-text')
-  if (texts.length > 0) {
-    let currentIndex = 0
-
-    function animateText(index: number) {
-      const el = texts[index]
-      if (!el) return
-
-      // Show this text, hide others
-      texts.forEach(t => t.classList.add('hidden'))
-      el.classList.remove('hidden', 'fading')
-      el.style.setProperty('--reveal', '0%')
-
-      const WRITING_DURATION = 1600
-      const HOLD_DURATION = 1200
-      const FADE_DURATION = 500
-      const GAP_DURATION = 200
-
-      function ease(progress: number): number {
-        if(progress < 0) return 0
-        if(progress > 1) return 1
-        if(progress < 0.5) {
-          return 4 * progress ** 3
-        } else {
-          const f = (progress - 1)
-          return 1 + 4 * f ** 3
-        }
-      }
-
-      // WRITING phase
-      const startTime = performance.now()
-
-      function writeFrame(now: number) {
-        const elapsed = now - startTime
-        const progress = Math.min(elapsed / WRITING_DURATION, 1)
-        const eased = ease(progress)
-        el.style.setProperty('--reveal', `${eased * 100}%`)
-
-        if (progress < 1) {
-          requestAnimationFrame(writeFrame)
-        } else {
-          // HOLDING phase
-          setTimeout(() => {
-            // FADING phase
-            el.classList.add('fading')
-            setTimeout(() => {
-              el.classList.add('hidden')
-              el.classList.remove('fading')
-              el.style.setProperty('--reveal', '0%')
-              currentIndex = (currentIndex + 1) % texts.length
-              setTimeout(() => animateText(currentIndex), GAP_DURATION)
-            }, FADE_DURATION)
-          }, HOLD_DURATION)
-        }
-      }
-
-      requestAnimationFrame(writeFrame)
-    }
-
-    // Check prefers-reduced-motion
-    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-    if (motionQuery.matches) {
-      texts.forEach(t => {
-        t.classList.remove('hidden')
-        t.style.setProperty('--reveal', '100%')
-      })
-    } else {
-      animateText(0)
-    }
-  }
-</script>
-
-<style>
-  .hero-title {
-    min-height: 3.5em;
-    overflow: visible;
-  }
-
-  .handwriting-text {
-    display: inline-block;
-    line-height: 1.5;
-    overflow: visible;
-    padding-block: 0.1em;
-    vertical-align: text-bottom;
-    -webkit-mask-image: linear-gradient(to right, black var(--reveal, 100%), transparent var(--reveal, 100%));
-    mask-image: linear-gradient(to right, black var(--reveal, 100%), transparent var(--reveal, 100%));
-    transition: opacity 0.5s ease;
-  }
-
-  .handwriting-text.hidden {
-    display: none;
-  }
-
-  .handwriting-text.fading {
-    opacity: 0;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .handwriting-text {
-      -webkit-mask-image: none !important;
-      mask-image: none !important;
-    }
-  }
-</style>

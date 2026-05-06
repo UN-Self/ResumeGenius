@@ -1,8 +1,11 @@
 import { useState } from 'react'
+import type { CSSProperties } from 'react'
+import { FileText, LockKeyhole, Sparkles, UserRound } from 'lucide-react'
 import { ApiError, authApi, type User } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert } from '@/components/ui/alert'
+import { ThemeSwitcher } from '@/components/ui/theme-switcher'
 
 interface LoginPageProps {
   onSuccess: (user: User) => void
@@ -30,40 +33,79 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-6">
-      <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6">
-        <h1 className="font-serif text-2xl font-semibold text-foreground mb-2">ResumeGenius</h1>
-        <p className="text-sm text-muted-foreground mb-6">输入用户名和密码后继续</p>
+    <div className="app-shell min-h-screen px-5">
+      <div className="relative z-10 mx-auto flex min-h-screen max-w-6xl items-center py-10">
+        <div className="grid w-full gap-8 lg:grid-cols-[1.1fr_420px] lg:items-center">
+          <section className="stagger-in hidden lg:block">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur-xl">
+              <Sparkles size={14} className="text-primary" />
+              Futuristic resume intelligence
+            </div>
+            <h1 className="gradient-text max-w-2xl text-6xl font-semibold tracking-tight">
+              让 AI 把经历整理成作品。
+            </h1>
+            <p className="mt-6 max-w-xl text-sm leading-7 text-muted-foreground">
+              上传资料、生成初稿、边聊边改，最后在白纸画布里得到一份可编辑、可导出的专业简历。
+            </p>
+            <div className="mt-10 grid max-w-xl grid-cols-3 gap-3">
+              {['资料接入', 'AI 生成', '可视化编辑'].map((item, index) => (
+                <div key={item} className="glass-panel rounded-2xl p-4 stagger-in" style={{ '--delay': `${index * 80 + 120}ms` } as CSSProperties}>
+                  <FileText className="mb-3 h-5 w-5 text-primary" />
+                  <p className="text-sm font-semibold text-foreground">{item}</p>
+                  <div className="mt-3 h-1.5 rounded-full bg-surface-hover">
+                    <div className="h-full rounded-full bg-primary" style={{ width: `${52 + index * 18}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
 
-        <form id="login-form" onSubmit={handleSubmit} className="space-y-3">
-          <Input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="用户名"
-            className="bg-background px-3"
-          />
-          <Input
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            type="password"
-            placeholder="密码（至少 6 位）"
-            className="bg-background px-3"
-          />
+          <div className="glass-panel stagger-in w-full rounded-3xl p-6">
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <h1 className="text-2xl font-semibold text-foreground">ResumeGenius</h1>
+                <p className="mt-2 text-sm text-muted-foreground">输入用户名和密码后继续</p>
+              </div>
+              <ThemeSwitcher className="shrink-0" />
+            </div>
 
-          {error && (
-            <Alert>{error}</Alert>
-          )}
+            <form id="login-form" onSubmit={handleSubmit} className="space-y-3">
+              <label className="relative block">
+                <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="用户名"
+                  className="pl-9"
+                />
+              </label>
+              <label className="relative block">
+                <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  type="password"
+                  placeholder="密码（至少 6 位）"
+                  className="pl-9"
+                />
+              </label>
 
-          <Button
-            type="submit"
-            form="login-form"
-            size="lg"
-            className="w-full"
-            disabled={loading || !username.trim() || !password}
-          >
-            {loading ? '登录中...' : '登录'}
-          </Button>
-        </form>
+              {error && (
+                <Alert>{error}</Alert>
+              )}
+
+              <Button
+                type="submit"
+                form="login-form"
+                size="lg"
+                className="mt-2 w-full"
+                disabled={loading || !username.trim() || !password}
+              >
+                {loading ? '登录中...' : '进入工作台'}
+              </Button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   )

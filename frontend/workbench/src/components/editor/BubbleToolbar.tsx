@@ -42,7 +42,7 @@ export function BubbleToolbar({ editor }: BubbleToolbarProps) {
   }, [editor])
 
   return (
-    <div className="flex items-center gap-2 bg-white border border-border rounded-lg shadow-sm px-1 py-0.5 relative z-10">
+    <div className="glass-panel relative z-30 flex items-center gap-2 rounded-xl px-1.5 py-1">
       {/* Font & Size group */}
       <div role="group" aria-label="字体和字号" className="flex items-center gap-0.5">
         <FontSelector editor={editor} />

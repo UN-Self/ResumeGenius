@@ -14,9 +14,9 @@ const DropdownTrigger = React.forwardRef<
     ref={ref}
     type="button"
     className={cn(
-      "flex items-center gap-1 px-2 min-h-[44px] rounded-md text-sm",
-      "text-muted-foreground hover:bg-surface-hover transition-colors",
-      "focus:outline-none focus:ring-2 focus:ring-ring",
+      "flex items-center gap-1 px-2 min-h-[40px] rounded-md text-sm",
+      "text-muted-foreground hover:bg-surface-hover hover:text-foreground transition-all",
+      "focus:outline-none focus:ring-2 focus:ring-ring/35",
       className
     )}
     {...props}
@@ -43,7 +43,7 @@ const DropdownItem = React.forwardRef<
     className={cn(
       "px-3 py-2 text-sm text-left rounded-md transition-colors",
       active
-        ? "bg-primary-50 text-primary"
+        ? "bg-surface-hover text-primary"
         : "text-muted-foreground hover:bg-surface-hover",
       className
     )}

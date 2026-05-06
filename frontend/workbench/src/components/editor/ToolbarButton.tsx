@@ -17,14 +17,14 @@ export function ToolbarButton({ onClick, isActive, icon, label, disabled }: Tool
       aria-label={label}
       aria-pressed={isActive}
       className={`
-        p-2 rounded-md transition-all duration-150 ease-in-out
-        min-w-[44px] min-h-[44px] flex items-center justify-center
+        p-2 rounded-lg transition-all duration-150 ease-in-out
+        min-w-10 min-h-10 flex items-center justify-center
         ${isActive
-          ? 'bg-primary-50 text-primary hover:bg-primary-100'
-          : 'text-muted-foreground hover:bg-surface-hover'
+          ? 'bg-surface-hover text-primary shadow-[inset_0_0_0_1px_var(--color-border-glow)]'
+          : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground'
         }
         ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-        focus:outline-none focus:ring-2 focus:ring-ring
+        focus:outline-none focus:ring-2 focus:ring-ring/35
       `}
     >
       {icon}
