@@ -72,8 +72,7 @@ describe('BubbleToolbar', () => {
 
   it('initializes activeStates eagerly (no null flash)', () => {
     // BubbleToolbar uses lazy initializer: useState(() => getActiveStates(editor))
-    // so it should render immediately with button states, unlike FormatToolbar
-    // which starts with null and returns null on first render.
+    // so it should render immediately with button states without a null flash.
     const mockEditor = createBubbleToolbarMockEditor({
       isActive: (name: string) => name === 'bold',
     })

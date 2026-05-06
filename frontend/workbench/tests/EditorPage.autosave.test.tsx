@@ -54,10 +54,6 @@ vi.mock('@/components/editor/ActionBar', () => ({
   ActionBar: () => <div>mock-action-bar</div>,
 }))
 
-vi.mock('@/components/editor/FormatToolbar', () => ({
-  FormatToolbar: () => <div>mock-format-toolbar</div>,
-}))
-
 vi.mock('@/components/editor/SaveIndicator', () => ({
   SaveIndicator: () => <div>mock-save-indicator</div>,
 }))

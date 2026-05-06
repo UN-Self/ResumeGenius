@@ -30,16 +30,6 @@
   text-align: center;
 }
 
-/* Format Toolbar */
-.format-toolbar {
-  background: #ffffff;
-  border-top: 1px solid var(--color-border, #e4ddd5);
-  padding: 8px 16px;
-  min-height: 48px;
-  display: flex;
-  justify-content: center;
-}
-
 /* Skeleton Loading */
 .skeleton-line {
   height: 12px;

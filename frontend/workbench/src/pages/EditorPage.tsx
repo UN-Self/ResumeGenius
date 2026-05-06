@@ -7,7 +7,6 @@ import TextAlign from '@tiptap/extension-text-align'
 import { TextStyleKit } from '@tiptap/extension-text-style'
 import { A4Canvas } from '@/components/editor/A4Canvas'
 import { ActionBar } from '@/components/editor/ActionBar'
-import { FormatToolbar } from '@/components/editor/FormatToolbar'
 import { SaveIndicator } from '@/components/editor/SaveIndicator'
 import { ChatPanel } from '@/components/chat/ChatPanel'
 import AssetSidebar from '@/components/intake/AssetSidebar'
@@ -289,9 +288,6 @@ export default function EditorPage() {
                 <BubbleToolbar editor={editor} />
               </BubbleMenu>
             )}
-          </div>
-          <div className="format-toolbar">
-            <FormatToolbar editor={editor} />
           </div>
         </div>
       </div>
