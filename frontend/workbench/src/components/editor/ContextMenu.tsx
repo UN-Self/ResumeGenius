@@ -63,13 +63,6 @@ export function ContextMenu({ editor, isOpen, x, y, onClose }: ContextMenuProps)
   const { from, to } = editor.state.selection
   const hasSelection = from !== to
 
-  const safeWriteText = (text: string) => {
-    navigator.clipboard.writeText(text).catch((err) => {
-      console.error('Clipboard write failed:', err)
-      setClipboardError('剪贴板访问被拒绝')
-    })
-  }
-
   const items: MenuItem[] = [
     {
       label: '撤销',
@@ -98,9 +91,13 @@ export function ContextMenu({ editor, isOpen, x, y, onClose }: ContextMenuProps)
       disabled: !hasSelection,
       action: () => {
         const plainText = editor.view.state.doc.textBetween(from, to, '\n')
-        safeWriteText(plainText)
-        editor.chain().focus().deleteSelection().run()
-        onClose()
+        navigator.clipboard.writeText(plainText).then(() => {
+          editor.chain().focus().deleteSelection().run()
+          onClose()
+        }).catch((err) => {
+          console.error('Clipboard write failed:', err)
+          setClipboardError('剪贴板访问被拒绝')
+        })
       },
     },
     {
@@ -110,7 +107,10 @@ export function ContextMenu({ editor, isOpen, x, y, onClose }: ContextMenuProps)
       disabled: !hasSelection,
       action: () => {
         const plainText = editor.view.state.doc.textBetween(from, to, '\n')
-        safeWriteText(plainText)
+        navigator.clipboard.writeText(plainText).catch((err) => {
+          console.error('Clipboard write failed:', err)
+          setClipboardError('剪贴板访问被拒绝')
+        })
         onClose()
       },
     },
