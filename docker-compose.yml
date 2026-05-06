@@ -50,7 +50,7 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       CHROME_BIN: "/usr/bin/chromium"
     healthcheck:
-      test: ["CMD-SHELL", "curl -sS http://localhost:8080/api/v1/auth/me || exit 1"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health > /dev/null 2>&1 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
