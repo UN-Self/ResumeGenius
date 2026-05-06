@@ -12,12 +12,13 @@ import (
 )
 
 const (
-	CodeParsePDFFailed   = 2001
-	CodeParseDOCXFailed  = 2002
-	CodeProjectNotFound  = 2003
-	CodeNoUsableAssets   = 2004
-	CodeAIGenerateFailed = 2005
-	CodeInvalidAssetData = 2006
+	CodeParsePDFFailed     = 2001
+	CodeParseDOCXFailed    = 2002
+	CodeProjectNotFound    = 2003
+	CodeNoUsableAssets     = 2004
+	CodeAIGenerateFailed   = 2005
+	CodeInvalidAssetData   = 2006
+	CodeGitExtractFailed   = 2007
 )
 
 type parseService interface {
@@ -106,6 +107,8 @@ func (h *Handler) respondParseError(c *gin.Context, err error) {
 		response.Error(c, CodeParsePDFFailed, "pdf parse failed")
 	case errors.Is(err, ErrDOCXParseFailed):
 		response.Error(c, CodeParseDOCXFailed, "docx parse failed")
+	case errors.Is(err, ErrGitExtractFailed):
+		response.Error(c, CodeGitExtractFailed, "git repository extract failed")
 	case errors.Is(err, ErrAIGenerateFailed):
 		response.ErrorWithStatus(c, http.StatusInternalServerError, CodeAIGenerateFailed, "ai draft generation failed")
 	default:
