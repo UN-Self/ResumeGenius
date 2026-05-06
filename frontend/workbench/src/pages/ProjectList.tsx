@@ -7,6 +7,7 @@ import ProjectCard, { NewResumeCard } from '@/components/intake/ProjectCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert } from '@/components/ui/alert'
+import { AnimatedBrandTitle } from '@/components/ui/animated-brand-title'
 import { Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/ui/modal'
 import { ThemeSwitcher } from '@/components/ui/theme-switcher'
 import DeleteConfirm from '@/components/intake/DeleteConfirm'
@@ -86,13 +87,11 @@ export default function ProjectList() {
       <div className="relative z-10 mx-auto max-w-7xl px-5 py-6 sm:px-8 lg:px-10">
         <header className="stagger-in relative z-50 mb-10 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground backdrop-blur-xl">
+            <div className="brand-kicker mb-3 flex w-fit items-center gap-2 rounded-full px-3 py-1 text-xs font-medium backdrop-blur-xl">
               <Sparkles size={14} className="text-primary" />
               AI resume workspace
             </div>
-            <h1 className="gradient-text text-4xl font-semibold tracking-tight sm:text-5xl">
-              ResumeGenius
-            </h1>
+            <AnimatedBrandTitle className="text-4xl font-semibold sm:text-5xl" />
             <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
               从资料接入、AI 生成到可视化编辑，把每一份简历整理成可直接交付的作品。
             </p>
