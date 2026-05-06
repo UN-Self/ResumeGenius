@@ -10,8 +10,7 @@ import { ActionBar } from '@/components/editor/ActionBar'
 import { SaveIndicator } from '@/components/editor/SaveIndicator'
 import { ChatPanel } from '@/components/chat/ChatPanel'
 import AssetSidebar from '@/components/intake/AssetSidebar'
-import { Deletion, Insertion } from '@/components/editor/extensions/ai-diff'
-import { request, intakeApi, workbenchApi, ApiError, type Asset, type PendingEdit } from '@/lib/api-client'
+import { request, intakeApi, workbenchApi, ApiError, type Asset } from '@/lib/api-client'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useExport } from '@/hooks/useExport'
 import { FullPageState } from '@/components/ui/full-page-state'
@@ -47,8 +46,6 @@ export default function EditorPage() {
       StarterKit.configure({ strike: false }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       TextStyleKit,
-      Deletion,
-      Insertion,
     ],
     content: '',
     editorProps: {
@@ -421,19 +418,19 @@ export default function EditorPage() {
           {draftId ? (
             <ChatPanel
               draftId={Number(draftId)}
-              onApplyDiffHTML={(edits: PendingEdit[]) => {
-                if (!editor) return
-                const currentHTML = editor.getHTML()
-                let diffHTML = currentHTML
-                for (const edit of edits) {
-                  diffHTML = diffHTML.replace(
-                    edit.old_string,
-                    `<del>${edit.old_string}</del><ins>${edit.new_string}</ins>`
-                  )
-                }
-                editor.commands.setContent(diffHTML)
+              onApplyEdits={async () => {
+                if (!editor || !draftId) return
+                const draft = await workbenchApi.getDraft(Number(draftId))
+                restoringContent.current = true
+                editor.commands.setContent(draft.html_content || '')
+                restoringContent.current = false
               }}
-              onRestoreHtml={(html) => editor?.commands.setContent(html)}
+              onRestoreHtml={(html) => {
+                if (!editor) return
+                restoringContent.current = true
+                editor.commands.setContent(html)
+                restoringContent.current = false
+              }}
             />
           ) : (
             <p className="mt-8 text-center text-xs text-[var(--color-text-secondary)]">

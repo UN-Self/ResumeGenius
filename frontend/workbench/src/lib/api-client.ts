@@ -172,12 +172,6 @@ export interface AIMessageItem {
   created_at: string
 }
 
-export interface PendingEdit {
-  old_string: string
-  new_string: string
-  description?: string
-}
-
 export interface ToolCallEntry {
   name: string
   status: 'running' | 'completed' | 'failed'

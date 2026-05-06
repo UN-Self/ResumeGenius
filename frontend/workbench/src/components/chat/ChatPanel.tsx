@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Sparkles, Send, Plus } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
-import { agentApi, undoDraft, redoDraft, type AISession, type ToolCallEntry, type PendingEdit } from '@/lib/api-client'
+import { agentApi, undoDraft, redoDraft, type AISession, type ToolCallEntry } from '@/lib/api-client'
 import { ToolCallLog } from './ToolCallLog'
 
 interface Message {
@@ -11,11 +11,11 @@ interface Message {
 
 interface Props {
   draftId: number
-  onApplyDiffHTML?: (edits: PendingEdit[]) => void
+  onApplyEdits?: () => Promise<void>
   onRestoreHtml?: (html: string) => void
 }
 
-export function ChatPanel({ draftId, onApplyDiffHTML, onRestoreHtml }: Props) {
+export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
   const [session, setSession] = useState<AISession | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -23,7 +23,6 @@ export function ChatPanel({ draftId, onApplyDiffHTML, onRestoreHtml }: Props) {
   const [error, setError] = useState<string | null>(null)
   const [thinking, setThinking] = useState('')
   const [toolCalls, setToolCalls] = useState<ToolCallEntry[]>([])
-  const [pendingEdits, setPendingEdits] = useState<PendingEdit[]>([])
   const [editsApplied, setEditsApplied] = useState(false)
   const [undoRedoLoading, setUndoRedoLoading] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -34,7 +33,6 @@ export function ChatPanel({ draftId, onApplyDiffHTML, onRestoreHtml }: Props) {
     setMessages([])
     setThinking('')
     setToolCalls([])
-    setPendingEdits([])
     setError(null)
 
     const init = async () => {
@@ -78,7 +76,6 @@ export function ChatPanel({ draftId, onApplyDiffHTML, onRestoreHtml }: Props) {
     setInput('')
     setThinking('')
     setToolCalls([])
-    setPendingEdits([])
     setEditsApplied(false)
     setError(null)
     setMessages((prev) => [...prev, { role: 'user', text }])
@@ -99,7 +96,6 @@ export function ChatPanel({ draftId, onApplyDiffHTML, onRestoreHtml }: Props) {
       let buffer = ''
       let currentText = ''
       let gotDone = false
-      const edits: PendingEdit[] = []
 
       while (true) {
         const { done, value } = await reader.read()
@@ -130,10 +126,11 @@ export function ChatPanel({ draftId, onApplyDiffHTML, onRestoreHtml }: Props) {
                   return updated
                 })
                 break
-              case 'edit':
-                if (event.params?.ops) {
-                  edits.push(...(event.params.ops as PendingEdit[]))
-                  setPendingEdits([...edits])
+              case 'done':
+                gotDone = true
+                if (onApplyEdits) {
+                  await onApplyEdits()
+                  setEditsApplied(true)
                 }
                 break
               case 'text':
@@ -149,14 +146,6 @@ export function ChatPanel({ draftId, onApplyDiffHTML, onRestoreHtml }: Props) {
               case 'error':
                 setError(event.message || 'AI 响应出错')
                 break
-              case 'done':
-                gotDone = true
-                if (edits.length > 0 && onApplyDiffHTML) {
-                  onApplyDiffHTML(edits)
-                  setEditsApplied(true)
-                }
-                setPendingEdits([])
-                break
             }
           } catch {
             // Skip unparseable lines
@@ -171,7 +160,7 @@ export function ChatPanel({ draftId, onApplyDiffHTML, onRestoreHtml }: Props) {
     } finally {
       setStreaming(false)
     }
-  }, [input, session, streaming, onApplyDiffHTML])
+  }, [input, session, streaming, onApplyEdits])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -184,7 +173,6 @@ export function ChatPanel({ draftId, onApplyDiffHTML, onRestoreHtml }: Props) {
     setMessages([])
     setThinking('')
     setToolCalls([])
-    setPendingEdits([])
     setEditsApplied(false)
     setError(null)
     try {
@@ -284,13 +272,6 @@ export function ChatPanel({ draftId, onApplyDiffHTML, onRestoreHtml }: Props) {
             )}
           </div>
         ))}
-
-        {/* Pending edits indicator during streaming */}
-        {streaming && pendingEdits.length > 0 && (
-          <div className="flex items-center gap-2 px-3 py-2 text-xs text-[var(--color-text-secondary)] bg-blue-50 border border-blue-200 rounded-lg">
-            <span>已生成 {pendingEdits.length} 项修改，等待确认...</span>
-          </div>
-        )}
 
         {/* Active tool indicator */}
         {streaming && toolCalls.some(c => c.status === 'running') && (

@@ -4,10 +4,9 @@ import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { server } from './setup'
 import { ChatPanel } from '@/components/chat/ChatPanel'
-import type { PendingEdit } from '@/lib/api-client'
 
-function renderChatPanel(draftId = 1, onApplyDiffHTML = vi.fn(), onRestoreHtml = vi.fn()) {
-  return render(<ChatPanel draftId={draftId} onApplyDiffHTML={onApplyDiffHTML} onRestoreHtml={onRestoreHtml} />)
+function renderChatPanel(draftId = 1, onApplyEdits = vi.fn().mockResolvedValue(undefined), onRestoreHtml = vi.fn()) {
+  return render(<ChatPanel draftId={draftId} onApplyEdits={onApplyEdits} onRestoreHtml={onRestoreHtml} />)
 }
 
 describe('ChatPanel', () => {
@@ -54,7 +53,7 @@ describe('ChatPanel', () => {
 
   it('shows undo/redo buttons in chat after edits are applied', async () => {
     const onRestoreHtml = vi.fn()
-    renderChatPanel(1, vi.fn(), onRestoreHtml)
+    renderChatPanel(1, vi.fn().mockResolvedValue(undefined), onRestoreHtml)
     const input = screen.getByPlaceholderText('输入你的需求...')
     await waitFor(() => expect(input).toBeEnabled())
 
@@ -77,7 +76,7 @@ describe('ChatPanel', () => {
       }),
     )
 
-    renderChatPanel(1, vi.fn(), onRestoreHtml)
+    renderChatPanel(1, vi.fn().mockResolvedValue(undefined), onRestoreHtml)
     const input = screen.getByPlaceholderText('输入你的需求...')
     await waitFor(() => expect(input).toBeEnabled())
 
@@ -124,9 +123,9 @@ describe('ChatPanel', () => {
     expect(sendButton).toBeEnabled()
   })
 
-  it('handles edit events and calls onApplyDiffHTML with pending edits', async () => {
-    const onApplyDiffHTML = vi.fn()
-    renderChatPanel(1, onApplyDiffHTML)
+  it('calls onApplyEdits when done event fires', async () => {
+    const onApplyEdits = vi.fn().mockResolvedValue(undefined)
+    renderChatPanel(1, onApplyEdits)
     const input = screen.getByPlaceholderText('输入你的需求...')
     await waitFor(() => {
       expect(input).toBeEnabled()
@@ -136,18 +135,8 @@ describe('ChatPanel', () => {
     const sendButton = screen.getByRole('button', { name: /发送/i })
     await userEvent.click(sendButton)
 
-    // Wait for the response to complete and onApplyDiffHTML to be called
     await waitFor(() => {
-      expect(onApplyDiffHTML).toHaveBeenCalledTimes(1)
-    })
-
-    // Verify the edits were passed correctly
-    const edits = onApplyDiffHTML.mock.calls[0][0] as PendingEdit[]
-    expect(edits).toHaveLength(1)
-    expect(edits[0]).toEqual({
-      old_string: '前端开发工程师',
-      new_string: '高级前端开发工程师',
-      description: '提升职位级别',
+      expect(onApplyEdits).toHaveBeenCalledTimes(1)
     })
   })
 
