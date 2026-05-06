@@ -143,8 +143,8 @@ export default function EditorPage() {
   }, [pid])
 
   const handleExport = () => {
-    if (draftId && editor) {
-      exportPdf(Number(draftId), editor.getHTML())
+    if (draftId) {
+      exportPdf(Number(draftId))
     }
   }
 

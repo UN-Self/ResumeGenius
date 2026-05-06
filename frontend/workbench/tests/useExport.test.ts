@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 
 // Mock request function from api-client — must be before useExport import
@@ -23,10 +23,7 @@ describe('useExport', () => {
     })
   })
 
-  it('polls with correct task ID (template literal interpolation)', async () => {
-    // The bug was using single quotes: '/tasks/${taskId}' instead of `/tasks/${taskId}`
-    // This test verifies the polling URL contains the actual task ID
-
+  it('polls with correct task ID', async () => {
     mockRequest.mockImplementation((url: string) => {
       if (url.includes('/drafts/1/export')) {
         return Promise.resolve({
@@ -35,7 +32,6 @@ describe('useExport', () => {
           progress: 0,
         })
       }
-      // Polling call - should use actual task ID
       if (url.includes('/tasks/abc-123') && !url.includes('/file')) {
         return Promise.resolve({
           task_id: 'abc-123',
@@ -49,19 +45,25 @@ describe('useExport', () => {
     const { result } = renderHook(() => useExport({ pollInterval: 100, maxPollDuration: 5000 }))
 
     await act(async () => {
-      await result.current.exportPdf(1, '<p>test</p>', 'resume')
+      await result.current.exportPdf(1, 'resume')
     })
 
-    // Verify polling used actual task ID in URL, not literal '${taskId}'
+    // Verify POST was called without html_content
+    const exportCalls = mockRequest.mock.calls.filter(
+      ([url]: [string]) => url.includes('/export')
+    )
+    expect(exportCalls.length).toBeGreaterThan(0)
+    expect(exportCalls[0][1]?.body).toBeUndefined()
+
+    // Verify polling used actual task ID
     const pollingCalls = mockRequest.mock.calls.filter(
       ([url]: [string]) => url.includes('/tasks/') && !url.includes('/export') && !url.includes('/file')
     )
     expect(pollingCalls.length).toBeGreaterThan(0)
     expect(pollingCalls[0][0]).toContain('abc-123')
-    expect(pollingCalls[0][0]).not.toContain('${')
   })
 
-  it('handles failed status correctly (not "faild")', async () => {
+  it('handles failed status correctly', async () => {
     mockRequest.mockImplementation((url: string) => {
       if (url.includes('/drafts/1/export')) {
         return Promise.resolve({
@@ -84,7 +86,7 @@ describe('useExport', () => {
 
     await act(async () => {
       try {
-        await result.current.exportPdf(1, '<p>test</p>')
+        await result.current.exportPdf(1)
       } catch {
         // expected
       }

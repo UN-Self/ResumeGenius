@@ -17,7 +17,7 @@ interface UseExportOptions {
 }
 
 interface UseExportReturn {
-  exportPdf: (draftId: number, htmlContent: string, filename?: string) => Promise<void>
+  exportPdf: (draftId: number, filename?: string) => Promise<void>
   status: ExportStatus
   error: string | null
 }
@@ -70,14 +70,12 @@ export function useExport({
     }
 
     throw new Error('导出超时')
-  }, [pollInterval, maxPollDuration])
+  }, [pollInterval, maxPollDuration, downloadFile])
 
-  // Stop polling on unmount
   useEffect(() => clearState, [clearState])
 
   const exportPdf = useCallback(async (
     draftId: number,
-    htmlContent: string,
     filename = 'resume',
   ) => {
     abortRef.current = false
@@ -85,9 +83,8 @@ export function useExport({
     setError(null)
 
     try {
-      const task = await request<ExportTask>('/drafts/' + draftId + '/export', {
+      const task = await request<ExportTask>(`/drafts/${draftId}/export`, {
         method: 'POST',
-        body: JSON.stringify({ html_content: htmlContent }),
       })
 
       await pollUntilDone(task.task_id, filename)
