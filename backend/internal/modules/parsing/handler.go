@@ -2,6 +2,7 @@ package parsing
 
 import (
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -91,6 +92,7 @@ func (h *Handler) Generate(c *gin.Context) {
 }
 
 func (h *Handler) respondParseError(c *gin.Context, err error) {
+	log.Printf("[parsing] error: %v", err)
 	switch {
 	case errors.Is(err, ErrProjectNotFound):
 		response.ErrorWithStatus(c, http.StatusNotFound, CodeProjectNotFound, "project not found")

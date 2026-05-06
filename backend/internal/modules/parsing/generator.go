@@ -12,6 +12,16 @@ import (
 	"time"
 )
 
+const chatCompletionPath = "/v1/chat/completions"
+
+func normalizeAIURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if strings.HasSuffix(raw, chatCompletionPath) {
+		return raw
+	}
+	return strings.TrimRight(raw, "/") + chatCompletionPath
+}
+
 const (
 	defaultAIModel                 = "default"
 	defaultAIGenerationTemperature = 0.7
@@ -88,9 +98,9 @@ func NewDraftGenerator() *DraftGenerator {
 	return &DraftGenerator{
 		readFile: os.ReadFile,
 		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
+			Timeout: 300 * time.Second,
 		},
-		apiURL: strings.TrimSpace(os.Getenv("AI_API_URL")),
+		apiURL: normalizeAIURL(os.Getenv("AI_API_URL")),
 		apiKey: strings.TrimSpace(os.Getenv("AI_API_KEY")),
 		model:  aiModelFromEnv(),
 	}

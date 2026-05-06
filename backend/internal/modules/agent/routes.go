@@ -3,12 +3,22 @@ package agent
 import (
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/modules/render"
 )
+
+func normalizeAIURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	const suffix = "/v1/chat/completions"
+	if strings.HasSuffix(raw, suffix) {
+		return raw
+	}
+	return strings.TrimRight(raw, "/") + suffix
+}
 
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, versionSvc *render.VersionService, exportSvc *render.ExportService) {
 	sessionSvc := NewSessionService(db)
@@ -18,7 +28,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, versionSvc *render.Version
 		provider = &MockAdapter{}
 	} else {
 		provider = NewOpenAIAdapter(
-			os.Getenv("AI_API_URL"),
+			normalizeAIURL(os.Getenv("AI_API_URL")),
 			os.Getenv("AI_API_KEY"),
 			envOrDefault("AI_MODEL", "default"),
 		)
