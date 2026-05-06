@@ -1,16 +1,19 @@
-import { ArrowUpRight, CheckCircle2, Clock3, FileText, MoreHorizontal, Plus } from 'lucide-react'
-import type { CSSProperties } from 'react'
+import { ArrowUpRight, CheckCircle2, Clock3, FileText, MoreHorizontal, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+
+interface ProjectCardProject {
+  id: number
+  title: string
+  status: string
+  created_at: string
+  current_draft_id: number | null
+  asset_count?: number
+}
 
 interface ProjectCardProps {
-  project: {
-    id: number
-    title: string
-    status: string
-    created_at: string
-    current_draft_id?: number | null
-    asset_count?: number
-  }
+  project: ProjectCardProject
   onClick: (id: number) => void
+  onDelete: (project: ProjectCardProject) => void
 }
 
 interface NewResumeCardProps {
@@ -178,15 +181,40 @@ export function NewResumeCard({ onClick }: NewResumeCardProps) {
   )
 }
 
-export default function ProjectCard({ project, onClick }: ProjectCardProps) {
+export default function ProjectCard({ project, onClick, onDelete }: ProjectCardProps) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const date = formatDate(project.created_at)
   const template = getTemplate(project.id)
   const ready = Boolean(project.current_draft_id)
 
+  useEffect(() => {
+    if (!menuOpen) return
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node
+      if (menuRef.current?.contains(target)) return
+      setMenuOpen(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [menuOpen])
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.target !== event.currentTarget) return
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    event.preventDefault()
+    onClick(project.id)
+  }
+
   return (
-    <button
+    <article
+      role="button"
+      tabIndex={0}
       onClick={() => onClick(project.id)}
-      className="resume-card-hover group relative flex min-h-[320px] flex-col overflow-hidden rounded-2xl border border-border bg-card/70 p-3 text-left backdrop-blur-xl"
+      onKeyDown={handleKeyDown}
+      className="resume-card-hover group relative flex min-h-[320px] cursor-pointer flex-col overflow-hidden rounded-2xl border border-border bg-card/70 p-3 text-left backdrop-blur-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       <div className="relative flex-1 rounded-xl bg-canvas-bg p-3">
         <ResumePreview template={template} />
@@ -211,10 +239,43 @@ export default function ProjectCard({ project, onClick }: ProjectCardProps) {
             <span>{date}</span>
           </div>
         </div>
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors group-hover:bg-surface-hover group-hover:text-foreground">
-          <MoreHorizontal size={16} />
-        </span>
+        <div ref={menuRef} className="relative shrink-0">
+          <button
+            type="button"
+            aria-label="更多操作"
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
+            onClick={(event) => {
+              event.stopPropagation()
+              setMenuOpen((value) => !value)
+            }}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground group-hover:bg-surface-hover group-hover:text-foreground"
+          >
+            <MoreHorizontal size={16} />
+          </button>
+
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute bottom-10 right-0 z-30 w-36 rounded-2xl border border-border bg-popover/96 p-1.5 text-popover-foreground shadow-[0_18px_50px_rgba(2,8,23,0.28)] backdrop-blur-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false)
+                  onDelete(project)
+                }}
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 size={14} />
+                删除简历
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </button>
+    </article>
   )
 }
