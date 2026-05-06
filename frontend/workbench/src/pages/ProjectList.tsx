@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Alert } from '@/components/ui/alert'
 import { Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/ui/modal'
 import { ThemeSwitcher } from '@/components/ui/theme-switcher'
+import DeleteConfirm from '@/components/intake/DeleteConfirm'
 
 export default function ProjectList() {
   const navigate = useNavigate()
@@ -17,6 +18,8 @@ export default function ProjectList() {
   const [title, setTitle] = useState('')
   const [query, setQuery] = useState('')
   const [createOpen, setCreateOpen] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -57,6 +60,21 @@ export default function ProjectList() {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleCreate()
+  }
+
+  const handleDeleteProject = async () => {
+    if (!deleteTarget) return
+    try {
+      setDeleteLoading(true)
+      setError('')
+      await intakeApi.deleteProject(deleteTarget.id)
+      setProjects((current) => current.filter((project) => project.id !== deleteTarget.id))
+      setDeleteTarget(null)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : '删除失败')
+    } finally {
+      setDeleteLoading(false)
+    }
   }
 
   const visibleProjects = projects.filter((project) =>
@@ -138,6 +156,7 @@ export default function ProjectList() {
                 onClick={(id) => navigate(
                   project.current_draft_id ? `/projects/${id}/edit` : `/projects/${id}`
                 )}
+                onDelete={setDeleteTarget}
               />
             ))}
           </div>
@@ -173,6 +192,15 @@ export default function ProjectList() {
           </Button>
         </ModalFooter>
       </Modal>
+
+      <DeleteConfirm
+        open={deleteTarget !== null}
+        title="删除简历"
+        message={`确定要删除「${deleteTarget?.title ?? ''}」吗？相关资料和草稿也会一起删除，此操作不可撤销。`}
+        loading={deleteLoading}
+        onConfirm={handleDeleteProject}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }
