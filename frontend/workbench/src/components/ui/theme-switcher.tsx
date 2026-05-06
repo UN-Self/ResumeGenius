@@ -2,20 +2,32 @@ import { Check, ChevronDown, Moon, Palette, SunMedium } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
-import { applyPreset, getInitialPreset, getPresetById, THEME_PRESETS, THEME_STORAGE_KEY } from '@/lib/theme'
+import {
+  applyThemeChoice,
+  getInitialThemeChoiceId,
+  getPresetById,
+  getSystemPreset,
+  hasStoredPreset,
+  SYSTEM_THEME_ID,
+  THEME_CHOICES,
+  THEME_MANUAL_STORAGE_KEY,
+  THEME_STORAGE_KEY,
+} from '@/lib/theme'
 
 const MENU_WIDTH = 176
-const MENU_HEIGHT = 208
+const MENU_HEIGHT = 216
 const MENU_GAP = 8
 const VIEWPORT_PADDING = 12
 
 export function ThemeSwitcher({ className }: { className?: string }) {
-  const [presetId, setPresetId] = useState(() => getInitialPreset().id)
+  const [choiceId, setChoiceId] = useState(() => getInitialThemeChoiceId())
+  const [systemPresetId, setSystemPresetId] = useState(() => getSystemPreset().id)
   const [open, setOpen] = useState(false)
   const [menuPosition, setMenuPosition] = useState({ left: 0, top: 0 })
   const rootRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
-  const active = THEME_PRESETS.find((preset) => preset.id === presetId) ?? THEME_PRESETS[0]
+  const activeChoice = THEME_CHOICES.find((choice) => choice.id === choiceId) ?? THEME_CHOICES[0]
+  const activePreset = choiceId === SYSTEM_THEME_ID ? getPresetById(systemPresetId) : getPresetById(choiceId)
 
   const updateMenuPosition = useCallback(() => {
     const rect = rootRef.current?.getBoundingClientRect()
@@ -34,17 +46,28 @@ export function ThemeSwitcher({ className }: { className?: string }) {
   }, [])
 
   useEffect(() => {
-    applyPreset(active)
-  }, [active])
-
-  useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
-      if (event.key !== THEME_STORAGE_KEY) return
-      setPresetId(getPresetById(event.newValue).id)
+      if (event.key !== THEME_STORAGE_KEY && event.key !== THEME_MANUAL_STORAGE_KEY) return
+      setChoiceId(getInitialThemeChoiceId())
+      setSystemPresetId(getSystemPreset().id)
     }
 
     window.addEventListener('storage', handleStorage)
     return () => window.removeEventListener('storage', handleStorage)
+  }, [])
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+    if (!media) return
+
+    const handleSystemThemeChange = () => {
+      if (hasStoredPreset()) return
+      setChoiceId(SYSTEM_THEME_ID)
+      setSystemPresetId(getSystemPreset().id)
+    }
+
+    media.addEventListener('change', handleSystemThemeChange)
+    return () => media.removeEventListener('change', handleSystemThemeChange)
   }, [])
 
   useEffect(() => {
@@ -100,11 +123,11 @@ export function ThemeSwitcher({ className }: { className?: string }) {
         onClick={() => setOpen((value) => !value)}
         className="inline-flex h-8 min-w-20 items-center justify-between gap-2 rounded-full border border-transparent bg-transparent px-2 text-xs font-medium text-foreground outline-none transition-colors hover:bg-surface-hover focus:border-border-glow"
       >
-        <span>{active.label}</span>
+        <span>{activeChoice.label}</span>
         <ChevronDown size={13} className={cn('transition-transform', open && 'rotate-180')} />
       </button>
       <span className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-hover text-primary">
-        {active.mode === 'dark' ? <Moon size={14} /> : <SunMedium size={14} />}
+        {activePreset.mode === 'dark' ? <Moon size={14} /> : <SunMedium size={14} />}
       </span>
 
       {open && createPortal(
@@ -116,14 +139,16 @@ export function ThemeSwitcher({ className }: { className?: string }) {
             top: menuPosition.top,
           }}
         >
-          {THEME_PRESETS.map((preset) => {
-            const selected = preset.id === presetId
+          {THEME_CHOICES.map((choice) => {
+            const selected = choice.id === choiceId
             return (
               <button
-                key={preset.id}
+                key={choice.id}
                 type="button"
                 onClick={() => {
-                  setPresetId(preset.id)
+                  setChoiceId(choice.id)
+                  applyThemeChoice(choice.id)
+                  setSystemPresetId(getSystemPreset().id)
                   setOpen(false)
                 }}
                 className={cn(
@@ -133,7 +158,7 @@ export function ThemeSwitcher({ className }: { className?: string }) {
                     : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground',
                 )}
               >
-                <span>{preset.label}</span>
+                <span>{choice.label}</span>
                 {selected && <Check size={14} />}
               </button>
             )

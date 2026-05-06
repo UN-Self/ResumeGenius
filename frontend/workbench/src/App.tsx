@@ -6,7 +6,7 @@ import LoginPage from '@/pages/LoginPage'
 import EditorPage from '@/pages/EditorPage'
 import { authApi } from '@/lib/api-client'
 import { FullPageState } from '@/components/ui/full-page-state'
-import { applyPreset, getInitialPreset, getPresetById, THEME_STORAGE_KEY } from '@/lib/theme'
+import { applyPreset, getInitialPreset, hasStoredPreset, THEME_MANUAL_STORAGE_KEY, THEME_STORAGE_KEY } from '@/lib/theme'
 
 type AuthState = 'checking' | 'authed' | 'guest'
 
@@ -14,15 +14,28 @@ export default function App() {
   const [authState, setAuthState] = useState<AuthState>('checking')
 
   useEffect(() => {
-    applyPreset(getInitialPreset())
-
-    const handleStorage = (event: StorageEvent) => {
-      if (event.key !== THEME_STORAGE_KEY) return
-      applyPreset(getPresetById(event.newValue))
+    const syncTheme = () => {
+      applyPreset(getInitialPreset(), { persist: false })
     }
 
+    syncTheme()
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== THEME_STORAGE_KEY && event.key !== THEME_MANUAL_STORAGE_KEY) return
+      syncTheme()
+    }
+    const handleSystemThemeChange = () => {
+      if (hasStoredPreset()) return
+      syncTheme()
+    }
+    const media = window.matchMedia?.('(prefers-color-scheme: dark)')
+
     window.addEventListener('storage', handleStorage)
-    return () => window.removeEventListener('storage', handleStorage)
+    media?.addEventListener('change', handleSystemThemeChange)
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      media?.removeEventListener('change', handleSystemThemeChange)
+    }
   }, [])
 
   useEffect(() => {

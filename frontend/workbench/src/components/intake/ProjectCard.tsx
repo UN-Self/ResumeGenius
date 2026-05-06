@@ -18,6 +18,10 @@ interface NewResumeCardProps {
 }
 
 const TEMPLATES = ['classic-blue', 'compact-black', 'modern-sidebar', 'warm-editorial', 'minimal-apple'] as const
+const TYPING_SNIPPETS = [
+  { title: '项目经历', line: 'ResumeGenius UI 重构' },
+  { title: '技术栈', line: 'React / TypeScript' },
+] as const
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString('zh-CN', {
@@ -65,8 +69,31 @@ function ResumePreview({ template }: { template: string }) {
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex items-start justify-between gap-2 border-b pb-2" style={{ borderColor: 'color-mix(in srgb, var(--color-primary), transparent 64%)' }}>
             <div className="min-w-0">
-              <div className="mb-1 h-2.5 w-16 rounded" style={{ background: accent }} />
-              <div className="h-1.5 w-28 rounded" style={{ background: paleLine }} />
+              <div className="flex items-center gap-0.5">
+                <span
+                  className="typing-text mb-1 text-[7px] font-semibold leading-none"
+                  style={{
+                    color: accent,
+                    '--typing-width': '7.2em',
+                    '--typing-steps': 7,
+                    '--type-delay': '80ms',
+                  } as CSSProperties}
+                >
+                  AI简历优化
+                </span>
+                <span className="typing-cursor mb-1 h-2.5" />
+              </div>
+              <span
+                className="typing-text block text-[5px] leading-none"
+                style={{
+                  color: 'color-mix(in srgb, var(--color-foreground), transparent 22%)',
+                  '--typing-width': '13em',
+                  '--typing-steps': 13,
+                  '--type-delay': '420ms',
+                } as CSSProperties}
+              >
+                前端工程师 · ResumeGenius
+              </span>
             </div>
             {!minimal && <div className="h-9 w-7 rounded" style={{ background: 'color-mix(in srgb, var(--color-muted), var(--color-resume-paper) 38%)' }} />}
           </div>
@@ -75,18 +102,47 @@ function ResumePreview({ template }: { template: string }) {
             <div key={section} className="mb-2">
               <div className="mb-1.5 flex items-center gap-1">
                 <span className="h-2 w-2 rounded-full" style={{ background: accent }} />
-                <span className="h-1.5 w-14 rounded" style={{ background: black ? strongAccent : softLine }} />
+                {section < TYPING_SNIPPETS.length ? (
+                  <span
+                    className="typing-text text-[5px] font-semibold leading-none"
+                    style={{
+                      color: black ? strongAccent : softLine,
+                      '--typing-width': `${TYPING_SNIPPETS[section].title.length + 1}em`,
+                      '--typing-steps': TYPING_SNIPPETS[section].title.length,
+                      '--type-delay': `${860 + section * 520}ms`,
+                    } as CSSProperties}
+                  >
+                    {TYPING_SNIPPETS[section].title}
+                  </span>
+                ) : (
+                  <span className="h-1.5 w-14 rounded" style={{ background: black ? strongAccent : softLine }} />
+                )}
               </div>
               <div className="space-y-1">
                 {Array.from({ length: section % 2 === 0 ? 3 : 2 }).map((_, line) => (
-                  <div
-                    key={line}
-                    className="h-1 rounded"
-                    style={{
-                      width: `${line === 0 ? 92 : 58 + ((line + section) % 3) * 12}%`,
-                      background: paleLine,
-                    }}
-                  />
+                  section < TYPING_SNIPPETS.length && line === 0 ? (
+                    <span
+                      key={line}
+                      className="typing-text block text-[4.5px] leading-none"
+                      style={{
+                        color: 'color-mix(in srgb, var(--color-foreground), transparent 36%)',
+                        '--typing-width': section === 0 ? '13.2em' : '11em',
+                        '--typing-steps': section === 0 ? 18 : 16,
+                        '--type-delay': `${1080 + section * 520}ms`,
+                      } as CSSProperties}
+                    >
+                      {TYPING_SNIPPETS[section].line}
+                    </span>
+                  ) : (
+                    <div
+                      key={line}
+                      className="h-1 rounded"
+                      style={{
+                        width: `${line === 0 ? 92 : 58 + ((line + section) % 3) * 12}%`,
+                        background: paleLine,
+                      }}
+                    />
+                  )
                 ))}
               </div>
             </div>

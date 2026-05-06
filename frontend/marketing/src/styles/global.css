@@ -115,33 +115,6 @@
   --preview-line: #d8c2a8;
 }
 
-[data-theme="light"][data-palette="professional-blue"] {
-  color-scheme: light;
-  --color-background: #f7faff;
-  --color-foreground: #152033;
-  --color-card: rgba(255, 255, 255, 0.82);
-  --color-card-foreground: #152033;
-  --color-primary: #1a73e8;
-  --color-primary-foreground: #ffffff;
-  --color-secondary: #eef4ff;
-  --color-secondary-foreground: #203456;
-  --color-muted: #eef4ff;
-  --color-muted-foreground: #61708a;
-  --color-accent: #4dabf7;
-  --color-accent-foreground: #061c33;
-  --color-destructive: #d64545;
-  --color-destructive-foreground: #ffffff;
-  --color-border: #d7e2f2;
-  --color-input: #d7e2f2;
-  --color-ring: #1a73e8;
-  --color-border-glow: #80b7ff;
-  --color-surface-hover: #e8f0fe;
-  --color-surface-glass: rgba(255, 255, 255, 0.66);
-  --preview-shell: #071426;
-  --preview-paper: #ffffff;
-  --preview-line: #c7d4e5;
-}
-
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
@@ -415,6 +388,56 @@
   border-color: color-mix(in srgb, var(--color-primary), transparent 70%) !important;
 }
 
+.hero-preview-text-accent {
+  color: color-mix(in srgb, var(--color-primary), #315f9f 24%);
+}
+
+.hero-preview-text-muted {
+  color: #64748b;
+}
+
+.typing-text {
+  display: inline-block;
+  width: 0;
+  max-width: var(--typing-width, 12em);
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: bottom;
+  animation: typing-text 4.8s steps(var(--typing-steps, 12), end) infinite;
+  animation-delay: var(--type-delay, 0ms);
+  will-change: width;
+}
+
+.typing-cursor {
+  display: inline-block;
+  width: 1px;
+  border-radius: 999px;
+  background: var(--color-primary);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--color-primary), transparent 20%);
+  animation: typing-cursor 0.9s steps(2, end) infinite;
+}
+
+@keyframes typing-text {
+  0%, 8% {
+    width: 0;
+  }
+  44%, 82% {
+    width: var(--typing-width, 12em);
+  }
+  100% {
+    width: 0;
+  }
+}
+
+@keyframes typing-cursor {
+  0%, 45% {
+    opacity: 1;
+  }
+  46%, 100% {
+    opacity: 0;
+  }
+}
+
 .animate-on-scroll {
   opacity: 0;
   transform: translateY(20px);
@@ -459,10 +482,23 @@
   .card-hover,
   .btn-primary,
   .btn-secondary,
+  .typing-text,
+  .typing-cursor,
   .faq-content,
   .nav-bar,
   .footer-gradient-border {
     transition-duration: 0.01ms !important;
+  }
+
+  .typing-text {
+    animation: none !important;
+    width: auto;
+    opacity: 1;
+  }
+
+  .typing-cursor {
+    animation: none !important;
+    opacity: 0;
   }
 
   [class*="animate-float"] {

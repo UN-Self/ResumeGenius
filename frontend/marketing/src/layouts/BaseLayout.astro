@@ -32,16 +32,25 @@ const { title, description = 'ResumeGenius - AI 辅助简历生成与优化平�
           'futuristic-light': { mode: 'light', palette: 'futuristic-apple' },
           'warm-editorial': { mode: 'light', palette: 'warm-editorial' },
           'quiet-luxury': { mode: 'dark', palette: 'quiet-luxury' },
-          'professional-blue': { mode: 'light', palette: 'professional-blue' },
         };
-        const cookieTheme = document.cookie
+        const readCookie = (key) => document.cookie
           .split('; ')
-          .find((item) => item.startsWith('resume_theme_preset='))
+          .find((item) => item.startsWith(`${key}=`))
           ?.split('=')
           .slice(1)
           .join('=');
-        const saved = localStorage.getItem('resume-genius-theme-preset') || (cookieTheme ? decodeURIComponent(cookieTheme) : '') || 'futuristic-dark';
-        const preset = presets[saved] || presets['futuristic-dark'];
+        const normalizeThemeId = (id) => {
+          return presets[id] ? id : '';
+        };
+        const hasManualTheme = localStorage.getItem('resume-genius-theme-manual') === 'true'
+          || decodeURIComponent(readCookie('resume_theme_manual') || '') === 'true';
+        const systemTheme = window.matchMedia?.('(prefers-color-scheme: dark)').matches
+          ? 'futuristic-dark'
+          : 'futuristic-light';
+        const savedTheme = hasManualTheme
+          ? normalizeThemeId(localStorage.getItem('resume-genius-theme-preset') || decodeURIComponent(readCookie('resume_theme_preset') || ''))
+          : '';
+        const preset = presets[savedTheme || systemTheme] || presets['futuristic-light'];
         document.documentElement.dataset.theme = preset.mode;
         document.documentElement.dataset.palette = preset.palette;
       })();
@@ -74,24 +83,65 @@ const { title, description = 'ResumeGenius - AI 辅助简历生成与优化平�
         'futuristic-light': { mode: 'light', palette: 'futuristic-apple' },
         'warm-editorial': { mode: 'light', palette: 'warm-editorial' },
         'quiet-luxury': { mode: 'dark', palette: 'quiet-luxury' },
-        'professional-blue': { mode: 'light', palette: 'professional-blue' },
       };
+      const SYSTEM_THEME_ID = 'system';
 
-      const applyThemePreset = (id) => {
-        const preset = themePresets[id] || themePresets['futuristic-dark'];
-        document.documentElement.dataset.theme = preset.mode;
-        document.documentElement.dataset.palette = preset.palette;
-        localStorage.setItem('resume-genius-theme-preset', id);
-        document.cookie = `resume_theme_preset=${encodeURIComponent(id)}; path=/; max-age=31536000; SameSite=Lax`;
-      };
-
-      const cookieTheme = document.cookie
+      const readThemeCookie = (key) => document.cookie
         .split('; ')
-        .find((item) => item.startsWith('resume_theme_preset='))
+        .find((item) => item.startsWith(`${key}=`))
         ?.split('=')
         .slice(1)
         .join('=');
-      const savedTheme = localStorage.getItem('resume-genius-theme-preset') || (cookieTheme ? decodeURIComponent(cookieTheme) : '') || 'futuristic-dark';
+
+      const normalizeThemeId = (id) => {
+        return themePresets[id] ? id : '';
+      };
+
+      const getSystemTheme = () => window.matchMedia?.('(prefers-color-scheme: dark)').matches
+        ? 'futuristic-dark'
+        : 'futuristic-light';
+
+      const hasManualTheme = () => localStorage.getItem('resume-genius-theme-manual') === 'true'
+        || decodeURIComponent(readThemeCookie('resume_theme_manual') || '') === 'true';
+
+      const getInitialThemeChoice = () => {
+        if (!hasManualTheme()) return SYSTEM_THEME_ID;
+        return normalizeThemeId(
+          localStorage.getItem('resume-genius-theme-preset')
+            || decodeURIComponent(readThemeCookie('resume_theme_preset') || ''),
+        ) || SYSTEM_THEME_ID;
+      };
+
+      const getEffectiveTheme = (id) => {
+        if (id === SYSTEM_THEME_ID) return getSystemTheme();
+        return normalizeThemeId(id) || getSystemTheme();
+      };
+
+      const setThemeAttributes = (id) => {
+        const preset = themePresets[getEffectiveTheme(id)] || themePresets['futuristic-light'];
+        document.documentElement.dataset.theme = preset.mode;
+        document.documentElement.dataset.palette = preset.palette;
+      };
+
+      const applyThemePreset = (id) => {
+        if (id === SYSTEM_THEME_ID) {
+          setThemeAttributes(SYSTEM_THEME_ID);
+          localStorage.setItem('resume-genius-theme-preset', SYSTEM_THEME_ID);
+          localStorage.setItem('resume-genius-theme-manual', 'false');
+          document.cookie = `resume_theme_preset=${encodeURIComponent(SYSTEM_THEME_ID)}; path=/; max-age=31536000; SameSite=Lax`;
+          document.cookie = 'resume_theme_manual=false; path=/; max-age=31536000; SameSite=Lax';
+          return;
+        }
+
+        const nextTheme = normalizeThemeId(id) || getSystemTheme();
+        setThemeAttributes(nextTheme);
+        localStorage.setItem('resume-genius-theme-preset', nextTheme);
+        localStorage.setItem('resume-genius-theme-manual', 'true');
+        document.cookie = `resume_theme_preset=${encodeURIComponent(nextTheme)}; path=/; max-age=31536000; SameSite=Lax`;
+        document.cookie = 'resume_theme_manual=true; path=/; max-age=31536000; SameSite=Lax';
+      };
+
+      const initialTheme = getInitialThemeChoice();
 
       const closeThemeMenus = () => {
         document.querySelectorAll('[data-theme-menu]').forEach((menu) => {
@@ -125,23 +175,30 @@ const { title, description = 'ResumeGenius - AI 辅助简历生成与优化平�
           option.addEventListener('click', () => {
             const nextTheme = option.getAttribute('data-theme-option') || 'futuristic-dark';
             applyThemePreset(nextTheme);
-            syncThemeMenus(nextTheme);
+            syncThemeMenus(nextTheme === SYSTEM_THEME_ID ? SYSTEM_THEME_ID : normalizeThemeId(nextTheme) || SYSTEM_THEME_ID);
             closeThemeMenus();
           });
         });
       });
 
-      syncThemeMenus(savedTheme);
+      setThemeAttributes(initialTheme);
+      syncThemeMenus(initialTheme);
       document.addEventListener('click', closeThemeMenus);
       document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') closeThemeMenus();
       });
 
       window.addEventListener('storage', (event) => {
-        if (event.key !== 'resume-genius-theme-preset') return;
-        const nextTheme = event.newValue || 'futuristic-dark';
-        applyThemePreset(nextTheme);
+        if (event.key !== 'resume-genius-theme-preset' && event.key !== 'resume-genius-theme-manual') return;
+        const nextTheme = getInitialThemeChoice();
+        setThemeAttributes(nextTheme);
         syncThemeMenus(nextTheme);
+      });
+
+      window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if (hasManualTheme()) return;
+        setThemeAttributes(SYSTEM_THEME_ID);
+        syncThemeMenus(SYSTEM_THEME_ID);
       });
 
       // Nav scroll border

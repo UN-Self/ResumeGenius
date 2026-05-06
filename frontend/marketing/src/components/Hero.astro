@@ -1,5 +1,9 @@
 ---
 const steps = ['读取资料', '生成简历 HTML', '优化排版', '准备预览']
+const typedResumeRows = [
+  { title: '项目经历', line: 'ResumeGenius 工作台重构' },
+  { title: '技术栈', line: 'React / TypeScript / AI' },
+]
 const features = [
   {
     title: 'AI 主动生成',
@@ -69,8 +73,15 @@ const features = [
           <div class="hero-preview-paper mx-auto h-full max-w-[310px] rounded-xl p-5 shadow-[0_22px_70px_rgba(15,23,42,0.22)]">
             <div class="hero-preview-divider mb-4 flex items-start justify-between border-b pb-3">
               <div>
-                <div class="hero-preview-accent mb-2 h-3 w-28 rounded"></div>
-                <div class="hero-preview-line h-2 w-40 rounded"></div>
+                <div class="flex items-center gap-1">
+                  <span class="typing-text hero-preview-text-accent mb-2 text-[12px] font-semibold leading-none" style="--typing-width: 7.2em; --typing-steps: 7; --type-delay: 80ms">
+                    AI 简历优化
+                  </span>
+                  <span class="typing-cursor mb-2 h-3"></span>
+                </div>
+                <span class="typing-text hero-preview-text-muted block text-[8px] leading-none" style="--typing-width: 15em; --typing-steps: 15; --type-delay: 420ms">
+                  前端工程师 · ResumeGenius
+                </span>
               </div>
               <div class="hero-preview-line h-12 w-10 rounded opacity-60"></div>
             </div>
@@ -78,10 +89,22 @@ const features = [
               <div class="mb-4">
                 <div class="mb-2 flex items-center gap-2">
                   <span class="hero-preview-accent h-2.5 w-2.5 rounded-full"></span>
-                  <span class="hero-preview-accent h-2 w-24 rounded opacity-80"></span>
+                  {index < typedResumeRows.length ? (
+                    <span class="typing-text hero-preview-text-accent text-[8px] font-semibold leading-none" style={`--typing-width: ${index === 0 ? '5em' : '4em'}; --typing-steps: ${typedResumeRows[index].title.length}; --type-delay: ${860 + index * 520}ms`}>
+                      {typedResumeRows[index].title}
+                    </span>
+                  ) : (
+                    <span class="hero-preview-accent h-2 w-24 rounded opacity-80"></span>
+                  )}
                 </div>
                 <div class="space-y-1.5">
-                  <div class="hero-preview-line h-1.5 w-full rounded"></div>
+                  {index < typedResumeRows.length ? (
+                    <span class="typing-text hero-preview-text-muted block text-[7px] leading-none" style={`--typing-width: ${index === 0 ? '15em' : '14em'}; --typing-steps: ${typedResumeRows[index].line.length}; --type-delay: ${1080 + index * 520}ms`}>
+                      {typedResumeRows[index].line}
+                    </span>
+                  ) : (
+                    <div class="hero-preview-line h-1.5 w-full rounded"></div>
+                  )}
                   <div class="hero-preview-line h-1.5 w-4/5 rounded"></div>
                   <div class="hero-preview-line h-1.5 w-3/5 rounded"></div>
                 </div>
