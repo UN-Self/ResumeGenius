@@ -2,12 +2,15 @@ package render
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/google/uuid"
@@ -68,19 +71,22 @@ func NewExportService(exporter PDFExporter, store storage.FileStorage) *ExportSe
 	return s
 }
 
-// CreateTask validates the draft exists (if db is set), creates a new export task,
-// and queues it for async processing. Returns the task ID.
-func (s *ExportService) CreateTask(draftID uint, htmlContent string) (string, error) {
-	// Validate draft exists when DB is available.
-	if s.db != nil {
-		var draft models.Draft
-		if err := s.db.First(&draft, draftID).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return "", ErrDraftNotFound
-			}
-			return "", err
-		}
+// CreateTask validates the draft exists, reads its HTML from the DB,
+// wraps it with the render template, and queues it for async processing.
+func (s *ExportService) CreateTask(draftID uint) (string, error) {
+	if s.db == nil {
+		return "", errors.New("database connection required for export")
 	}
+
+	var draft models.Draft
+	if err := s.db.First(&draft, draftID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", ErrDraftNotFound
+		}
+		return "", err
+	}
+
+	wrappedHTML := wrapWithTemplate(draft.HTMLContent)
 
 	taskID := "task_" + uuid.New().String()
 	task := &ExportTask{
@@ -89,7 +95,7 @@ func (s *ExportService) CreateTask(draftID uint, htmlContent string) (string, er
 		Status:      "pending",
 		Progress:    0,
 		CreatedAt:   time.Now().UTC(),
-		htmlContent: htmlContent,
+		htmlContent: wrappedHTML,
 	}
 
 	s.tasks.Store(taskID, task)
@@ -220,21 +226,28 @@ func NewChromeExporter() *ChromeExporter {
 }
 
 // ExportHTMLToPDF renders the given HTML content to PDF bytes.
+// The HTML is expected to be a complete document captured from the editor DOM.
 // Each call creates a new tab (context) but reuses the same Chrome process.
 func (c *ChromeExporter) ExportHTMLToPDF(htmlContent string) ([]byte, error) {
 	ctx, cancel := chromedp.NewContext(c.allocCtx)
 	defer cancel()
 
+	renderHTML := injectFontCSS(htmlContent)
+
 	var buf []byte
 	err := chromedp.Run(ctx,
+		// Force screen media to prevent @media print rules from affecting PDF layout
+		emulation.SetEmulatedMedia().WithMedia("screen"),
 		chromedp.Navigate("about:blank"),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			frameTree, err := page.GetFrameTree().Do(ctx)
 			if err != nil {
 				return err
 			}
-			return page.SetDocumentContent(frameTree.Frame.ID, htmlContent).Do(ctx)
+			return page.SetDocumentContent(frameTree.Frame.ID, renderHTML).Do(ctx)
 		}),
+		// Wait for fonts to finish loading before rendering.
+		chromedp.Evaluate(`document.fonts.ready`, nil),
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
 			buf, _, err = page.PrintToPDF().
@@ -251,4 +264,36 @@ func (c *ChromeExporter) ExportHTMLToPDF(htmlContent string) ([]byte, error) {
 // Close releases the Chrome allocator resources.
 func (c *ChromeExporter) Close() {
 	c.cancel()
+}
+
+//go:embed render-template.html
+var renderTemplate string
+
+//go:embed fonts/inter-regular.woff2
+var interRegular []byte
+
+//go:embed fonts/inter-medium.woff2
+var interMedium []byte
+
+//go:embed fonts/inter-semibold.woff2
+var interSemiBold []byte
+
+// interFontFaceCSS generates @font-face declarations with embedded base64 WOFF2 data.
+func interFontFaceCSS() string {
+	return fmt.Sprintf(`@font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap; src: url(data:font/woff2;base64,%s) format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 500; font-display: swap; src: url(data:font/woff2;base64,%s) format("woff2"); }
+@font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap; src: url(data:font/woff2;base64,%s) format("woff2"); }`,
+		interRegular, interMedium, interSemiBold)
+}
+
+// injectFontCSS inserts the embedded Inter font @font-face CSS into the HTML document.
+func injectFontCSS(html string) string {
+	fontStyle := "<style>" + interFontFaceCSS() + "</style>"
+	return strings.Replace(html, "</head>", fontStyle+"</head>", 1)
+}
+
+// wrapWithTemplate inserts the HTML fragment into the render template,
+// replacing the {{CONTENT}} placeholder.
+func wrapWithTemplate(htmlFragment string) string {
+	return strings.Replace(renderTemplate, "{{CONTENT}}", htmlFragment, 1)
 }

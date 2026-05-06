@@ -55,11 +55,6 @@ type rollbackReq struct {
 	VersionID uint `json:"version_id"`
 }
 
-// createExportReq is the request body for creating a PDF export task.
-type createExportReq struct {
-	HTMLContent string `json:"html_content"`
-}
-
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
@@ -240,13 +235,7 @@ func (h *Handler) CreateExport(c *gin.Context) {
 		return
 	}
 
-	var req createExportReq
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.ErrorWithStatus(c, http.StatusBadRequest, CodeInternalError, "invalid request body")
-		return
-	}
-
-	taskID, err := h.exportSvc.CreateTask(draftID, req.HTMLContent)
+	taskID, err := h.exportSvc.CreateTask(draftID)
 	if err != nil {
 		if errors.Is(err, ErrDraftNotFound) {
 			response.ErrorWithStatus(c, http.StatusNotFound, CodeDraftNotFound, "draft not found")

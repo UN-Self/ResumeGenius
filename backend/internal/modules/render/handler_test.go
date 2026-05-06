@@ -260,9 +260,7 @@ func TestHandler_CreateExport(t *testing.T) {
 	r, _, db := setupRouter(t)
 	draft := seedDraft(t, db)
 
-	w := doJSON(t, r, "POST", "/drafts/"+fmt.Sprintf("%d", draft.ID)+"/export", map[string]string{
-		"html_content": "<html><body>Resume</body></html>",
-	})
+	w := doJSON(t, r, "POST", "/drafts/"+fmt.Sprintf("%d", draft.ID)+"/export", nil)
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	resp := parseResp(t, w)
@@ -277,9 +275,7 @@ func TestHandler_CreateExport(t *testing.T) {
 func TestHandler_CreateExport_DraftNotFound(t *testing.T) {
 	r, _, _ := setupRouter(t)
 
-	w := doJSON(t, r, "POST", "/drafts/99999/export", map[string]string{
-		"html_content": "<html><body>Resume</body></html>",
-	})
+	w := doJSON(t, r, "POST", "/drafts/99999/export", nil)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 
 	resp := parseResp(t, w)
@@ -291,9 +287,7 @@ func TestHandler_GetTask(t *testing.T) {
 	draft := seedDraft(t, db)
 
 	// Create an export task via the export endpoint
-	exportW := doJSON(t, r, "POST", "/drafts/"+fmt.Sprintf("%d", draft.ID)+"/export", map[string]string{
-		"html_content": "<html><body>Resume</body></html>",
-	})
+	exportW := doJSON(t, r, "POST", "/drafts/"+fmt.Sprintf("%d", draft.ID)+"/export", nil)
 	exportResp := parseResp(t, exportW)
 	taskData := exportResp.Data.(map[string]interface{})
 	taskID := taskData["task_id"].(string)
@@ -326,9 +320,7 @@ func TestHandler_DownloadFile(t *testing.T) {
 	draft := seedDraft(t, db)
 
 	// Create export task
-	w := doJSON(t, r, "POST", "/drafts/"+fmt.Sprintf("%d", draft.ID)+"/export", map[string]string{
-		"html_content": "<html><body>Resume</body></html>",
-	})
+	w := doJSON(t, r, "POST", "/drafts/"+fmt.Sprintf("%d", draft.ID)+"/export", nil)
 	require.Equal(t, http.StatusOK, w.Code)
 	resp := parseResp(t, w)
 	taskID := resp.Data.(map[string]interface{})["task_id"].(string)

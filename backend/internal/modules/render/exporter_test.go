@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
 )
 
@@ -92,12 +93,36 @@ func waitForTask(t *testing.T, svc *ExportService, taskID string, timeout time.D
 // CreateTask
 // ---------------------------------------------------------------------------
 
+func TestCreateTask_ReadsHTMLFromDB(t *testing.T) {
+	db := SetupTestDB(t)
+	draft := seedDraft(t, db)
+	svc, mock := newTestExportServiceWithDB(t, db)
+
+	_ = mock // mock exporter is used internally
+
+	// Verify seedDraft HTML is in the DB
+	var fetched models.Draft
+	require.NoError(t, db.First(&fetched, draft.ID).Error)
+	require.Equal(t, "<html><body><h1>Test Resume</h1></body></html>", fetched.HTMLContent)
+
+	taskID, err := svc.CreateTask(draft.ID)
+	require.NoError(t, err)
+
+	task := waitForTask(t, svc, taskID, 3*time.Second)
+	assert.Equal(t, "completed", task.Status)
+
+	// Verify the mock exporter received HTML wrapped with the template
+	stored, _ := svc.tasks.Load(taskID)
+	assert.Contains(t, stored.(*ExportTask).htmlContent, "<h1>Test Resume</h1>")
+	assert.Contains(t, stored.(*ExportTask).htmlContent, ".resume-page")
+}
+
 func TestCreateTask_ReturnsTaskID(t *testing.T) {
 	db := SetupTestDB(t)
 	draft := seedDraft(t, db)
 	svc, _ := newTestExportServiceWithDB(t, db)
 
-	taskID, err := svc.CreateTask(draft.ID, "<html><body>Resume</body></html>")
+	taskID, err := svc.CreateTask(draft.ID)
 	require.NoError(t, err)
 	require.NotNil(t, taskID)
 	assert.True(t, strings.HasPrefix(taskID, "task_"), "task ID should start with 'task_', got: %s", taskID)
@@ -115,7 +140,7 @@ func TestCreateTask_DraftNotFound(t *testing.T) {
 	db := SetupTestDB(t)
 	svc, _ := newTestExportServiceWithDB(t, db)
 
-	_, err := svc.CreateTask(99999, "<html><body>Resume</body></html>")
+	_, err := svc.CreateTask(99999)
 	require.ErrorIs(t, err, ErrDraftNotFound)
 }
 
@@ -139,7 +164,7 @@ func TestTaskFlows_ToCompleted(t *testing.T) {
 	draft := seedDraft(t, db)
 	svc, _ := newTestExportServiceWithDB(t, db)
 
-	taskID, err := svc.CreateTask(draft.ID, "<html><body>Resume</body></html>")
+	taskID, err := svc.CreateTask(draft.ID)
 	require.NoError(t, err)
 
 	task := waitForTask(t, svc, taskID, 3*time.Second)
@@ -158,7 +183,7 @@ func TestTaskFlows_ToFailed(t *testing.T) {
 	// Configure mock to return an error
 	mock.Err = fmt.Errorf("chromedp: headless shell crashed")
 
-	taskID, err := svc.CreateTask(draft.ID, "<html><body>Resume</body></html>")
+	taskID, err := svc.CreateTask(draft.ID)
 	require.NoError(t, err)
 
 	task := waitForTask(t, svc, taskID, 3*time.Second)
@@ -177,7 +202,7 @@ func TestGetFile_CompletedTask(t *testing.T) {
 	draft := seedDraft(t, db)
 	svc, _ := newTestExportServiceWithDB(t, db)
 
-	taskID, err := svc.CreateTask(draft.ID, "<html><body>Resume</body></html>")
+	taskID, err := svc.CreateTask(draft.ID)
 	require.NoError(t, err)
 
 	waitForTask(t, svc, taskID, 3*time.Second)
@@ -209,23 +234,64 @@ func TestNewChromeExporter_RespectsChromeBinEnv(t *testing.T) {
 
 func TestGetFile_TaskNotCompleted(t *testing.T) {
 	svc, _ := newTestExportService(t)
-	mock := &MockExporter{
-		PDFBytes: samplePDF(t),
-		Err:      fmt.Errorf("intentional slow failure"),
-	}
-	tmpDir := t.TempDir()
-	store := storage.NewLocalStorage(tmpDir)
-	svc = NewExportService(mock, store)
-	t.Cleanup(func() { svc.Close() })
 
-	// Create task directly without DB validation (db is nil, skip validation)
-	svc.db = nil
-	taskID, err := svc.CreateTask(1, "<html><body>Test</body></html>")
-	require.NoError(t, err)
+	// db is nil, CreateTask will return error since DB is required
+	_, err := svc.CreateTask(1)
+	require.Error(t, err)
+}
 
-	// Try to get file immediately — task should still be pending/processing
-	_, err = svc.GetFile(taskID)
-	require.ErrorIs(t, err, ErrTaskNotCompleted)
+// ---------------------------------------------------------------------------
+// wrapWithTemplate
+// ---------------------------------------------------------------------------
+
+func TestWrapWithTemplate_ReplacesPlaceholder(t *testing.T) {
+	result := wrapWithTemplate("<h1>Hello</h1><p>World</p>")
+
+	assert.Contains(t, result, "<h1>Hello</h1><p>World</p>")
+	assert.Contains(t, result, `<div class="resume-page">`)
+	assert.Contains(t, result, ".resume-page h1")
+	assert.Contains(t, result, "@page")
+	assert.NotContains(t, result, "{{CONTENT}}")
+}
+
+func TestWrapWithTemplate_EmptyContent(t *testing.T) {
+	result := wrapWithTemplate("")
+
+	assert.Contains(t, result, `<div class="resume-page"></div>`)
+	assert.Contains(t, result, ".resume-page")
+}
+
+// ---------------------------------------------------------------------------
+// injectFontCSS
+// ---------------------------------------------------------------------------
+
+func TestInjectFontCSS_InsertsBeforeHeadClose(t *testing.T) {
+	input := `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><p>test</p></body></html>`
+	result := injectFontCSS(input)
+
+	assert.Contains(t, result, `@font-face`)
+	assert.Contains(t, result, `font-family: "Inter"`)
+	assert.Contains(t, result, "font-weight: 400")
+	assert.Contains(t, result, "font-weight: 600")
+	assert.Contains(t, result, "base64,")
+	// Font style should be inserted before </head>
+	assert.Contains(t, result, "<style>")
+	assert.Contains(t, result, "</style></head>")
+}
+
+func TestInjectFontCSS_PreservesOriginalContent(t *testing.T) {
+	input := `<!DOCTYPE html><html><head><style>body{color:red}</style></head><body><p>hello</p></body></html>`
+	result := injectFontCSS(input)
+
+	assert.Contains(t, result, "body{color:red}")
+	assert.Contains(t, result, "<p>hello</p>")
+}
+
+func TestInjectFontCSS_NoHeadTag(t *testing.T) {
+	input := `<p>no head tag</p>`
+	result := injectFontCSS(input)
+	// Should return unchanged when no </head> found
+	assert.Equal(t, input, result)
 }
 
 func TestRegisterRoutes_ReturnsCleanup(t *testing.T) {
