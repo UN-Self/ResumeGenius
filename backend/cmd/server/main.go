@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -59,6 +60,10 @@ func setupRouter(db *gorm.DB) (*gin.Engine, func()) {
 	r := gin.Default()
 	r.Use(middleware.CORS(), middleware.Logger())
 
+	r.GET("/health", gin.WrapH(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})))
+
 	uploadDir := os.Getenv("UPLOAD_DIR")
 	if uploadDir == "" {
 		uploadDir = "./uploads"
@@ -82,10 +87,10 @@ func setupRouter(db *gorm.DB) (*gin.Engine, func()) {
 	parsing.RegisterRoutes(authed, db, store)
 
 	// 先创建 render services
-	versionSvc, exportSvc, renderCleanup := render.NewServices(db, store)
+	_, _, renderCleanup := render.NewServices(db, store)
 
-	// agent 模块接收 render services
-	agent.RegisterRoutes(authed, db, versionSvc, exportSvc)
+	// agent 模块
+	agent.RegisterRoutes(authed, db)
 	workbench.RegisterRoutes(authed, db)
 
 	// render 路由注册（复用已有 services）

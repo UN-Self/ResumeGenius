@@ -73,9 +73,10 @@ type Draft struct {
 	Project     Project        `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
 	Versions    []Version      `gorm:"foreignKey:DraftID" json:"versions,omitempty"`
 	AISessions  []AISession    `gorm:"foreignKey:DraftID" json:"ai_sessions,omitempty"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+	CreatedAt             time.Time      `json:"created_at"`
+	UpdatedAt             time.Time      `json:"updated_at"`
+	CurrentEditSequence   int            `gorm:"default:0" json:"-"`
+	DeletedAt             gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 type Version struct {
@@ -137,4 +138,18 @@ type AIToolCall struct {
 	CompletedAt *time.Time     `json:"completed_at,omitempty"`
 	CreatedAt   time.Time      `json:"created_at"`
 	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
+// DraftEdit records each AI edit on a draft for undo/redo.
+type DraftEdit struct {
+	ID           uint           `gorm:"primaryKey" json:"id"`
+	DraftID      uint           `gorm:"not null;index" json:"draft_id"`
+	Sequence     int            `gorm:"not null" json:"sequence"`
+	OpType       string         `gorm:"size:20;not null" json:"op_type"`
+	OldString    string         `gorm:"type:text" json:"old_string,omitempty"`
+	NewString    string         `gorm:"type:text" json:"new_string,omitempty"`
+	Description  string         `gorm:"type:text" json:"description,omitempty"`
+	HtmlSnapshot string         `gorm:"type:text;not null" json:"-"`
+	CreatedAt    time.Time      `json:"created_at"`
+	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 }
