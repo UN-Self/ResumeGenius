@@ -75,6 +75,7 @@ git commit -m "test: 移除 FormatToolbar 相关测试代码"
 - Modify: `frontend/workbench/src/pages/EditorPage.tsx:10`（移除 import）
 - Modify: `frontend/workbench/src/pages/EditorPage.tsx:293-295`（移除渲染代码）
 - Modify: `frontend/workbench/src/styles/editor.css:33-41`（移除 .format-toolbar 样式）
+- Modify: `frontend/workbench/tests/EditorPage.autosave.test.tsx:57-59`（移除 FormatToolbar mock，因 Task 1 延迟至此）
 
 **Step 1: 运行测试确认当前状态通过**
 
