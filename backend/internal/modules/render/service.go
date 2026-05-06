@@ -17,11 +17,12 @@ var (
 
 // RollbackResult contains the outcome of a version rollback operation.
 type RollbackResult struct {
-	DraftID         uint   `json:"draft_id"`
-	HTMLContent     string `json:"-"`
-	UpdatedAt       string `json:"updated_at"`
-	NewVersionID    uint   `json:"new_version_id"`
-	NewVersionLabel string `json:"new_version_label"`
+	DraftID             uint   `json:"draft_id"`
+	HTMLContent         string `json:"-"`
+	UpdatedAt           string `json:"updated_at"`
+	NewVersionID        uint   `json:"new_version_id"`
+	NewVersionLabel     string `json:"new_version_label"`
+	NewVersionCreatedAt string `json:"new_version_created_at"`
 }
 
 // VersionService provides version CRUD and rollback operations.
@@ -120,7 +121,7 @@ func (s *VersionService) rollbackInTx(tx *gorm.DB, draftID, versionID uint, resu
 	}
 
 	// Auto-snapshot the current HTML before overwriting.
-	autoLabel := fmt.Sprintf("回退到版本 %s", version.CreatedAt.Format("2006-01-02 15:04:05"))
+	autoLabel := fmt.Sprintf("回退到版本 %d", versionID)
 	autoVersion := models.Version{
 		DraftID:      draftID,
 		HTMLSnapshot: draft.HTMLContent,
@@ -144,6 +145,7 @@ func (s *VersionService) rollbackInTx(tx *gorm.DB, draftID, versionID uint, resu
 	result.UpdatedAt = now
 	result.NewVersionID = autoVersion.ID
 	result.NewVersionLabel = autoLabel
+	result.NewVersionCreatedAt = autoVersion.CreatedAt.Format("2006-01-02T15:04:05Z")
 
 	return nil
 }

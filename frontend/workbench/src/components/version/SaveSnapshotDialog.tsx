@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,9 +13,12 @@ interface SaveSnapshotDialogProps {
 export function SaveSnapshotDialog({ open, saving, onClose, onConfirm }: SaveSnapshotDialogProps) {
   const [label, setLabel] = useState('')
 
+  useEffect(() => {
+    if (open) setLabel('')
+  }, [open])
+
   const handleConfirm = () => {
     onConfirm(label)
-    setLabel('')
   }
 
   const handleClose = () => {

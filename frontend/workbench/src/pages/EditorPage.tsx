@@ -442,6 +442,7 @@ export default function EditorPage() {
         onConfirm={async (label) => {
           setSavingSnapshot(true)
           try {
+            await flush()
             await createSnapshot(label)
             setSaveDialogOpen(false)
           } catch {
