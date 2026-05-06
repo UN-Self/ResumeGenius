@@ -147,6 +147,7 @@ func (h *Handler) Chat(c *gin.Context) {
 		})
 		sendEvent(string(errJSON))
 	}
+	sendEvent(`{"type":"done"}`)
 }
 
 func (h *Handler) GetHistory(c *gin.Context) {
