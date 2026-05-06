@@ -35,6 +35,14 @@ type versionItem struct {
 	CreatedAt string `json:"created_at"`
 }
 
+// versionDetail is the response for a single version with HTML snapshot.
+type versionDetail struct {
+	ID           uint   `json:"id"`
+	Label        string `json:"label"`
+	HTMLSnapshot string `json:"html_snapshot"`
+	CreatedAt    string `json:"created_at"`
+}
+
 // versionListResp is the response for listing versions of a draft.
 type versionListResp struct {
 	Items []versionItem `json:"items"`
@@ -103,6 +111,43 @@ func (h *Handler) ListVersions(c *gin.Context) {
 	response.Success(c, versionListResp{
 		Items: items,
 		Total: len(items),
+	})
+}
+
+// GetVersion handles GET /drafts/:draft_id/versions/:version_id.
+func (h *Handler) GetVersion(c *gin.Context) {
+	draftID, err := parseUintParam(c, "draft_id")
+	if err != nil {
+		response.Error(c, CodeDraftNotFound, "invalid draft_id")
+		return
+	}
+
+	versionID, err := parseUintParam(c, "version_id")
+	if err != nil {
+		response.Error(c, CodeVersionNotFound, "invalid version_id")
+		return
+	}
+
+	version, err := h.versionSvc.GetByID(draftID, versionID)
+	if err != nil {
+		if errors.Is(err, ErrVersionNotFound) {
+			response.ErrorWithStatus(c, http.StatusNotFound, CodeVersionNotFound, "version not found")
+			return
+		}
+		response.Error(c, CodeExportFailed, "failed to get version")
+		return
+	}
+
+	label := ""
+	if version.Label != nil {
+		label = *version.Label
+	}
+
+	response.Success(c, versionDetail{
+		ID:           version.ID,
+		Label:        label,
+		HTMLSnapshot: version.HTMLSnapshot,
+		CreatedAt:    version.CreatedAt.Format("2006-01-02T15:04:05Z"),
 	})
 }
 

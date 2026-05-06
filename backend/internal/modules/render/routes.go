@@ -37,6 +37,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, store storage.FileStorage)
 
 	// Version management
 	rg.GET("/drafts/:draft_id/versions", h.ListVersions)
+	rg.GET("/drafts/:draft_id/versions/:version_id", h.GetVersion)
 	rg.POST("/drafts/:draft_id/versions", h.CreateVersion)
 	rg.POST("/drafts/:draft_id/rollback", h.Rollback)
 

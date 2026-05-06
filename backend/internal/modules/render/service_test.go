@@ -165,3 +165,47 @@ func TestRollback_VersionBelongsToOtherDraft(t *testing.T) {
 	_, err = svc.Rollback(draft.ID, ver.ID)
 	require.ErrorIs(t, err, ErrVersionNotFound)
 }
+
+// ---------------------------------------------------------------------------
+// GetByID
+// ---------------------------------------------------------------------------
+
+func TestGetByID_Success(t *testing.T) {
+	db := SetupTestDB(t)
+	draft := seedDraft(t, db)
+
+	svc := NewVersionService(db)
+
+	created, err := svc.Create(draft.ID, "测试版本")
+	require.NoError(t, err)
+
+	found, err := svc.GetByID(draft.ID, created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, found.ID)
+	assert.Equal(t, created.HTMLSnapshot, found.HTMLSnapshot)
+	require.NotNil(t, found.Label)
+	assert.Equal(t, "测试版本", *found.Label)
+}
+
+func TestGetByID_NotFound(t *testing.T) {
+	db := SetupTestDB(t)
+	draft := seedDraft(t, db)
+	svc := NewVersionService(db)
+
+	_, err := svc.GetByID(draft.ID, 99999)
+	require.ErrorIs(t, err, ErrVersionNotFound)
+}
+
+func TestGetByID_WrongDraft(t *testing.T) {
+	db := SetupTestDB(t)
+	draft := seedDraft(t, db)
+	otherDraft := seedDraft(t, db)
+
+	svc := NewVersionService(db)
+
+	ver, err := svc.Create(otherDraft.ID, "other")
+	require.NoError(t, err)
+
+	_, err = svc.GetByID(draft.ID, ver.ID)
+	require.ErrorIs(t, err, ErrVersionNotFound)
+}
