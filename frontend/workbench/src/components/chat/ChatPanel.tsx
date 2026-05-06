@@ -29,11 +29,13 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
 
   useEffect(() => {
     let cancelled = false
+    /* eslint-disable react-hooks/set-state-in-effect -- Chat state should reset immediately when switching drafts. */
     setSession(null)
     setMessages([])
     setThinking('')
     setToolCalls([])
     setError(null)
+    /* eslint-enable react-hooks/set-state-in-effect */
 
     const init = async () => {
       try {
@@ -221,11 +223,14 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
         {messages.map((msg, i) => (
           <div key={i}>
             <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${
+              <div
+                data-message-role={msg.role}
+                className={`max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap shadow-sm ${
                 msg.role === 'user'
-                  ? 'bg-[var(--color-primary)] text-white'
-                  : 'bg-white border border-[var(--color-divider)] text-[var(--color-text-main)]'
-              }`}>
+                  ? 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
+                  : 'border border-[var(--color-divider)] bg-[var(--color-card)] text-[var(--color-text-main)] backdrop-blur-xl'
+              }`}
+              >
                 {msg.role === 'user' ? (
                   msg.text
                 ) : (
@@ -250,7 +255,7 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
                   }}
                   disabled={undoRedoLoading}
                   aria-label="Undo"
-                  className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded disabled:opacity-50 cursor-pointer"
+                  className="px-2 py-1 text-xs rounded border border-transparent bg-[var(--color-surface-hover)] text-[var(--color-text-main)] hover:border-[var(--color-border-glow)] disabled:opacity-50 cursor-pointer"
                 >
                   Undo
                 </button>
@@ -264,7 +269,7 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
                   }}
                   disabled={undoRedoLoading}
                   aria-label="Redo"
-                  className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded disabled:opacity-50 cursor-pointer"
+                  className="px-2 py-1 text-xs rounded border border-transparent bg-[var(--color-surface-hover)] text-[var(--color-text-main)] hover:border-[var(--color-border-glow)] disabled:opacity-50 cursor-pointer"
                 >
                   Redo
                 </button>
@@ -283,7 +288,7 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
 
         {/* Error */}
         {error && (
-          <div className="text-xs text-red-500 text-center bg-red-50 rounded px-3 py-2">
+          <div className="rounded border border-[color-mix(in_srgb,var(--color-destructive),transparent_68%)] bg-[color-mix(in_srgb,var(--color-destructive),transparent_90%)] px-3 py-2 text-center text-xs text-[var(--color-destructive)]">
             {error}
           </div>
         )}
@@ -301,12 +306,12 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
             placeholder="输入你的需求..."
             disabled={streaming || !session}
             rows={2}
-            className="flex-1 border border-[var(--color-divider)] rounded-md px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] disabled:bg-gray-50 disabled:text-[var(--color-text-disabled)]"
+            className="flex-1 rounded-md border border-[var(--color-divider)] bg-[var(--color-card)] px-3 py-2 text-sm text-[var(--color-text-main)] placeholder:text-[var(--color-text-secondary)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] disabled:bg-[var(--color-muted)] disabled:text-[var(--color-text-disabled)]"
           />
           <button
             onClick={handleSend}
             disabled={streaming || !input.trim() || !session}
-            className="self-end bg-[var(--color-primary)] text-white p-2 rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer"
+            className="self-end bg-[var(--color-primary)] text-[var(--color-primary-foreground)] p-2 rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer"
             aria-label="发送"
           >
             <Send size={16} />
