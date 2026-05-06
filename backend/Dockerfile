@@ -23,6 +23,8 @@ RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apk/re
     git \
     poppler-utils \
     tzdata
+# Font config: map SimSun/SimHei/KaiTi/FangSong to Noto CJK (already installed above)
+COPY fonts/local.conf /etc/fonts/local.conf
 ENV TZ=Asia/Shanghai
 WORKDIR /app
 COPY --from=builder /server /app/server
