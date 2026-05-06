@@ -44,6 +44,7 @@ services:
       AI_API_URL: ${AI_API_URL:-}
       AI_API_KEY: ${AI_API_KEY:-}
       AI_MODEL: ${AI_MODEL:-default}
+      AGENT_MAX_ITERATIONS: ${AGENT_MAX_ITERATIONS:-10}
       JWT_SECRET: ${JWT_SECRET:-}
       JWT_TTL_HOURS: ${JWT_TTL_HOURS:-8760}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
