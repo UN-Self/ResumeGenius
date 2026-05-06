@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { History, Plus } from 'lucide-react'
+import { History, Plus, RefreshCw } from 'lucide-react'
 import type { Version } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import {
@@ -11,8 +11,10 @@ import {
 interface VersionDropdownProps {
   versions: Version[]
   loading: boolean
+  error?: string | null
   onPreview: (version: Version) => void
   onSaveSnapshot: () => void
+  onRetry?: () => void
 }
 
 function formatRelativeTime(dateStr: string): string {
@@ -29,8 +31,10 @@ function formatRelativeTime(dateStr: string): string {
 export function VersionDropdown({
   versions,
   loading,
+  error,
   onPreview,
   onSaveSnapshot,
+  onRetry,
 }: VersionDropdownProps) {
   const [open, setOpen] = useState(false)
 
@@ -47,6 +51,16 @@ export function VersionDropdown({
           {loading ? (
             <div className="px-4 py-6 text-center text-sm text-muted-foreground">
               加载中...
+            </div>
+          ) : error ? (
+            <div className="px-4 py-6 text-center">
+              <p className="text-sm text-destructive mb-2">{error}</p>
+              {onRetry && (
+                <Button variant="secondary" size="sm" onClick={onRetry}>
+                  <RefreshCw size={14} className="mr-1" />
+                  重试
+                </Button>
+              )}
             </div>
           ) : versions.length === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-muted-foreground">
