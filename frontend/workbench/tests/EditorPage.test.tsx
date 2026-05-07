@@ -87,6 +87,48 @@ describe('EditorPage', () => {
         expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
       })
     })
+
+    it('loads assets when no current_draft_id (first workbench entry)', async () => {
+      mockEditorLoad({
+        currentDraftId: null,
+        assets: [
+          {
+            id: 10,
+            project_id: 1,
+            type: 'resume_pdf',
+            label: 'Resume.pdf',
+            content: 'Parsed resume content',
+            metadata: { parsing: { original_filename: 'Resume.pdf' } },
+            created_at: '2026-05-05T00:00:00Z',
+          },
+        ],
+      })
+
+      server.use(
+        http.post('/api/v1/drafts', () => {
+          return HttpResponse.json({
+            code: 0,
+            data: {
+              id: 2,
+              project_id: 1,
+              html_content: '',
+              updated_at: '2026-04-28T12:00:00Z',
+            },
+            message: 'ok',
+          })
+        })
+      )
+
+      renderWithRouter()
+      await waitFor(() => {
+        expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
+      })
+
+      // Assets should be loaded even when draft had to be auto-created
+      expect(screen.getByText('Resume')).toBeInTheDocument()
+      expect(screen.getByText('编辑')).toBeInTheDocument()
+      expect(screen.getByText('删除')).toBeInTheDocument()
+    })
   })
 
   describe('Editor loads', () => {
