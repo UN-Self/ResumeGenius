@@ -412,8 +412,7 @@ func (e *AgentToolExecutor) searchSkills(ctx context.Context, params map[string]
 		}
 	}
 
-	summaryOnly := keyword == "" && category == ""
-	results := e.skillLoader.Search(keyword, category, limit, summaryOnly)
+	results := e.skillLoader.Search(keyword, category, limit)
 
 	resp := map[string]interface{}{
 		"skills": results,

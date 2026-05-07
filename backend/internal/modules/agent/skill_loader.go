@@ -35,13 +35,6 @@ type SkillReference struct {
 	Source string `yaml:"source"`
 }
 
-// SkillSummary is a lightweight representation returned when no search filter is given.
-type SkillSummary struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Category    string `json:"category"`
-}
-
 // SkillLoader loads and provides search over skill files.
 type SkillLoader struct {
 	skills []SkillFile
@@ -80,16 +73,15 @@ func (l *SkillLoader) Skills() []SkillFile {
 	return l.skills
 }
 
-// Search returns skill summaries (name + description + category) when keyword
-// and category are empty, or full SkillFile objects when a filter is provided.
+// Search returns matching SkillFile objects based on keyword and/or category.
+// When both keyword and category are empty, all skills are returned in full.
 //
-//   - keyword: matched against SkillFile.Metadata.Keywords (case-insensitive contains)
-//   - category: matched against SkillFile.Metadata.Category (case-insensitive exact match)
+//   - keyword: case-insensitive contains match against Name, Description, and Keywords
+//   - category: case-insensitive exact match against Metadata.Category
 //   - limit: max results returned (0 = no limit)
-//   - summaryOnly: when true, returns lightweight summaries instead of full skill content
-func (l *SkillLoader) Search(keyword, category string, limit int, summaryOnly bool) []interface{} {
+func (l *SkillLoader) Search(keyword, category string, limit int) []SkillFile {
 	if len(l.skills) == 0 {
-		return []interface{}{}
+		return nil
 	}
 
 	var matched []SkillFile
@@ -111,26 +103,10 @@ func (l *SkillLoader) Search(keyword, category string, limit int, summaryOnly bo
 		matched = matched[:limit]
 	}
 
-	if summaryOnly || (keyword == "" && category == "") {
-		result := make([]interface{}, len(matched))
-		for i, s := range matched {
-			result[i] = SkillSummary{
-				Name:        s.Name,
-				Description: s.Description,
-				Category:    s.Metadata.Category,
-			}
-		}
-		return result
-	}
-
-	result := make([]interface{}, len(matched))
-	for i, s := range matched {
-		result[i] = s
-	}
-	return result
+	return matched
 }
 
-// matchKeyword checks if the keyword matches any of the skill's keywords.
+// matchKeyword checks if the keyword matches any of the skill's keywords, name, or description.
 // Matching is case-insensitive and uses contains semantics.
 func matchKeyword(s SkillFile, keyword string) bool {
 	kw := strings.ToLower(keyword)
