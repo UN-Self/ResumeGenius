@@ -1,4 +1,5 @@
 import { Node, mergeAttributes } from '@tiptap/core'
+import { nullSafeAttr } from './attributes'
 
 const CONTAINER_TAGS = ['div', 'section', 'header', 'footer', 'main', 'article', 'nav', 'aside'] as const
 
@@ -33,22 +34,8 @@ export const Div = Node.create({
         parseHTML: (element: HTMLElement) => element.tagName.toLowerCase(),
         renderHTML: () => ({}),
       },
-      class: {
-        default: null,
-        parseHTML: (element: HTMLElement) => element.getAttribute('class'),
-        renderHTML: (attributes: Record<string, string>) => {
-          if (!attributes.class) return {}
-          return { class: attributes.class }
-        },
-      },
-      style: {
-        default: null,
-        parseHTML: (element: HTMLElement) => element.getAttribute('style'),
-        renderHTML: (attributes: Record<string, string>) => {
-          if (!attributes.style) return {}
-          return { style: attributes.style }
-        },
-      },
+      class: nullSafeAttr('class'),
+      style: nullSafeAttr('style'),
     }
   },
 })

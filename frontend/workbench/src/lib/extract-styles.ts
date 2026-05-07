@@ -9,6 +9,26 @@
 
 const SCOPE_PREFIX = '.resume-document'
 
+/**
+ * Defense-in-depth: strip XSS-adjacent CSS patterns before injection.
+ * Modern browsers have disabled `expression()` for decades and `url(javascript:)`
+ * does not execute in CSS property values, but explicit removal costs nothing
+ * and adds a safety net against future CSS-based attacks or legacy renderers.
+ */
+const DANGEROUS_CSS_PATTERNS: Array<{ pattern: RegExp; replace: string }> = [
+  { pattern: /\bexpression\s*\(/gi, replace: 'blocked(' },
+  { pattern: /\burl\s*\(\s*["'\s]*(?:javascript|data\s*:|vbscript)/gi, replace: 'url(blocked:' },
+  { pattern: /^\s*behavior\s*:.*$/gim, replace: '/* blocked */' },
+]
+
+function sanitizeCSS(css: string): string {
+  let sanitized = css
+  for (const { pattern, replace } of DANGEROUS_CSS_PATTERNS) {
+    sanitized = sanitized.replace(pattern, replace)
+  }
+  return sanitized
+}
+
 const DIMENSION_PROPERTIES = new Set([
   'width',
   'min-width',
@@ -70,6 +90,12 @@ interface WalkOptions {
  * Walk a CSSRuleList, applying onStyleRule to each CSSStyleRule.
  * CSSMediaRule blocks are recursively walked; non-print results are
  * wrapped back into @media blocks.
+ *
+ * When `preserveOtherRules` is false, non-CSSStyleRule/non-CSSMediaRule
+ * at-rules (@supports, @layer, @font-face, @keyframes, etc.) are silently
+ * dropped. This is intentional for scoped-selector rewrites where these
+ * at-rules' internal selectors would also need rewriting logic that isn't
+ * yet implemented. Set `preserveOtherRules: true` to keep them as-is.
  *
  * Returns an array of CSS rule text strings.
  */
@@ -348,8 +374,21 @@ export function promoteContainerBackground(css: string, containerSelector: strin
   )
 
   if (promotedProps.length > 0) {
-    // Deduplicate props (same property may appear from multiple container classes)
-    const uniqueProps = [...new Set(promotedProps)]
+    // Deduplicate by property name. When the same property appears in
+    // multiple container-class rules, the last one wins (CSS cascade).
+    // Uses a Map keyed by prop_priority so different !important states
+    // are tracked separately.
+    const propMap = new Map<string, string>()
+    for (const propStr of promotedProps) {
+      const colonIdx = propStr.indexOf(':')
+      const propName = propStr.slice(0, colonIdx)
+      const valuePart = propStr.slice(colonIdx + 1)
+      const key = valuePart.includes('!important')
+        ? `${propName}!important`
+        : propName
+      propMap.set(key, propStr)
+    }
+    const uniqueProps = [...propMap.values()]
 
     // Clean up CSSOM shorthand expansion artifacts:
     // When `background: #fff` is parsed by CSSOM, it expands to many longhands
@@ -420,7 +459,7 @@ export function extractStyles(html: string): ExtractedStyles {
   }
 
   // Scope selectors
-  let scopedCSS = scopeSelectors(rawCSS)
+  let scopedCSS = scopeSelectors(sanitizeCSS(rawCSS))
 
   // Strip container dimensions for root container classes
   const containerClasses = getRootContainerClasses(doc)
