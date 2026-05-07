@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { ChevronDown, MoreHorizontal, PencilLine, RefreshCcw, Trash2 } from 'lucide-react'
+import { ChevronDown, Folder, MoreHorizontal, PencilLine, RefreshCcw, Trash2 } from 'lucide-react'
 import type { Asset } from '@/lib/api-client'
 import { getAssetVisual, getDisplayAssetTitle, getDisplayFileName, getOriginalFilenameFromAsset } from './fileVisuals'
 
@@ -203,6 +203,7 @@ export default function AssetList({
   const [renamingAssetId, setRenamingAssetId] = useState<number | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [renameSavingAssetId, setRenameSavingAssetId] = useState<number | null>(null)
+  const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<number>>(() => new Set())
   const renameInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -266,6 +267,14 @@ export default function AssetList({
     files.filter((asset) => folderIdForAsset(asset) === parentId)
   const rootFiles = files.filter((asset) => folderIdForAsset(asset) === null)
 
+  useEffect(() => {
+    const nextFolderIds = new Set(folders.map((folder) => folder.id))
+    setCollapsedFolderIds((current) => {
+      const next = new Set([...current].filter((id) => nextFolderIds.has(id)))
+      return next.size === current.size ? current : next
+    })
+  }, [folders])
+
   if (assets.length === 0) {
     return (
       <div className="py-12 text-center text-muted-foreground">
@@ -287,59 +296,99 @@ export default function AssetList({
           ].join(' ')}
         >
           <ChevronDown className="h-4 w-4" />
+          <Folder className="h-4 w-4 text-cyan-500" />
           <span className="min-w-0 flex-1 truncate text-sm font-semibold">根目录</span>
           <span className="text-[11px]">{childFoldersOf(null).length + rootFiles.length}</span>
         </button>
         <div className="mt-2 space-y-2 pl-5">
           {childFoldersOf(null).map((folder) => renderFolder(folder))}
-          {rootFiles.map((asset) => renderAsset(asset, false))}
+          {rootFiles.map((asset) => renderAsset(asset))}
         </div>
       </div>
     </div>
   )
 
-  function folderContainsSelection(folderId: number): boolean {
-    if (selectedFolderId === folderId) return true
-    if (childFilesOf(folderId).some((asset) => asset.id === selectedAssetId)) return true
-    return childFoldersOf(folderId).some((folder) => folderContainsSelection(folder.id))
+  function toggleFolder(folderId: number) {
+    onSelectFolder?.(folderId)
+    setCollapsedFolderIds((current) => {
+      const next = new Set(current)
+      if (next.has(folderId)) {
+        next.delete(folderId)
+      } else {
+        next.add(folderId)
+      }
+      return next
+    })
   }
 
   function renderFolder(folder: AssetItem) {
     const childFolders = childFoldersOf(folder.id)
     const childFiles = childFilesOf(folder.id)
-    const expanded = folderContainsSelection(folder.id) || selectedFolderId === folder.id
+    const expanded = !collapsedFolderIds.has(folder.id)
     const visual = getAssetVisual(folder.type, folder.uri)
     const Icon = visual.icon
     const title = getDisplayTitle(folder, visual.chipLabel)
+    const renaming = renamingAssetId === folder.id
+    const renameSaving = renameSavingAssetId === folder.id
 
     return (
       <div key={folder.id} className="rounded-xl border border-border/80 bg-card/70 p-2">
-        <button
-          type="button"
-          onClick={() => onSelectFolder?.(folder.id)}
+        <div
           className={[
-            'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-surface-hover',
+            'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-surface-hover',
             selectedFolderId === folder.id ? 'bg-primary/10 text-foreground' : 'text-muted-foreground',
           ].join(' ')}
         >
-          <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? '' : '-rotate-90'}`} />
-          <Icon className={`h-4 w-4 ${visual.iconClassName}`} />
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</span>
+          <button
+            type="button"
+            onClick={() => toggleFolder(folder.id)}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          >
+            <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded ? '' : '-rotate-90'}`} />
+            <Icon className={`h-4 w-4 shrink-0 ${visual.iconClassName}`} />
+            {renaming ? (
+              <input
+                ref={renameInputRef}
+                value={renameValue}
+                disabled={renameSaving}
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => setRenameValue(event.target.value.replace(/[\r\n]+/g, ' '))}
+                onBlur={() => void commitRename(folder)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    event.currentTarget.blur()
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    cancelRename()
+                  }
+                }}
+                className="h-7 min-w-0 flex-1 rounded-lg border border-primary/35 bg-background/80 px-2 text-sm font-semibold text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-ring/35 disabled:opacity-60"
+              />
+            ) : (
+              <span className="min-w-0 flex-1 truncate text-sm font-semibold" title={title}>{title}</span>
+            )}
+          </button>
           <span className="text-[11px]">{childFolders.length + childFiles.length}</span>
-        </button>
+          <AssetMoreMenu
+            asset={folder}
+            renameable={onRenameAsset !== undefined}
+            onRename={() => beginRename(folder, title)}
+            onDelete={onDelete}
+          />
+        </div>
         {expanded && (
           <div className="mt-2 space-y-2 pl-5">
             {childFolders.map((child) => renderFolder(child))}
-            {childFiles.length > 0 ? childFiles.map((asset) => renderAsset(asset, true)) : childFolders.length === 0 ? (
-              <p className="px-2 py-3 text-xs text-muted-foreground">文件夹为空</p>
-            ) : null}
+            {childFiles.map((asset) => renderAsset(asset))}
           </div>
         )}
       </div>
     )
   }
 
-  function renderAsset(asset: AssetItem, nested: boolean) {
+  function renderAsset(asset: AssetItem) {
         const visual = getAssetVisual(asset.type, asset.uri)
         const Icon = visual.icon
         const title = getDisplayTitle(asset, visual.chipLabel)
@@ -362,22 +411,22 @@ export default function AssetList({
               onOpenAsset(asset)
             }}
             className={[
-              nested ? 'rounded-xl border bg-card/80 p-2.5 shadow-sm transition-colors' : 'rounded-2xl border bg-card/90 p-3.5 shadow-sm transition-colors',
+              'rounded-xl border bg-card/85 p-2 shadow-sm transition-colors',
               onOpenAsset ? 'cursor-pointer hover:border-primary-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35' : 'hover:border-primary-200',
               selectedAssetId === asset.id ? 'border-primary/60 bg-primary/10' : 'border-border',
             ].join(' ')}
           >
-            <div className="flex items-start gap-3">
+            <div className="flex items-center gap-2.5">
               <div
-                className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${visual.iconWrapperClassName}`}
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${visual.iconWrapperClassName}`}
               >
-                <Icon className={`h-5 w-5 ${visual.iconClassName}`} />
+                <Icon className={`h-4 w-4 ${visual.iconClassName}`} />
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="flex min-h-8 min-w-0 items-center gap-2">
+                    <div className="flex min-h-7 min-w-0 items-center gap-2">
                       {renaming ? (
                         <input
                           ref={renameInputRef}
@@ -396,7 +445,7 @@ export default function AssetList({
                               cancelRename()
                             }
                           }}
-                          className="h-8 min-w-0 flex-1 rounded-lg border border-primary/35 bg-background/80 px-2.5 text-sm font-semibold text-foreground shadow-[0_8px_24px_rgba(2,8,23,0.16)] outline-none transition focus:border-primary focus:ring-2 focus:ring-ring/35 disabled:opacity-60"
+                          className="h-7 min-w-0 flex-1 rounded-lg border border-primary/35 bg-background/80 px-2 text-sm font-semibold text-foreground shadow-[0_8px_24px_rgba(2,8,23,0.16)] outline-none transition focus:border-primary focus:ring-2 focus:ring-ring/35 disabled:opacity-60"
                         />
                       ) : (
                         <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground" title={title}>{title}</p>

@@ -228,6 +228,8 @@ func (h *Handler) CreateFolder(c *gin.Context) {
 			response.Error(c, CodeProjectNotFound, "project not found")
 		case errors.Is(err, ErrInvalidFolderName):
 			response.Error(c, CodeParamInvalid, "folder name is required")
+		case errors.Is(err, ErrFolderDepthExceeded):
+			response.Error(c, CodeParamInvalid, "folder depth cannot exceed 7 levels")
 		default:
 			response.Error(c, CodeInternalError, "failed to create folder")
 		}
