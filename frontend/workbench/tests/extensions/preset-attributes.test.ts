@@ -47,4 +47,16 @@ describe('PresetAttributes', () => {
     expect(editor.getHTML()).toContain('style="font-size: 14px;"')
     editor.destroy()
   })
+
+  it('preserves class attribute on bulletList', () => {
+    const editor = createEditor('<ul class="skills-list"><li><p>Item</p></li></ul>')
+    expect(editor.getHTML()).toContain('class="skills-list"')
+    editor.destroy()
+  })
+
+  it('preserves class attribute on blockquote', () => {
+    const editor = createEditor('<blockquote class="quote"><p>Text</p></blockquote>')
+    expect(editor.getHTML()).toContain('class="quote"')
+    editor.destroy()
+  })
 })

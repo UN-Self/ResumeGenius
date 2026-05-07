@@ -237,6 +237,9 @@ describe('promoteContainerBackground', () => {
     const result = promoteContainerBackground(css, '.resume')
     // CSSOM expands shorthand — background-color should be promoted
     expect(result).toMatch(/\.resume-document\s*\{[^}]*background/)
+    // Should NOT include default-valued longhands like background-image: none
+    // that CSSOM expands from the shorthand
+    expect(result).not.toContain('background-image: none')
   })
 
   it('does not affect non-container selectors', () => {
@@ -256,6 +259,32 @@ describe('promoteContainerBackground', () => {
 
   it('returns empty for empty input', () => {
     expect(promoteContainerBackground('', '.resume')).toBe('')
+  })
+
+  it('preserves non-container rules inside @media screen when promoting container background', () => {
+    const css = '@media screen and (max-width: 600px) { .resume-document .resume { background: #f5f5f5; } .resume-document .section { font-size: 12pt; } }'
+    const result = promoteContainerBackground(css, '.resume')
+    // @media block should still exist (non-container .section rule preserves it)
+    expect(result).toContain('@media screen and (max-width: 600px)')
+    // .section should remain INSIDE the @media block, not leaked to top level
+    expect(result).toMatch(/@media[\s\S]*\.resume-document\s+\.section[\s\S]*font-size:\s*12pt/)
+    // Background should be promoted to .resume-document at top level
+    expect(result).toMatch(/\.resume-document\s*\{[^}]*background/)
+  })
+
+  it('drops empty @media block when all inner rules are fully promoted', () => {
+    const css = '@media screen and (max-width: 600px) { .resume-document .resume { background: #f5f5f5; } }'
+    const result = promoteContainerBackground(css, '.resume')
+    // All container props are background → rule dropped → @media block empty → dropped
+    expect(result).not.toContain('@media')
+    // But background is still promoted
+    expect(result).toMatch(/\.resume-document\s*\{[^}]*background/)
+  })
+
+  it('preserves !important priority on promoted background', () => {
+    const css = '.resume-document .resume { background: #fff !important; }'
+    const result = promoteContainerBackground(css, '.resume')
+    expect(result).toContain('!important')
   })
 })
 
