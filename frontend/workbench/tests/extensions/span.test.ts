@@ -4,10 +4,28 @@ import StarterKit from '@tiptap/starter-kit'
 import { TextStyleKit } from '@tiptap/extension-text-style'
 import { Span } from '@/components/editor/extensions/Span'
 import { Div } from '@/components/editor/extensions/Div'
+import { PresetAttributes } from '@/components/editor/extensions/PresetAttributes'
 
 function createEditor(content = '') {
   return new Editor({
     extensions: [StarterKit.configure({ strike: false }), TextStyleKit, Span, Div],
+    content,
+  })
+}
+
+/**
+ * Integration editor matching EditorPage production configuration —
+ * all three custom extensions loaded together.
+ */
+function createIntegratedEditor(content = '') {
+  return new Editor({
+    extensions: [
+      StarterKit.configure({ strike: false }),
+      TextStyleKit,
+      PresetAttributes,
+      Div,
+      Span,
+    ],
     content,
   })
 }
@@ -61,6 +79,39 @@ describe('Span mark', () => {
     const html = editor.getHTML()
     expect(html).toContain('class="label"')
     expect(html).toContain('Alice')
+    editor.destroy()
+  })
+})
+
+describe('Span with PresetAttributes integration', () => {
+  it('preserves span class alongside block-level attributes', () => {
+    const editor = createIntegratedEditor(
+      '<div class="resume"><p class="intro"><span class="tag">TypeScript</span></p></div>',
+    )
+    const html = editor.getHTML()
+    expect(html).toContain('class="resume"')
+    expect(html).toContain('class="intro"')
+    expect(html).toContain('class="tag"')
+    editor.destroy()
+  })
+
+  it('preserves span class when used together with styled paragraph', () => {
+    const editor = createIntegratedEditor(
+      '<p style="font-size: 14px"><span class="label">Name:</span> Alice</p>',
+    )
+    const html = editor.getHTML()
+    expect(html).toContain('class="label"')
+    expect(html).toContain('style="font-size: 14px;"')
+    editor.destroy()
+  })
+
+  it('preserves multiple spans in a classed div with PresetAttributes loaded', () => {
+    const editor = createIntegratedEditor(
+      '<div class="tags"><span class="tag">Go</span> and <span class="tag">React</span></div>',
+    )
+    const html = editor.getHTML()
+    const tagMatches = html.match(/class="tag"/g)
+    expect(tagMatches).toHaveLength(2)
     editor.destroy()
   })
 })
