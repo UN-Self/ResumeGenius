@@ -6,6 +6,7 @@ import { WatermarkOverlay } from './WatermarkOverlay'
 interface A4CanvasProps {
   editor?: Editor | null
   children?: ReactNode
+  scopedCSS?: string
 }
 
 const CANVAS_WIDTH_MM = 210
@@ -21,7 +22,7 @@ function computeZoom(containerWidth: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
 }
 
-export function A4Canvas({ editor, children }: A4CanvasProps) {
+export function A4Canvas({ editor, children, scopedCSS }: A4CanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [zoom, setZoom] = useState(0.75)
 
@@ -52,6 +53,7 @@ export function A4Canvas({ editor, children }: A4CanvasProps) {
           transformOrigin: 'top center',
         }}
       >
+        {scopedCSS && <style dangerouslySetInnerHTML={{ __html: scopedCSS }} />}
         {children || (editor && <TipTapEditor editor={editor} />)}
         <WatermarkOverlay />
       </div>
