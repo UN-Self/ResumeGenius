@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { MoreHorizontal, PencilLine, RefreshCcw, Trash2 } from 'lucide-react'
+import { ChevronDown, MoreHorizontal, PencilLine, RefreshCcw, Trash2 } from 'lucide-react'
 import type { Asset } from '@/lib/api-client'
 import { getAssetVisual, getDisplayAssetTitle, getDisplayFileName, getOriginalFilenameFromAsset } from './fileVisuals'
 
@@ -15,6 +15,8 @@ interface AssetListProps {
   onReparseAsset?: (asset: AssetItem) => void
   canReparseAsset?: (asset: AssetItem) => boolean
   reparseLoadingAssetId?: number | null
+  onSelectFolder?: (folderId: number | null) => void
+  selectedFolderId?: number | null
 }
 
 interface AssetActionButtonProps {
@@ -35,7 +37,10 @@ function AssetActionButton({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={(event) => {
+        event.stopPropagation()
+        onClick()
+      }}
       disabled={disabled}
       className={[
         'inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[11px] font-medium shadow-sm transition-colors',
@@ -192,6 +197,8 @@ export default function AssetList({
   onReparseAsset,
   canReparseAsset,
   reparseLoadingAssetId,
+  onSelectFolder,
+  selectedFolderId,
 }: AssetListProps) {
   const [renamingAssetId, setRenamingAssetId] = useState<number | null>(null)
   const [renameValue, setRenameValue] = useState('')
@@ -243,6 +250,22 @@ export default function AssetList({
     }
   }
 
+  const folders = assets.filter((asset) => asset.type === 'folder')
+  const files = assets.filter((asset) => asset.type !== 'folder')
+  const folderIdSet = new Set(folders.map((folder) => folder.id))
+  const folderIdForAsset = (asset: AssetItem) => {
+    const raw = asset.metadata?.folder_id
+    if (typeof raw !== 'number' || raw === asset.id || !folderIdSet.has(raw)) {
+      return null
+    }
+    return raw
+  }
+  const childFoldersOf = (parentId: number | null) =>
+    folders.filter((folder) => folderIdForAsset(folder) === parentId)
+  const childFilesOf = (parentId: number | null) =>
+    files.filter((asset) => folderIdForAsset(asset) === parentId)
+  const rootFiles = files.filter((asset) => folderIdForAsset(asset) === null)
+
   if (assets.length === 0) {
     return (
       <div className="py-12 text-center text-muted-foreground">
@@ -254,7 +277,69 @@ export default function AssetList({
 
   return (
     <div className="space-y-3">
-      {assets.map((asset) => {
+      <div className="rounded-2xl border border-border bg-card/70 p-2">
+        <button
+          type="button"
+          onClick={() => onSelectFolder?.(null)}
+          className={[
+            'flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition-colors hover:bg-surface-hover',
+            selectedFolderId === null ? 'bg-primary/10 text-foreground' : 'text-muted-foreground',
+          ].join(' ')}
+        >
+          <ChevronDown className="h-4 w-4" />
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">根目录</span>
+          <span className="text-[11px]">{childFoldersOf(null).length + rootFiles.length}</span>
+        </button>
+        <div className="mt-2 space-y-2 pl-5">
+          {childFoldersOf(null).map((folder) => renderFolder(folder))}
+          {rootFiles.map((asset) => renderAsset(asset, false))}
+        </div>
+      </div>
+    </div>
+  )
+
+  function folderContainsSelection(folderId: number): boolean {
+    if (selectedFolderId === folderId) return true
+    if (childFilesOf(folderId).some((asset) => asset.id === selectedAssetId)) return true
+    return childFoldersOf(folderId).some((folder) => folderContainsSelection(folder.id))
+  }
+
+  function renderFolder(folder: AssetItem) {
+    const childFolders = childFoldersOf(folder.id)
+    const childFiles = childFilesOf(folder.id)
+    const expanded = folderContainsSelection(folder.id) || selectedFolderId === folder.id
+    const visual = getAssetVisual(folder.type, folder.uri)
+    const Icon = visual.icon
+    const title = getDisplayTitle(folder, visual.chipLabel)
+
+    return (
+      <div key={folder.id} className="rounded-xl border border-border/80 bg-card/70 p-2">
+        <button
+          type="button"
+          onClick={() => onSelectFolder?.(folder.id)}
+          className={[
+            'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-surface-hover',
+            selectedFolderId === folder.id ? 'bg-primary/10 text-foreground' : 'text-muted-foreground',
+          ].join(' ')}
+        >
+          <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? '' : '-rotate-90'}`} />
+          <Icon className={`h-4 w-4 ${visual.iconClassName}`} />
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</span>
+          <span className="text-[11px]">{childFolders.length + childFiles.length}</span>
+        </button>
+        {expanded && (
+          <div className="mt-2 space-y-2 pl-5">
+            {childFolders.map((child) => renderFolder(child))}
+            {childFiles.length > 0 ? childFiles.map((asset) => renderAsset(asset, true)) : childFolders.length === 0 ? (
+              <p className="px-2 py-3 text-xs text-muted-foreground">文件夹为空</p>
+            ) : null}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  function renderAsset(asset: AssetItem, nested: boolean) {
         const visual = getAssetVisual(asset.type, asset.uri)
         const Icon = visual.icon
         const title = getDisplayTitle(asset, visual.chipLabel)
@@ -277,7 +362,7 @@ export default function AssetList({
               onOpenAsset(asset)
             }}
             className={[
-              'rounded-2xl border bg-card/90 p-3.5 shadow-sm transition-colors',
+              nested ? 'rounded-xl border bg-card/80 p-2.5 shadow-sm transition-colors' : 'rounded-2xl border bg-card/90 p-3.5 shadow-sm transition-colors',
               onOpenAsset ? 'cursor-pointer hover:border-primary-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35' : 'hover:border-primary-200',
               selectedAssetId === asset.id ? 'border-primary/60 bg-primary/10' : 'border-border',
             ].join(' ')}
@@ -298,6 +383,7 @@ export default function AssetList({
                           ref={renameInputRef}
                           value={renameValue}
                           disabled={renameSaving}
+                          onClick={(event) => event.stopPropagation()}
                           onChange={(event) => setRenameValue(event.target.value.replace(/[\r\n]+/g, ' '))}
                           onBlur={() => void commitRename(asset)}
                           onKeyDown={(event) => {
@@ -349,7 +435,5 @@ export default function AssetList({
             </div>
           </div>
         )
-      })}
-    </div>
-  )
+  }
 }

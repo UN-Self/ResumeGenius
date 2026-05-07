@@ -1,7 +1,7 @@
-import { FileImage, FileText, GitBranch, type LucideIcon } from 'lucide-react'
+import { FileImage, FileText, Folder, GitBranch, type LucideIcon } from 'lucide-react'
 import type { Asset } from '@/lib/api-client'
 
-type FileVisualKey = 'pdf' | 'docx' | 'png' | 'jpg' | 'jpeg' | 'git' | 'note' | 'generic'
+type FileVisualKey = 'pdf' | 'docx' | 'png' | 'jpg' | 'jpeg' | 'git' | 'note' | 'folder' | 'generic'
 
 export interface FileVisual {
   key: FileVisualKey
@@ -76,6 +76,15 @@ const visuals: Record<FileVisualKey, FileVisual> = {
     iconWrapperClassName: 'border-amber-200 bg-amber-50',
     iconClassName: 'text-amber-700',
     chipClassName: 'border-amber-200 bg-amber-100 text-amber-700',
+  },
+  folder: {
+    key: 'folder',
+    chipLabel: '文件夹',
+    typeLabel: '文件夹',
+    icon: Folder,
+    iconWrapperClassName: 'border-cyan-200 bg-cyan-50',
+    iconClassName: 'text-cyan-700',
+    chipClassName: 'border-cyan-200 bg-cyan-100 text-cyan-700',
   },
   generic: {
     key: 'generic',
@@ -156,6 +165,8 @@ export function getAssetVisual(type: string, uri?: string | null) {
       return visuals.git
     case 'note':
       return visuals.note
+    case 'folder':
+      return visuals.folder
     default:
       return visuals.generic
   }
@@ -173,6 +184,8 @@ export function getAssetBadgeText(type: string, reference?: string | null) {
       return 'GIT'
     case 'note':
       return '\u5907\u6ce8'
+    case 'folder':
+      return '文件夹'
     default:
       return '\u7d20\u6750'
   }
@@ -194,6 +207,8 @@ export function getDisplayAssetTitle(type: string, label: string) {
       const repoName = normalized.split('/').pop() ?? normalized
       return repoName.replace(/\.git$/i, '')
     }
+    case 'folder':
+      return trimmedLabel
     default:
       return trimmedLabel
   }

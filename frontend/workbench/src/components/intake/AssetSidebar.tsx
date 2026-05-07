@@ -1,6 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { FolderPlus } from 'lucide-react'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/ui/modal'
 import { intakeApi, parsingApi, type Asset } from '@/lib/api-client'
 import AssetList from './AssetList'
 import DeleteConfirm from './DeleteConfirm'
@@ -70,6 +73,10 @@ export default function AssetSidebar({
   const [uploadOpen, setUploadOpen] = useState(false)
   const [gitOpen, setGitOpen] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
+  const [folderOpen, setFolderOpen] = useState(false)
+  const [folderName, setFolderName] = useState('')
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null)
+  const [creatingFolder, setCreatingFolder] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [reparseLoadingAssetId, setReparseLoadingAssetId] = useState<number | null>(null)
@@ -86,6 +93,17 @@ export default function AssetSidebar({
     [assets]
   )
 
+  const folders = useMemo(
+    () => visibleAssets.filter((asset) => asset.type === 'folder'),
+    [visibleAssets]
+  )
+
+  useEffect(() => {
+    if (selectedFolderId === null) return
+    if (folders.some((folder) => folder.id === selectedFolderId)) return
+    setSelectedFolderId(null)
+  }, [folders, selectedFolderId])
+
   const reparsableAssets = useMemo(
     () => visibleAssets.filter(canReparseAsset),
     [visibleAssets]
@@ -100,10 +118,10 @@ export default function AssetSidebar({
     await onReload()
   }
 
-  const handleUpload = async (file: File, replaceAssetId?: number) => {
+  const handleUpload = async (file: File, replaceAssetId?: number, folderId?: number | null) => {
     setError('')
     try {
-      await intakeApi.uploadFile(projectId, file, replaceAssetId)
+      await intakeApi.uploadFile(projectId, file, replaceAssetId, folderId)
       await parsingApi.parseProject(projectId)
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : '上传或解析失败')
@@ -142,6 +160,25 @@ export default function AssetSidebar({
     } catch (renameError) {
       setError(renameError instanceof Error ? renameError.message : '重命名素材失败')
     } finally {
+      await refreshAssets()
+    }
+  }
+
+  const handleCreateFolder = async () => {
+    const trimmedName = folderName.replace(/\s+/g, ' ').trim()
+    if (!trimmedName) return
+
+    setCreatingFolder(true)
+    setError('')
+    try {
+      const folder = await intakeApi.createFolder(projectId, trimmedName, selectedFolderId)
+      setSelectedFolderId(folder.id)
+      setFolderName('')
+      setFolderOpen(false)
+    } catch (createFolderError) {
+      setError(createFolderError instanceof Error ? createFolderError.message : '创建文件夹失败')
+    } finally {
+      setCreatingFolder(false)
       await refreshAssets()
     }
   }
@@ -198,6 +235,10 @@ export default function AssetSidebar({
         <Button size="sm" variant="secondary" onClick={() => setNoteOpen(true)}>
           添加备注
         </Button>
+        <Button size="sm" variant="secondary" onClick={() => setFolderOpen(true)} disabled={creatingFolder}>
+          <FolderPlus className="h-3.5 w-3.5" />
+          {creatingFolder ? '创建中...' : '新建文件夹'}
+        </Button>
       </div>
 
       {dirtyReparseAssets.length > 0 && (
@@ -217,6 +258,8 @@ export default function AssetSidebar({
           assets={visibleAssets}
           onOpenAsset={onOpenAsset}
           selectedAssetId={selectedAssetId}
+          onSelectFolder={setSelectedFolderId}
+          selectedFolderId={selectedFolderId}
           onDelete={(id) => {
             const target = visibleAssets.find((asset) => asset.id === id) ?? null
             setDeleteTarget(target)
@@ -233,6 +276,8 @@ export default function AssetSidebar({
         onClose={() => setUploadOpen(false)}
         onUpload={handleUpload}
         existingAssets={visibleAssets}
+        folders={folders}
+        defaultFolderId={selectedFolderId}
       />
       <GitRepoDialog
         open={gitOpen}
@@ -244,6 +289,28 @@ export default function AssetSidebar({
         onClose={() => setNoteOpen(false)}
         onSubmit={handleCreateNote}
       />
+      <Modal open={folderOpen} onClose={() => setFolderOpen(false)} maxWidth="max-w-sm">
+        <ModalHeader>新建文件夹</ModalHeader>
+        <ModalBody>
+          <p className="mb-3 text-sm text-muted-foreground">
+            {selectedFolderId === null ? '将在根目录下创建文件夹。' : '将在当前选中文件夹下创建子文件夹。'}
+          </p>
+          <Input
+            value={folderName}
+            onChange={(event) => setFolderName(event.target.value.replace(/[\r\n]+/g, ' '))}
+            placeholder="例如：原始简历 / 作品集 / 证书"
+            autoFocus
+          />
+        </ModalBody>
+        <ModalFooter>
+          <Button variant="secondary" onClick={() => setFolderOpen(false)}>
+            取消
+          </Button>
+          <Button onClick={() => void handleCreateFolder()} disabled={!folderName.trim() || creatingFolder}>
+            {creatingFolder ? '创建中...' : '创建'}
+          </Button>
+        </ModalFooter>
+      </Modal>
       <DeleteConfirm
         open={deleteTarget !== null}
         title="删除素材"

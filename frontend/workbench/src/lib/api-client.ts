@@ -91,15 +91,23 @@ export const intakeApi = {
   // Assets
   listAssets: (projectId: number) =>
     request<Asset[]>(`/assets?project_id=${projectId}`),
-  uploadFile: (projectId: number, file: File, replaceAssetId?: number) => {
+  uploadFile: (projectId: number, file: File, replaceAssetId?: number, folderId?: number | null) => {
     const fd = new FormData()
     fd.append('file', file)
     fd.append('project_id', String(projectId))
     if (replaceAssetId !== undefined) {
       fd.append('replace_asset_id', String(replaceAssetId))
     }
+    if (folderId !== undefined && folderId !== null) {
+      fd.append('folder_id', String(folderId))
+    }
     return upload<Asset>('/assets/upload', fd)
   },
+  createFolder: (projectId: number, name: string, parentFolderId?: number | null) =>
+    request<Asset>('/assets/folders', {
+      method: 'POST',
+      body: JSON.stringify({ project_id: projectId, name, parent_folder_id: parentFolderId ?? null }),
+    }),
   createGitRepo: (projectId: number, repoUrl: string) =>
     request<Asset>('/assets/git', {
       method: 'POST',

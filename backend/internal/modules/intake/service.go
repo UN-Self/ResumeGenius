@@ -131,6 +131,7 @@ var (
 	ErrProjectNotFound      = errors.New("project not found")
 	ErrAssetNotFound        = errors.New("asset not found")
 	ErrAssetURIMissing      = errors.New("asset uri is required")
+	ErrInvalidFolderName    = errors.New("folder name is required")
 	ErrReplaceAssetMismatch = errors.New("replacement asset does not match uploaded filename")
 )
 
@@ -170,12 +171,21 @@ func (s *AssetService) validateProject(userID string, projectID uint) error {
 }
 
 func (s *AssetService) UploadFile(userID string, projectID uint, filename string, data []byte, size int64) (*models.Asset, error) {
-	return s.UploadFileWithReplacement(userID, projectID, filename, data, size, nil)
+	return s.UploadFileWithReplacement(userID, projectID, filename, data, size, nil, nil)
 }
 
-func (s *AssetService) UploadFileWithReplacement(userID string, projectID uint, filename string, data []byte, size int64, replaceAssetID *uint) (*models.Asset, error) {
+func (s *AssetService) UploadFileWithReplacement(userID string, projectID uint, filename string, data []byte, size int64, replaceAssetID *uint, folderIDs ...*uint) (*models.Asset, error) {
 	if err := s.validateProject(userID, projectID); err != nil {
 		return nil, err
+	}
+	var folderID *uint
+	if len(folderIDs) > 0 {
+		folderID = folderIDs[0]
+	}
+	if folderID != nil {
+		if err := s.validateFolder(userID, projectID, *folderID); err != nil {
+			return nil, err
+		}
 	}
 
 	ext := strings.ToLower(filepath.Ext(filename))
@@ -198,7 +208,7 @@ func (s *AssetService) UploadFileWithReplacement(userID string, projectID uint, 
 	}
 
 	fileHash := storage.SHA256Hex(data)
-	restoredAsset, err := s.restoreDeletedAssetByFileHash(userID, projectID, filename, assetType, fileHash, replaceAsset)
+	restoredAsset, err := s.restoreDeletedAssetByFileHash(userID, projectID, filename, assetType, fileHash, replaceAsset, folderID)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +226,7 @@ func (s *AssetService) UploadFileWithReplacement(userID string, projectID uint, 
 		Type:      assetType,
 		URI:       &uri,
 		FileHash:  &fileHash,
-		Metadata:  withAssetOriginalFilenameMetadata(nil, filename),
+		Metadata:  withAssetFolderMetadata(withAssetOriginalFilenameMetadata(nil, filename), folderID),
 	}
 	if err := s.db.Create(&asset).Error; err != nil {
 		_ = s.storage.Delete(uri)
@@ -231,6 +241,32 @@ func (s *AssetService) UploadFileWithReplacement(userID string, projectID uint, 
 		}
 	}
 
+	return &asset, nil
+}
+
+func (s *AssetService) CreateFolder(userID string, projectID uint, name string, parentFolderID *uint) (*models.Asset, error) {
+	if err := s.validateProject(userID, projectID); err != nil {
+		return nil, err
+	}
+	if parentFolderID != nil {
+		if err := s.validateFolder(userID, projectID, *parentFolderID); err != nil {
+			return nil, err
+		}
+	}
+	trimmedName := strings.TrimSpace(name)
+	if trimmedName == "" {
+		return nil, ErrInvalidFolderName
+	}
+
+	asset := models.Asset{
+		ProjectID: projectID,
+		Type:      "folder",
+		Label:     &trimmedName,
+		Metadata:  withAssetFolderMetadata(models.JSONB{"folder": true}, parentFolderID),
+	}
+	if err := s.db.Create(&asset).Error; err != nil {
+		return nil, fmt.Errorf("create folder asset: %w", err)
+	}
 	return &asset, nil
 }
 
@@ -338,6 +374,9 @@ func (s *AssetService) ResolveAssetFile(userID string, assetID uint) (*models.As
 	if err != nil {
 		return nil, "", err
 	}
+	if !s.storage.Exists(strings.TrimSpace(*asset.URI)) {
+		return nil, "", ErrAssetNotFound
+	}
 
 	return &asset, path, nil
 }
@@ -429,6 +468,27 @@ func withAssetOriginalFilenameMetadata(existing models.JSONB, filename string) m
 	return metadata
 }
 
+func withAssetFolderMetadata(existing models.JSONB, folderID *uint) models.JSONB {
+	metadata := cloneAssetJSONB(existing)
+	if folderID == nil {
+		delete(metadata, "folder_id")
+		return metadata
+	}
+	metadata["folder_id"] = *folderID
+	return metadata
+}
+
+func (s *AssetService) validateFolder(userID string, projectID uint, folderID uint) error {
+	var folder models.Asset
+	if err := s.db.First(&folder, folderID).Error; err != nil {
+		return ErrAssetNotFound
+	}
+	if folder.ProjectID != projectID || folder.Type != "folder" {
+		return ErrAssetNotFound
+	}
+	return s.validateProject(userID, folder.ProjectID)
+}
+
 func cloneAssetJSONB(input models.JSONB) models.JSONB {
 	if input == nil {
 		return models.JSONB{}
@@ -510,13 +570,14 @@ func (s *AssetService) restoreDeletedAssetByFileHash(
 	projectID uint,
 	filename, assetType, fileHash string,
 	replaceAsset *models.Asset,
+	folderID *uint,
 ) (*models.Asset, error) {
 	deletedAsset, err := s.findDeletedAssetByFileHash(userID, fileHash)
 	if err != nil || deletedAsset == nil {
 		return deletedAsset, err
 	}
 
-	restoredMetadata := withAssetOriginalFilenameMetadata(deletedAsset.Metadata, filename)
+	restoredMetadata := withAssetFolderMetadata(withAssetOriginalFilenameMetadata(deletedAsset.Metadata, filename), folderID)
 	derivedIDs := derivedImageAssetIDsFromAssetMetadata(deletedAsset.Metadata)
 	restoredAssetID := deletedAsset.ID
 
@@ -586,7 +647,15 @@ func (s *AssetService) softDeleteAssetCascade(tx *gorm.DB, asset models.Asset) e
 
 func (s *AssetService) collectAssetsForDelete(db *gorm.DB, asset models.Asset) ([]models.Asset, error) {
 	assets := []models.Asset{asset}
-	derivedIDs := derivedImageAssetIDsFromAssetMetadata(asset.Metadata)
+	if asset.Type == "folder" {
+		descendants, err := s.collectFolderDescendantsForDelete(db, asset)
+		if err != nil {
+			return nil, err
+		}
+		assets = append(assets, descendants...)
+	}
+
+	derivedIDs := derivedImageAssetIDsForAssets(assets)
 	if len(derivedIDs) == 0 {
 		return assets, nil
 	}
@@ -599,6 +668,83 @@ func (s *AssetService) collectAssetsForDelete(db *gorm.DB, asset models.Asset) (
 	}
 
 	return append(assets, derivedAssets...), nil
+}
+
+func derivedImageAssetIDsForAssets(assets []models.Asset) []uint {
+	seen := make(map[uint]struct{})
+	ids := make([]uint, 0)
+	for _, asset := range assets {
+		for _, id := range derivedImageAssetIDsFromAssetMetadata(asset.Metadata) {
+			if _, ok := seen[id]; ok {
+				continue
+			}
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+func (s *AssetService) collectFolderDescendantsForDelete(db *gorm.DB, folder models.Asset) ([]models.Asset, error) {
+	var projectAssets []models.Asset
+	if err := db.Where("project_id = ?", folder.ProjectID).Find(&projectAssets).Error; err != nil {
+		return nil, fmt.Errorf("find folder descendants: %w", err)
+	}
+
+	descendants := make([]models.Asset, 0)
+	visitedFolders := map[uint]struct{}{folder.ID: {}}
+	queue := []uint{folder.ID}
+
+	for len(queue) > 0 {
+		parentID := queue[0]
+		queue = queue[1:]
+
+		for _, candidate := range projectAssets {
+			candidateFolderID, ok := assetFolderID(candidate)
+			if !ok || candidateFolderID != parentID || candidate.ID == folder.ID {
+				continue
+			}
+
+			descendants = append(descendants, candidate)
+			if candidate.Type != "folder" {
+				continue
+			}
+			if _, seen := visitedFolders[candidate.ID]; seen {
+				continue
+			}
+			visitedFolders[candidate.ID] = struct{}{}
+			queue = append(queue, candidate.ID)
+		}
+	}
+
+	return descendants, nil
+}
+
+func assetFolderID(asset models.Asset) (uint, bool) {
+	raw, ok := asset.Metadata["folder_id"]
+	if !ok {
+		return 0, false
+	}
+
+	switch typed := raw.(type) {
+	case float64:
+		if typed <= 0 {
+			return 0, false
+		}
+		return uint(typed), true
+	case int:
+		if typed <= 0 {
+			return 0, false
+		}
+		return uint(typed), true
+	case uint:
+		if typed == 0 {
+			return 0, false
+		}
+		return typed, true
+	default:
+		return 0, false
+	}
 }
 
 func derivedImageAssetIDsFromAssetMetadata(metadata models.JSONB) []uint {

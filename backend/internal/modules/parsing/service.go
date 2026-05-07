@@ -168,6 +168,8 @@ func (s *ParsingService) defaultListProjectAssets(projectID uint) ([]models.Asse
 
 func (s *ParsingService) shouldSkipAssetInParseFlow(asset models.Asset) bool {
 	switch asset.Type {
+	case "folder":
+		return true
 	case AssetTypeResumeImage:
 		return true
 	case AssetTypeGitRepo:

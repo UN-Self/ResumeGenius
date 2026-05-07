@@ -58,6 +58,8 @@ services:
       start_period: 10s
     ports:
       - "${HOST_BACKEND_PORT:-8080}:8080"
+    volumes:
+      - ./data/uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
