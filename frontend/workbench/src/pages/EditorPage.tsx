@@ -221,6 +221,12 @@ export default function EditorPage() {
             if (cancelled) return
             setDraftId(String(draft.id))
             setPendingHtml(draft.html_content || '')
+            setProjectTitle(project.title)
+
+            const nextAssets = await intakeApi.listAssets(pid)
+            if (cancelled) return
+            setAssets(nextAssets)
+            setError(null)
           } catch (createErr) {
             if (cancelled) return
             setError(createErr instanceof ApiError ? createErr.message : '创建草稿失败')
