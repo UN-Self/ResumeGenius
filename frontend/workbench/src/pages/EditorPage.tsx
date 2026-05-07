@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { FileText, X } from 'lucide-react'
+import { FileText, LayoutTemplate, Palette, X } from 'lucide-react'
 import { useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
@@ -47,6 +47,7 @@ export default function EditorPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [leftOpen, setLeftOpen] = useState(true)
+  const [leftView, setLeftView] = useState<'files' | 'components' | 'templates'>('files')
   const [rightOpen, setRightOpen] = useState(true)
   const [contextMenu, setContextMenu] = useState<{ isOpen: boolean; x: number; y: number }>({
     isOpen: false, x: 0, y: 0,
@@ -399,13 +400,18 @@ export default function EditorPage() {
   const activeAsset = typeof activeTab === 'number'
     ? assets.find((asset) => asset.id === activeTab) ?? null
     : null
+  const leftViewTitle = {
+    files: '文件',
+    components: '图案组件库',
+    templates: '简历模板库',
+  }[leftView]
 
   return (
     <div className={gridClass}>
       <div className="editor-panel-left">
         <div className="panel-header">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {'\u7d20\u6750'}
+            {leftViewTitle}
           </h2>
           <button
             type="button"
@@ -416,14 +422,52 @@ export default function EditorPage() {
             {'<'}
           </button>
         </div>
-        <div className="panel-body">
-          <AssetSidebar
-            projectId={pid}
-            assets={assets}
-            onReload={reloadAssets}
-            onOpenAsset={openAssetTab}
-            selectedAssetId={typeof activeTab === 'number' ? activeTab : null}
-          />
+        <div className="panel-body left-workbench-body">
+          <nav className="left-activity-bar" aria-label="左侧功能">
+            <button
+              type="button"
+              aria-label="文件"
+              aria-pressed={leftView === 'files'}
+              className={leftView === 'files' ? 'left-activity-button active' : 'left-activity-button'}
+              onClick={() => setLeftView('files')}
+            >
+              <FileText className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              aria-label="图案组件库"
+              aria-pressed={leftView === 'components'}
+              className={leftView === 'components' ? 'left-activity-button active' : 'left-activity-button'}
+              onClick={() => setLeftView('components')}
+            >
+              <Palette className="h-5 w-5" />
+            </button>
+            <button
+              type="button"
+              aria-label="简历模板库"
+              aria-pressed={leftView === 'templates'}
+              className={leftView === 'templates' ? 'left-activity-button active' : 'left-activity-button'}
+              onClick={() => setLeftView('templates')}
+            >
+              <LayoutTemplate className="h-5 w-5" />
+            </button>
+          </nav>
+          <div className="left-workbench-content">
+            {leftView === 'files' ? (
+              <AssetSidebar
+                projectId={pid}
+                assets={assets}
+                onReload={reloadAssets}
+                onOpenAsset={openAssetTab}
+                selectedAssetId={typeof activeTab === 'number' ? activeTab : null}
+              />
+            ) : (
+              <div className="left-empty-pane">
+                <p className="text-sm font-semibold text-foreground">{leftViewTitle}</p>
+                <p className="mt-2 text-xs text-muted-foreground">暂无内容</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
