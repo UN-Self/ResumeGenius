@@ -382,7 +382,8 @@ func TestAssetService_UploadFile_RestoresSoftDeletedSameFileAndDerivedAssets(t *
 	assert.Equal(t, *oldAsset.FileHash, *restoredAsset.FileHash)
 	require.NotNil(t, restoredAsset.Content)
 	assert.Equal(t, parsedContent, *restoredAsset.Content)
-	assert.Nil(t, restoredAsset.URI)
+	require.NotNil(t, restoredAsset.URI)
+	assert.True(t, storage.Exists(*restoredAsset.URI))
 
 	var activeAssets []models.Asset
 	require.NoError(t, db.Where("project_id = ?", projB.ID).Order("id asc").Find(&activeAssets).Error)
