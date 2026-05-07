@@ -12,6 +12,8 @@ interface AssetSidebarProps {
   projectId: number
   assets: Asset[]
   onReload: () => Promise<void>
+  onOpenAsset?: (asset: Asset) => void
+  selectedAssetId?: number | null
 }
 
 interface ParsingMetadata {
@@ -57,7 +59,13 @@ function hasUserEditedContent(asset: Asset) {
   return getParsingMetadata(asset)?.updated_by_user === true
 }
 
-export default function AssetSidebar({ projectId, assets, onReload }: AssetSidebarProps) {
+export default function AssetSidebar({
+  projectId,
+  assets,
+  onReload,
+  onOpenAsset,
+  selectedAssetId,
+}: AssetSidebarProps) {
   const [error, setError] = useState('')
   const [uploadOpen, setUploadOpen] = useState(false)
   const [gitOpen, setGitOpen] = useState(false)
@@ -207,6 +215,8 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
       <div className="mt-4">
         <AssetList
           assets={visibleAssets}
+          onOpenAsset={onOpenAsset}
+          selectedAssetId={selectedAssetId}
           onDelete={(id) => {
             const target = visibleAssets.find((asset) => asset.id === id) ?? null
             setDeleteTarget(target)

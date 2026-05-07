@@ -130,6 +130,7 @@ var (
 	ErrInvalidGitURL        = errors.New("invalid git repository URL")
 	ErrProjectNotFound      = errors.New("project not found")
 	ErrAssetNotFound        = errors.New("asset not found")
+	ErrAssetURIMissing      = errors.New("asset uri is required")
 	ErrReplaceAssetMismatch = errors.New("replacement asset does not match uploaded filename")
 )
 
@@ -319,6 +320,28 @@ func (s *AssetService) ListByProject(userID string, projectID uint) ([]models.As
 	return assets, nil
 }
 
+func (s *AssetService) ResolveAssetFile(userID string, assetID uint) (*models.Asset, string, error) {
+	var asset models.Asset
+	if err := s.db.First(&asset, assetID).Error; err != nil {
+		return nil, "", ErrAssetNotFound
+	}
+
+	if err := s.validateProject(userID, asset.ProjectID); err != nil {
+		return nil, "", err
+	}
+
+	if asset.URI == nil || strings.TrimSpace(*asset.URI) == "" {
+		return nil, "", ErrAssetURIMissing
+	}
+
+	path, err := s.storage.Resolve(strings.TrimSpace(*asset.URI))
+	if err != nil {
+		return nil, "", err
+	}
+
+	return &asset, path, nil
+}
+
 func (s *AssetService) DeleteAsset(userID string, assetID uint) error {
 	var asset models.Asset
 	if err := s.db.First(&asset, assetID).Error; err != nil {
@@ -505,13 +528,13 @@ func (s *AssetService) restoreDeletedAssetByFileHash(
 		}
 
 		updates := map[string]interface{}{
-			"project_id":  projectID,
-			"type":        assetType,
-			"label":       nil,
-			"file_hash":   fileHash,
-			"metadata":    restoredMetadata,
-			"deleted_at":  nil,
-			"updated_at":  gorm.Expr("CURRENT_TIMESTAMP"),
+			"project_id": projectID,
+			"type":       assetType,
+			"label":      nil,
+			"file_hash":  fileHash,
+			"metadata":   restoredMetadata,
+			"deleted_at": nil,
+			"updated_at": gorm.Expr("CURRENT_TIMESTAMP"),
 		}
 		if err := tx.Unscoped().Model(&models.Asset{}).Where("id = ?", restoredAssetID).Updates(updates).Error; err != nil {
 			return fmt.Errorf("restore deleted asset: %w", err)

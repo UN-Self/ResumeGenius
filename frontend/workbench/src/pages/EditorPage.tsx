@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { FileText, X } from 'lucide-react'
 import { useEditor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
@@ -10,6 +11,9 @@ import { ActionBar } from '@/components/editor/ActionBar'
 import { SaveIndicator } from '@/components/editor/SaveIndicator'
 import { ChatPanel } from '@/components/chat/ChatPanel'
 import AssetSidebar from '@/components/intake/AssetSidebar'
+import { AssetWorkspace } from '@/components/intake/AssetWorkspace'
+import { getDisplayTitle } from '@/components/intake/AssetList'
+import { getAssetVisual } from '@/components/intake/fileVisuals'
 import { request, intakeApi, workbenchApi, ApiError, type Asset } from '@/lib/api-client'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useExport } from '@/hooks/useExport'
@@ -23,10 +27,8 @@ import { SaveSnapshotDialog } from '@/components/version/SaveSnapshotDialog'
 import { RollbackConfirmDialog } from '@/components/version/RollbackConfirmDialog'
 import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
-import { extractStyles, reconstructHtml } from '@/lib/extract-styles'
-import { Div, Span, PresetAttributes } from '@/components/editor/extensions'
-import { usePanelState } from '@/hooks/usePanelState'
-import { useContextMenuState } from '@/hooks/useContextMenuState'
+import { Button } from '@/components/ui/button'
+import { Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/ui/modal'
 
 export default function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -37,20 +39,24 @@ export default function EditorPage() {
   const draftIdRef = useRef<string | null>(null)
   const [projectTitle, setProjectTitle] = useState('')
   const [assets, setAssets] = useState<Asset[]>([])
+  const [openAssetTabIds, setOpenAssetTabIds] = useState<number[]>([])
+  const [activeTab, setActiveTab] = useState<'resume' | number>('resume')
+  const [assetDrafts, setAssetDrafts] = useState<Record<number, string>>({})
+  const [assetSavingId, setAssetSavingId] = useState<number | null>(null)
+  const [pendingCloseAsset, setPendingCloseAsset] = useState<Asset | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  const { leftOpen, rightOpen, setLeftOpen, setRightOpen } = usePanelState()
-  const { contextMenu, closeContextMenu, handleContextMenu } = useContextMenuState()
+  const [leftOpen, setLeftOpen] = useState(true)
+  const [rightOpen, setRightOpen] = useState(true)
+  const [contextMenu, setContextMenu] = useState<{ isOpen: boolean; x: number; y: number }>({
+    isOpen: false, x: 0, y: 0,
+  })
 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ strike: false }),
-      TextAlign.configure({ types: ['heading', 'paragraph', 'div'] }),
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
       TextStyleKit,
-      Div,
-      Span,
-      PresetAttributes,
     ],
     content: '',
     editorProps: {
@@ -71,7 +77,6 @@ export default function EditorPage() {
   })
 
   const [pendingHtml, setPendingHtml] = useState<string | null>(null)
-  const [scopedCSS, setScopedCSS] = useState('')
 
   const { scheduleSave, flush, retry, status, lastSavedAt } = useAutoSave({
     save: async (html: string) => {
@@ -83,7 +88,6 @@ export default function EditorPage() {
         })
       }
     },
-    reconstruct: (html: string) => reconstructHtml(html, rawCSSRef.current),
     saveUrl: draftId ? `/api/v1/drafts/${draftId}` : undefined,
   })
 
@@ -111,21 +115,13 @@ export default function EditorPage() {
 
   // Save editor content before preview so we can restore it on exit
   const savedContentBeforePreview = useRef<string | null>(null)
-  const savedScopedCSSBeforePreview = useRef<string | null>(null)
-  const savedRawCSSBeforePreview = useRef<string>('')
   const didRecenterAfterPreviewRef = useRef(false)
   const restoringContent = useRef(false)
-  const rawCSSRef = useRef('')
 
   // When preview HTML is ready, load it into the editor and make read-only
   useLayoutEffect(() => {
     if (previewMode === 'previewing' && previewHtml && editor) {
-      const { bodyHtml, scopedCSS: css, rawCSS } = extractStyles(previewHtml)
-      rawCSSRef.current = rawCSS
-      setScopedCSS(css)
-      restoringContent.current = true
-      editor.commands.setContent(bodyHtml)
-      restoringContent.current = false
+      editor.commands.setContent(previewHtml)
       editor.setEditable(false)
       didRecenterAfterPreviewRef.current = false
     }
@@ -135,10 +131,8 @@ export default function EditorPage() {
     if (editor) {
       savedContentBeforePreview.current = editor.getHTML()
     }
-    savedScopedCSSBeforePreview.current = scopedCSS
-    savedRawCSSBeforePreview.current = rawCSSRef.current
     await startPreview(version)
-  }, [editor, scopedCSS, startPreview])
+  }, [editor, startPreview])
 
   const handleExitPreview = useCallback(() => {
     if (editor) {
@@ -151,14 +145,6 @@ export default function EditorPage() {
       }
       savedContentBeforePreview.current = null
     }
-    if (savedScopedCSSBeforePreview.current !== null) {
-      setScopedCSS(savedScopedCSSBeforePreview.current)
-      savedScopedCSSBeforePreview.current = null
-    }
-    if (savedRawCSSBeforePreview.current !== undefined) {
-      rawCSSRef.current = savedRawCSSBeforePreview.current
-      savedRawCSSBeforePreview.current = ''
-    }
     exitPreview()
   }, [editor, exitPreview])
 
@@ -167,10 +153,80 @@ export default function EditorPage() {
     setAssets(nextAssets)
   }, [pid])
 
+  useEffect(() => {
+    const assetIds = new Set(assets.map((asset) => asset.id))
+    setOpenAssetTabIds((current) => current.filter((id) => assetIds.has(id)))
+    setAssetDrafts((current) => {
+      const next: Record<number, string> = {}
+      for (const asset of assets) {
+        if (current[asset.id] !== undefined) {
+          next[asset.id] = current[asset.id]
+        }
+      }
+      return next
+    })
+    setActiveTab((current) => {
+      if (current === 'resume' || assetIds.has(current)) return current
+      return 'resume'
+    })
+  }, [assets])
+
   const handleExport = () => {
     if (draftId) {
       exportPdf(Number(draftId))
     }
+  }
+
+  const openAssetTab = (asset: Asset) => {
+    setOpenAssetTabIds((current) => current.includes(asset.id) ? current : [...current, asset.id])
+    setAssetDrafts((current) => ({
+      ...current,
+      [asset.id]: current[asset.id] ?? (asset.content ?? ''),
+    }))
+    setActiveTab(asset.id)
+  }
+
+  const saveAssetTab = async (asset: Asset) => {
+    const content = assetDrafts[asset.id] ?? asset.content ?? ''
+    setAssetSavingId(asset.id)
+    try {
+      const updated = await intakeApi.updateAsset(asset.id, { content })
+      setAssets((current) => current.map((item) => item.id === updated.id ? updated : item))
+      setAssetDrafts((current) => ({ ...current, [asset.id]: updated.content ?? '' }))
+    } catch (saveError) {
+      toast(saveError instanceof Error ? saveError.message : '保存素材失败')
+    } finally {
+      setAssetSavingId(null)
+    }
+  }
+
+  const finalizeCloseAssetTab = (asset: Asset) => {
+    setOpenAssetTabIds((current) => {
+      const index = current.indexOf(asset.id)
+      const next = current.filter((id) => id !== asset.id)
+      if (activeTab === asset.id) {
+        setActiveTab(next[index] ?? next[index - 1] ?? 'resume')
+      }
+      return next
+    })
+    setPendingCloseAsset(null)
+  }
+
+  const requestCloseAssetTab = (asset: Asset) => {
+    const draft = assetDrafts[asset.id] ?? asset.content ?? ''
+    const dirty = draft !== (asset.content ?? '')
+    if (dirty) {
+      setPendingCloseAsset(asset)
+      return
+    }
+
+    finalizeCloseAssetTab(asset)
+  }
+
+  const saveAndClosePendingAsset = async () => {
+    if (!pendingCloseAsset) return
+    await saveAssetTab(pendingCloseAsset)
+    finalizeCloseAssetTab(pendingCloseAsset)
   }
 
   const handleRollback = async () => {
@@ -178,15 +234,7 @@ export default function EditorPage() {
     try {
       await flush()
       const html = await rollbackVersion()
-      if (editor) {
-        const { bodyHtml, scopedCSS: css, rawCSS } = extractStyles(html)
-        rawCSSRef.current = rawCSS
-        setScopedCSS(css)
-        editor.setEditable(true)
-        restoringContent.current = true
-        editor.commands.setContent(bodyHtml)
-        restoringContent.current = false
-      }
+      editor?.commands.setContent(html)
       setRollbackDialogOpen(false)
     } catch (e) {
       toast(e instanceof Error ? e.message : '回滚失败')
@@ -194,6 +242,43 @@ export default function EditorPage() {
       setRollbacking(false)
     }
   }
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    setContextMenu({ isOpen: true, x: e.clientX, y: e.clientY })
+  }, [])
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu((prev) => ({ ...prev, isOpen: false }))
+  }, [])
+
+  useEffect(() => {
+    const close = () => closeContextMenu()
+    document.addEventListener('scroll', close, true)
+    return () => document.removeEventListener('scroll', close, true)
+  }, [closeContextMenu])
+
+  useEffect(() => {
+    if (!contextMenu.isOpen) return
+
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('[role="menu"]')) {
+        closeContextMenu()
+      }
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeContextMenu()
+    }
+
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [contextMenu.isOpen, closeContextMenu])
 
   useEffect(() => {
     draftIdRef.current = draftId
@@ -217,12 +302,6 @@ export default function EditorPage() {
             if (cancelled) return
             setDraftId(String(draft.id))
             setPendingHtml(draft.html_content || '')
-            setProjectTitle(project.title)
-
-            const nextAssets = await intakeApi.listAssets(pid)
-            if (cancelled) return
-            setAssets(nextAssets)
-            setError(null)
           } catch (createErr) {
             if (cancelled) return
             setError(createErr instanceof ApiError ? createErr.message : '创建草稿失败')
@@ -269,10 +348,7 @@ export default function EditorPage() {
   useEffect(() => {
     if (editor && pendingHtml !== null && !hasAppliedRef.current) {
       hasAppliedRef.current = true
-      const { bodyHtml, scopedCSS: css, rawCSS } = extractStyles(pendingHtml)
-      rawCSSRef.current = rawCSS
-      setScopedCSS(css)
-      editor.commands.setContent(bodyHtml)
+      editor.commands.setContent(pendingHtml)
     }
   }, [editor, pendingHtml])
 
@@ -311,6 +387,13 @@ export default function EditorPage() {
     rightOpen ? 'right-open' : 'right-collapsed',
   ].join(' ')
 
+  const openAssetTabs = openAssetTabIds
+    .map((id) => assets.find((asset) => asset.id === id))
+    .filter((asset): asset is Asset => Boolean(asset))
+  const activeAsset = typeof activeTab === 'number'
+    ? assets.find((asset) => asset.id === activeTab) ?? null
+    : null
+
   return (
     <div className={gridClass}>
       <div className="editor-panel-left">
@@ -332,6 +415,8 @@ export default function EditorPage() {
             projectId={pid}
             assets={assets}
             onReload={reloadAssets}
+            onOpenAsset={openAssetTab}
+            selectedAssetId={typeof activeTab === 'number' ? activeTab : null}
           />
         </div>
       </div>
@@ -377,29 +462,99 @@ export default function EditorPage() {
               />
             </ActionBar>
           </div>
-          <div className="flex-1 overflow-auto" onContextMenu={handleContextMenu}>
-            {previewMode === 'previewing' && previewVersion && (
-              <VersionPreviewBanner
-                version={previewVersion}
-                onRollback={() => setRollbackDialogOpen(true)}
-                onClose={handleExitPreview}
+          <div className="editor-tab-strip" role="tablist" aria-label="打开的栏目">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === 'resume'}
+              onClick={() => setActiveTab('resume')}
+              className={activeTab === 'resume' ? 'editor-tab active' : 'editor-tab'}
+            >
+              <FileText className="h-3.5 w-3.5 text-primary" />
+              <span className="truncate">简历</span>
+            </button>
+            {openAssetTabs.map((asset) => {
+              const visual = getAssetVisual(asset.type, asset.uri)
+              const title = getDisplayTitle(asset, visual.chipLabel)
+              const Icon = visual.icon
+              const dirty = (assetDrafts[asset.id] ?? asset.content ?? '') !== (asset.content ?? '')
+              return (
+                <button
+                  key={asset.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === asset.id}
+                  onClick={() => setActiveTab(asset.id)}
+                  className={activeTab === asset.id ? 'editor-tab active' : 'editor-tab'}
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{title}</span>
+                  {dirty && <span className="editor-tab-dirty" aria-label="未保存" />}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`关闭 ${title}`}
+                    className="editor-tab-close"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      requestCloseAssetTab(asset)
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return
+                      event.preventDefault()
+                      event.stopPropagation()
+                      requestCloseAssetTab(asset)
+                    }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <div
+            className="flex-1 overflow-auto"
+            onContextMenu={activeTab === 'resume' ? handleContextMenu : undefined}
+          >
+            {activeTab === 'resume' ? (
+              <>
+                {previewMode === 'previewing' && previewVersion && (
+                  <VersionPreviewBanner
+                    version={previewVersion}
+                    onRollback={() => setRollbackDialogOpen(true)}
+                    onClose={handleExitPreview}
+                  />
+                )}
+                <A4Canvas editor={editor} />
+                {editor && previewMode !== 'previewing' && (
+                  <BubbleMenu
+                    editor={editor}
+                    options={{
+                      placement: 'top',
+                      arrow: false,
+                    }}
+                    shouldShow={({ editor: e }) => {
+                      const { from, to } = e.state.selection
+                      return from !== to
+                    }}
+                  >
+                    <BubbleToolbar editor={editor} />
+                  </BubbleMenu>
+                )}
+              </>
+            ) : activeAsset ? (
+              <AssetWorkspace
+                asset={activeAsset}
+                value={assetDrafts[activeAsset.id] ?? activeAsset.content ?? ''}
+                dirty={(assetDrafts[activeAsset.id] ?? activeAsset.content ?? '') !== (activeAsset.content ?? '')}
+                saving={assetSavingId === activeAsset.id}
+                onChange={(value) => setAssetDrafts((current) => ({ ...current, [activeAsset.id]: value }))}
+                onSave={() => void saveAssetTab(activeAsset)}
               />
-            )}
-            <A4Canvas editor={editor} scopedCSS={scopedCSS} />
-            {editor && previewMode !== 'previewing' && (
-              <BubbleMenu
-                editor={editor}
-                options={{
-                  placement: 'top',
-                  arrow: false,
-                }}
-                shouldShow={({ editor: e }) => {
-                  const { from, to } = e.state.selection
-                  return from !== to
-                }}
-              >
-                <BubbleToolbar editor={editor} />
-              </BubbleMenu>
+            ) : (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                该栏目已经关闭。
+              </div>
             )}
           </div>
         </div>
@@ -425,25 +580,15 @@ export default function EditorPage() {
               draftId={Number(draftId)}
               onApplyEdits={async () => {
                 if (!editor || !draftId) return
-                try {
-                  const draft = await workbenchApi.getDraft(Number(draftId))
-                  restoringContent.current = true
-                  const { bodyHtml, scopedCSS: css, rawCSS } = extractStyles(draft.html_content || '')
-                  rawCSSRef.current = rawCSS
-                  setScopedCSS(css)
-                  editor.commands.setContent(bodyHtml)
-                  restoringContent.current = false
-                } catch {
-                  toast('应用 AI 修改失败，请重试')
-                }
+                const draft = await workbenchApi.getDraft(Number(draftId))
+                restoringContent.current = true
+                editor.commands.setContent(draft.html_content || '')
+                restoringContent.current = false
               }}
               onRestoreHtml={(html) => {
                 if (!editor) return
                 restoringContent.current = true
-                const { bodyHtml, scopedCSS: css, rawCSS } = extractStyles(html)
-                rawCSSRef.current = rawCSS
-                setScopedCSS(css)
-                editor.commands.setContent(bodyHtml)
+                editor.commands.setContent(html)
                 restoringContent.current = false
               }}
             />
@@ -485,6 +630,55 @@ export default function EditorPage() {
         onClose={() => setRollbackDialogOpen(false)}
         onConfirm={handleRollback}
       />
+      <Modal
+        open={pendingCloseAsset !== null}
+        onClose={() => setPendingCloseAsset(null)}
+        maxWidth="max-w-lg"
+        className="asset-unsaved-dialog"
+      >
+        <ModalHeader>
+          <div className="flex items-center gap-3">
+            <span className="asset-unsaved-dialog-icon">
+              <FileText className="h-4 w-4" />
+            </span>
+            <span>保存素材改动？</span>
+          </div>
+        </ModalHeader>
+        <ModalBody>
+          <p className="text-sm leading-6 text-muted-foreground">
+            这个栏目里有尚未保存的解析文本。关闭前可以保存到素材库，也可以放弃这次修改。
+          </p>
+        </ModalBody>
+        <ModalFooter className="items-center justify-between">
+          <Button
+            variant="ghost"
+            type="button"
+            onClick={() => setPendingCloseAsset(null)}
+          >
+            继续编辑
+          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              type="button"
+              disabled={assetSavingId === pendingCloseAsset?.id}
+              onClick={() => {
+                if (!pendingCloseAsset) return
+                finalizeCloseAssetTab(pendingCloseAsset)
+              }}
+            >
+              放弃修改
+            </Button>
+            <Button
+              type="button"
+              disabled={assetSavingId === pendingCloseAsset?.id}
+              onClick={() => void saveAndClosePendingAsset()}
+            >
+              {assetSavingId === pendingCloseAsset?.id ? '保存中...' : '保存并关闭'}
+            </Button>
+          </div>
+        </ModalFooter>
+      </Modal>
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   )
