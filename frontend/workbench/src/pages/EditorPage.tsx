@@ -24,6 +24,7 @@ import { RollbackConfirmDialog } from '@/components/version/RollbackConfirmDialo
 import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
 import { extractStyles } from '@/lib/extract-styles'
+import { Div, Span, PresetAttributes } from '@/components/editor/extensions'
 
 export default function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -45,8 +46,11 @@ export default function EditorPage() {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ strike: false }),
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      TextAlign.configure({ types: ['heading', 'paragraph', 'div'] }),
       TextStyleKit,
+      Div,
+      Span,
+      PresetAttributes,
     ],
     content: '',
     editorProps: {
