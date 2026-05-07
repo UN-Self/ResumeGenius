@@ -11,11 +11,12 @@ import (
 
 func normalizeAIURL(raw string) string {
 	raw = strings.TrimSpace(raw)
-	const suffix = "/v1/chat/completions"
-	if strings.HasSuffix(raw, suffix) {
+	// 如果已包含完整 /chat/completions 路径，直接使用（兼容智谱等非标准版本号）
+	if strings.Contains(raw, "/chat/completions") {
 		return raw
 	}
-	return strings.TrimRight(raw, "/") + suffix
+	// 否则追加默认路径（兼容 OpenAI 标准 API）
+	return strings.TrimRight(raw, "/") + "/v1/chat/completions"
 }
 
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
