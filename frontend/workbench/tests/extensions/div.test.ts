@@ -81,4 +81,29 @@ describe('Div extension', () => {
     expect(html).toContain('<h2>Title</h2>')
     editor.destroy()
   })
+
+  it('preserves footer tag as footer', () => {
+    const editor = createEditor('<footer class="page-footer"><p>Footer</p></footer>')
+    const html = editor.getHTML()
+    expect(html).toContain('<footer')
+    expect(html).toContain('class="page-footer"')
+    editor.destroy()
+  })
+
+  it('preserves article tag as article', () => {
+    const editor = createEditor('<article class="post"><p>Content</p></article>')
+    const html = editor.getHTML()
+    expect(html).toContain('<article')
+    expect(html).toContain('class="post"')
+    editor.destroy()
+  })
+
+  it('handles empty div', () => {
+    const editor = createEditor('<div class="spacer"></div>')
+    const html = editor.getHTML()
+    // ProseMirror may insert an empty paragraph inside the div
+    expect(html).toContain('<div')
+    expect(html).toContain('class="spacer"')
+    editor.destroy()
+  })
 })

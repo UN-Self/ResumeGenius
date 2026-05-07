@@ -1,4 +1,4 @@
-import { Node } from '@tiptap/core'
+import { Node, mergeAttributes } from '@tiptap/core'
 
 const CONTAINER_TAGS = ['div', 'section', 'header', 'footer', 'main', 'article', 'nav', 'aside'] as const
 
@@ -15,20 +15,15 @@ export const Div = Node.create({
   draggable: false,
 
   parseHTML() {
-    return CONTAINER_TAGS.map((tag) => ({
-      tag,
-      getAttrs: (element: HTMLElement) => ({
-        originalTag: element.tagName.toLowerCase(),
-      }),
-    }))
+    return CONTAINER_TAGS.map((tag) => ({ tag }))
   },
 
-  renderHTML({ node }) {
+  renderHTML({ node, HTMLAttributes }) {
     const tag = node.attrs.originalTag || 'div'
-    const attrs: Record<string, string> = {}
-    if (node.attrs.class) attrs.class = node.attrs.class
-    if (node.attrs.style) attrs.style = node.attrs.style
-    return [tag, attrs, 0]
+    // mergeAttributes calls each attribute's renderHTML callback:
+    // - class/style → rendered normally
+    // - originalTag → renderHTML returns {} (suppressed from DOM)
+    return [tag, mergeAttributes(HTMLAttributes), 0]
   },
 
   addAttributes() {

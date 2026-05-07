@@ -28,6 +28,90 @@ const DIMENSION_PROPERTIES = new Set([
   'margin-left',
 ])
 
+/**
+ * Default-valued longhands that CSSOM produces when expanding `background` shorthand.
+ * When a `background-color` longhand is present, these can be safely removed to
+ * keep the promoted output concise.
+ */
+const DEFAULT_BG_LONGHANDS = new Set([
+  'background-image: none;',
+  'background-repeat: repeat;',
+  'background-attachment: scroll;',
+  'background-position: 0% 0%;',
+  'background-size: auto;',
+  'background-origin: padding-box;',
+  'background-clip: border-box;',
+])
+
+// ─── Shared CSS helpers ─────────────────────────────────────────────
+
+/**
+ * Parse a CSS string into a CSSStyleSheet.
+ * Returns null if parsing fails (unparseable CSS).
+ */
+function parseCss(css: string): CSSStyleSheet | null {
+  const sheet = new CSSStyleSheet()
+  try {
+    sheet.replaceSync(css)
+    return sheet
+  } catch {
+    return null
+  }
+}
+
+interface WalkOptions {
+  /** Skip @media print blocks entirely */
+  skipPrintMedia: boolean
+  /** Preserve non-CSSStyleRule, non-CSSMediaRule at-rules as-is */
+  preserveOtherRules: boolean
+}
+
+/**
+ * Walk a CSSRuleList, applying onStyleRule to each CSSStyleRule.
+ * CSSMediaRule blocks are recursively walked; non-print results are
+ * wrapped back into @media blocks.
+ *
+ * Returns an array of CSS rule text strings.
+ */
+function walkRuleList(
+  rules: CSSRuleList,
+  onStyleRule: (rule: CSSStyleRule) => string | null,
+  options: WalkOptions,
+): string[] {
+  const output: string[] = []
+
+  for (let i = 0; i < rules.length; i++) {
+    const rule = rules[i]
+
+    if (rule instanceof CSSStyleRule) {
+      const result = onStyleRule(rule)
+      if (result !== null) output.push(result)
+    } else if (rule instanceof CSSMediaRule) {
+      const mediaText = (rule as CSSMediaRule).media.mediaText
+      if (/print/i.test(mediaText)) {
+        if (options.skipPrintMedia) continue
+        output.push(rule.cssText)
+        continue
+      }
+
+      const inner = walkRuleList(
+        (rule as CSSMediaRule).cssRules,
+        onStyleRule,
+        options,
+      )
+      if (inner.length > 0) {
+        output.push(`@media ${mediaText} {\n${inner.join('\n')}\n}`)
+      }
+    } else {
+      if (options.preserveOtherRules) {
+        output.push(rule.cssText)
+      }
+    }
+  }
+
+  return output
+}
+
 // ─── scopeSelectors ───────────────────────────────────────────────────
 
 /**
@@ -96,44 +180,17 @@ function scopeRule(rule: CSSStyleRule): string {
 export function scopeSelectors(css: string): string {
   if (!css.trim()) return ''
 
-  const sheet = new CSSStyleSheet()
-  try {
-    sheet.replaceSync(css)
-  } catch {
+  const sheet = parseCss(css)
+  if (!sheet) {
     // Unparseable CSS should not be injected — risk of unscoped styles leaking out.
     return ''
   }
 
-  const output: string[] = []
-
-  function processRuleList(rules: CSSRuleList): void {
-    for (let i = 0; i < rules.length; i++) {
-      const rule = rules[i]
-
-      if (rule instanceof CSSStyleRule) {
-        output.push(scopeRule(rule))
-      } else if (rule instanceof CSSMediaRule) {
-        const mediaText = (rule as CSSMediaRule).media.mediaText
-        // Skip @media print
-        if (/print/i.test(mediaText)) continue
-
-        const inner: string[] = []
-        const mediaRule = rule as CSSMediaRule
-        for (let j = 0; j < mediaRule.cssRules.length; j++) {
-          const innerRule = mediaRule.cssRules[j]
-          if (innerRule instanceof CSSStyleRule) {
-            inner.push(scopeRule(innerRule))
-          }
-        }
-        if (inner.length > 0) {
-          output.push(`@media ${mediaText} {\n${inner.join('\n')}\n}`)
-        }
-      }
-      // Skip @page and other at-rules
-    }
-  }
-
-  processRuleList(sheet.cssRules)
+  const output = walkRuleList(
+    sheet.cssRules,
+    (rule: CSSStyleRule) => scopeRule(rule),
+    { skipPrintMedia: true, preserveOtherRules: false },
+  )
 
   return output.join('\n')
 }
@@ -169,16 +226,12 @@ function selectorEndsWith(selector: string, suffix: string): boolean {
 export function stripContainerDimensions(css: string, containerSelector: string): string {
   if (!css.trim()) return ''
 
-  const sheet = new CSSStyleSheet()
-  try {
-    sheet.replaceSync(css)
-  } catch {
+  const sheet = parseCss(css)
+  if (!sheet) {
     // If CSS can't be parsed, return as-is — better to show styled content
     // with extra container dimensions than to lose all styling.
     return css
   }
-
-  const output: string[] = []
 
   /**
    * Strip dimension properties from a CSSStyleRule that matches the container.
@@ -210,39 +263,11 @@ export function stripContainerDimensions(css: string, containerSelector: string)
     return null
   }
 
-  for (let i = 0; i < sheet.cssRules.length; i++) {
-    const rule = sheet.cssRules[i]
-
-    if (rule instanceof CSSStyleRule) {
-      const result = stripStyleRule(rule)
-      if (result !== null) output.push(result)
-    } else if (rule instanceof CSSMediaRule) {
-      const mediaText = (rule as CSSMediaRule).media.mediaText
-      // Skip @media print blocks (already dropped by scopeSelectors)
-      if (/print/i.test(mediaText)) {
-        output.push(rule.cssText)
-        continue
-      }
-
-      const mediaRule = rule as CSSMediaRule
-      const inner: string[] = []
-      for (let j = 0; j < mediaRule.cssRules.length; j++) {
-        const innerRule = mediaRule.cssRules[j]
-        if (innerRule instanceof CSSStyleRule) {
-          const result = stripStyleRule(innerRule)
-          if (result !== null) inner.push(result)
-        } else {
-          inner.push(innerRule.cssText)
-        }
-      }
-      if (inner.length > 0) {
-        output.push(`@media ${mediaText} {\n${inner.join('\n')}\n}`)
-      }
-    } else {
-      // Preserve other at-rules as-is
-      output.push(rule.cssText)
-    }
-  }
+  const output = walkRuleList(
+    sheet.cssRules,
+    (rule: CSSStyleRule) => stripStyleRule(rule),
+    { skipPrintMedia: false, preserveOtherRules: true },
+  )
 
   return output.join('\n')
 }
@@ -265,29 +290,28 @@ function isBackgroundProperty(prop: string): boolean {
  * ensures the background covers the full A4 canvas including padding.
  *
  * Non-background properties on the root container are left untouched.
+ *
+ * NOTE: Relies on stripContainerDimensions being called first to remove
+ * dimension properties from the container rule. Without that step, the
+ * original scoped rule (more specific selector) could override the
+ * promoted background on `.resume-document` (less specific selector).
  */
 export function promoteContainerBackground(css: string, containerSelector: string): string {
   if (!css.trim()) return ''
 
-  const sheet = new CSSStyleSheet()
-  try {
-    sheet.replaceSync(css)
-  } catch {
-    return css
-  }
+  const sheet = parseCss(css)
+  if (!sheet) return css
 
   const promotedProps: string[] = []
-  const output: string[] = []
 
-  function processStyleRule(rule: CSSStyleRule): void {
+  function processStyleRule(rule: CSSStyleRule): { keptRule: string | null; bgProps: string[] } {
     const selectors = rule.selectorText.split(',').map((s) => s.trim())
     const matchesContainer = selectors.some(
       (s) => selectorEndsWith(s, containerSelector),
     )
 
     if (!matchesContainer) {
-      output.push(rule.cssText)
-      return
+      return { keptRule: rule.cssText, bgProps: [] }
     }
 
     const bgProps: string[] = []
@@ -305,48 +329,39 @@ export function promoteContainerBackground(css: string, containerSelector: strin
       }
     }
 
-    promotedProps.push(...bgProps)
+    const keptRule =
+      keptProps.length > 0
+        ? `${rule.selectorText} {\n  ${keptProps.join('\n  ')}\n}`
+        : null
 
-    if (keptProps.length > 0) {
-      output.push(`${rule.selectorText} {\n  ${keptProps.join('\n  ')}\n}`)
-    }
-    // If all props were background-related, the rule is dropped (promoted instead)
+    return { keptRule, bgProps }
   }
 
-  for (let i = 0; i < sheet.cssRules.length; i++) {
-    const rule = sheet.cssRules[i]
-
-    if (rule instanceof CSSStyleRule) {
-      processStyleRule(rule)
-    } else if (rule instanceof CSSMediaRule) {
-      const mediaText = (rule as CSSMediaRule).media.mediaText
-      if (/print/i.test(mediaText)) {
-        output.push(rule.cssText)
-        continue
-      }
-
-      const mediaRule = rule as CSSMediaRule
-      const inner: string[] = []
-      for (let j = 0; j < mediaRule.cssRules.length; j++) {
-        const innerRule = mediaRule.cssRules[j]
-        if (innerRule instanceof CSSStyleRule) {
-          processStyleRule(innerRule)
-        } else {
-          inner.push(innerRule.cssText)
-        }
-      }
-      if (inner.length > 0) {
-        output.push(`@media ${mediaText} {\n${inner.join('\n')}\n}`)
-      }
-    } else {
-      output.push(rule.cssText)
-    }
-  }
+  const output = walkRuleList(
+    sheet.cssRules,
+    (rule: CSSStyleRule) => {
+      const { keptRule, bgProps } = processStyleRule(rule)
+      promotedProps.push(...bgProps)
+      return keptRule
+    },
+    { skipPrintMedia: false, preserveOtherRules: true },
+  )
 
   if (promotedProps.length > 0) {
     // Deduplicate props (same property may appear from multiple container classes)
     const uniqueProps = [...new Set(promotedProps)]
-    const bgRule = `.resume-document {\n  ${uniqueProps.join('\n  ')}\n}`
+
+    // Clean up CSSOM shorthand expansion artifacts:
+    // When `background: #fff` is parsed by CSSOM, it expands to many longhands
+    // (background-color, background-image: none, background-repeat: repeat, etc.).
+    // If we have a background-color, remove default-valued longhands to keep
+    // the output concise.
+    const hasBgColor = uniqueProps.some((p) => p.startsWith('background-color:'))
+    const cleaned = hasBgColor
+      ? uniqueProps.filter((p) => !DEFAULT_BG_LONGHANDS.has(p))
+      : uniqueProps
+
+    const bgRule = `.resume-document {\n  ${cleaned.join('\n  ')}\n}`
     output.unshift(bgRule)
   }
 
