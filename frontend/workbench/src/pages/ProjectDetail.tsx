@@ -80,6 +80,17 @@ export default function ProjectDetail() {
     }
   }
 
+  const handleRenameAsset = async (asset: Asset, label: string) => {
+    setAssetActionError('')
+    try {
+      await intakeApi.updateAsset(asset.id, { label })
+    } catch (renameError) {
+      setAssetActionError(renameError instanceof Error ? renameError.message : '重命名资料失败')
+    } finally {
+      reload()
+    }
+  }
+
   const handleDeleteAsset = async () => {
     if (!deleteTarget || deleteTarget.type !== 'asset') return
     try {
@@ -107,11 +118,6 @@ export default function ProjectDetail() {
       setDeleting(false)
       setDeleteTarget(null)
     }
-  }
-
-  const handleEditNote = (asset: Asset) => {
-    setEditingNote(asset)
-    setNoteOpen(true)
   }
 
   // --- Loading / error states ---
@@ -187,8 +193,7 @@ export default function ProjectDetail() {
       <AssetList
         assets={assets}
         onDelete={(id) => setDeleteTarget({ type: 'asset', id })}
-        onEditAsset={handleEditNote}
-        canEditAsset={(asset) => asset.type === 'note'}
+        onRenameAsset={handleRenameAsset}
       />
 
       {assets.length > 0 && (

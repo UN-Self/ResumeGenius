@@ -73,13 +73,13 @@ function Modal({
   if (!open) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[9998] flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div className="fixed inset-0 bg-black/45 backdrop-blur-md" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/55 backdrop-blur-md" onClick={onClose} />
       {/* Content */}
       <div
         className={cn(
-          "relative glass-panel rounded-2xl p-6 w-full mx-4 stagger-in",
+          "relative z-[9999] w-full rounded-2xl border border-border bg-popover p-6 text-popover-foreground shadow-[0_24px_90px_rgba(2,8,23,0.48)]",
           maxWidth,
           className
         )}
