@@ -132,6 +132,7 @@ var (
 	ErrAssetNotFound        = errors.New("asset not found")
 	ErrAssetURIMissing      = errors.New("asset uri is required")
 	ErrInvalidFolderName    = errors.New("folder name is required")
+	ErrFolderDepthExceeded  = errors.New("folder depth cannot exceed 7 levels")
 	ErrReplaceAssetMismatch = errors.New("replacement asset does not match uploaded filename")
 )
 
@@ -144,6 +145,7 @@ var allowedExtensions = map[string]string{
 }
 
 var maxFileSize = 20 * 1024 * 1024
+var maxFolderDepth = 7
 
 var gitURLPattern = regexp.MustCompile(`^https?://[^\s/$.?#].[^\s]*$`)
 
@@ -251,6 +253,13 @@ func (s *AssetService) CreateFolder(userID string, projectID uint, name string, 
 	if parentFolderID != nil {
 		if err := s.validateFolder(userID, projectID, *parentFolderID); err != nil {
 			return nil, err
+		}
+		parentDepth, err := s.folderDepth(projectID, *parentFolderID)
+		if err != nil {
+			return nil, err
+		}
+		if parentDepth >= maxFolderDepth {
+			return nil, ErrFolderDepthExceeded
 		}
 	}
 	trimmedName := strings.TrimSpace(name)
@@ -487,6 +496,36 @@ func (s *AssetService) validateFolder(userID string, projectID uint, folderID ui
 		return ErrAssetNotFound
 	}
 	return s.validateProject(userID, folder.ProjectID)
+}
+
+func (s *AssetService) folderDepth(projectID uint, folderID uint) (int, error) {
+	depth := 0
+	currentID := folderID
+	seen := make(map[uint]struct{})
+
+	for currentID != 0 {
+		if _, ok := seen[currentID]; ok {
+			return depth, nil
+		}
+		seen[currentID] = struct{}{}
+
+		var folder models.Asset
+		if err := s.db.First(&folder, currentID).Error; err != nil {
+			return 0, ErrAssetNotFound
+		}
+		if folder.ProjectID != projectID || folder.Type != "folder" {
+			return 0, ErrAssetNotFound
+		}
+
+		depth++
+		parentID, ok := assetFolderID(folder)
+		if !ok {
+			break
+		}
+		currentID = parentID
+	}
+
+	return depth, nil
 }
 
 func cloneAssetJSONB(input models.JSONB) models.JSONB {

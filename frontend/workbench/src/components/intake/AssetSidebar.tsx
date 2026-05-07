@@ -11,6 +11,8 @@ import GitRepoDialog from './GitRepoDialog'
 import NoteDialog from './NoteDialog'
 import UploadDialog from './UploadDialog'
 
+const MAX_FOLDER_DEPTH = 7
+
 interface AssetSidebarProps {
   projectId: number
   assets: Asset[]
@@ -60,6 +62,39 @@ function canReparseAsset(asset: Asset) {
 
 function hasUserEditedContent(asset: Asset) {
   return getParsingMetadata(asset)?.updated_by_user === true
+}
+
+function getAssetFolderId(asset: Asset) {
+  const raw = asset.metadata?.folder_id
+  return typeof raw === 'number' ? raw : null
+}
+
+function getFolderDepth(folderId: number | null, folders: Asset[]) {
+  if (folderId === null) {
+    return 0
+  }
+
+  const foldersById = new Map(folders.map((folder) => [folder.id, folder]))
+  const visited = new Set<number>()
+  let currentId: number | null = folderId
+  let depth = 0
+
+  while (currentId !== null) {
+    if (visited.has(currentId)) {
+      return depth
+    }
+    visited.add(currentId)
+
+    const folder = foldersById.get(currentId)
+    if (!folder) {
+      return depth
+    }
+
+    depth += 1
+    currentId = getAssetFolderId(folder)
+  }
+
+  return depth
 }
 
 export default function AssetSidebar({
@@ -114,6 +149,12 @@ export default function AssetSidebar({
     [reparsableAssets]
   )
 
+  const selectedFolderDepth = useMemo(
+    () => getFolderDepth(selectedFolderId, folders),
+    [folders, selectedFolderId]
+  )
+  const folderDepthLimitReached = selectedFolderDepth >= MAX_FOLDER_DEPTH
+
   const refreshAssets = async () => {
     await onReload()
   }
@@ -167,6 +208,10 @@ export default function AssetSidebar({
   const handleCreateFolder = async () => {
     const trimmedName = folderName.replace(/\s+/g, ' ').trim()
     if (!trimmedName) return
+    if (folderDepthLimitReached) {
+      setError(`文件夹最多支持 ${MAX_FOLDER_DEPTH} 层`)
+      return
+    }
 
     setCreatingFolder(true)
     setError('')
@@ -235,7 +280,12 @@ export default function AssetSidebar({
         <Button size="sm" variant="secondary" onClick={() => setNoteOpen(true)}>
           添加备注
         </Button>
-        <Button size="sm" variant="secondary" onClick={() => setFolderOpen(true)} disabled={creatingFolder}>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => setFolderOpen(true)}
+          disabled={creatingFolder || folderDepthLimitReached}
+        >
           <FolderPlus className="h-3.5 w-3.5" />
           {creatingFolder ? '创建中...' : '新建文件夹'}
         </Button>
@@ -293,7 +343,11 @@ export default function AssetSidebar({
         <ModalHeader>新建文件夹</ModalHeader>
         <ModalBody>
           <p className="mb-3 text-sm text-muted-foreground">
-            {selectedFolderId === null ? '将在根目录下创建文件夹。' : '将在当前选中文件夹下创建子文件夹。'}
+            {folderDepthLimitReached
+              ? `文件夹最多支持 ${MAX_FOLDER_DEPTH} 层，请先选择更上层目录。`
+              : selectedFolderId === null
+                ? '将在根目录下创建文件夹。'
+                : '将在当前选中文件夹下创建子文件夹。'}
           </p>
           <Input
             value={folderName}
@@ -306,7 +360,10 @@ export default function AssetSidebar({
           <Button variant="secondary" onClick={() => setFolderOpen(false)}>
             取消
           </Button>
-          <Button onClick={() => void handleCreateFolder()} disabled={!folderName.trim() || creatingFolder}>
+          <Button
+            onClick={() => void handleCreateFolder()}
+            disabled={!folderName.trim() || creatingFolder || folderDepthLimitReached}
+          >
             {creatingFolder ? '创建中...' : '创建'}
           </Button>
         </ModalFooter>
