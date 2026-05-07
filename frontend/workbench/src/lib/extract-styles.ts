@@ -247,6 +247,112 @@ export function stripContainerDimensions(css: string, containerSelector: string)
   return output.join('\n')
 }
 
+// ─── promoteContainerBackground ────────────────────────────────────
+
+/**
+ * Check if a CSS property is background-related.
+ * Covers both the `background` shorthand and all `background-*` longhands.
+ */
+function isBackgroundProperty(prop: string): boolean {
+  return prop === 'background' || prop.startsWith('background-')
+}
+
+/**
+ * Promote background properties from root container rules to `.resume-document`.
+ *
+ * After scoping, root container background ends up on `.resume-document .resume`,
+ * which only covers the content area (inside padding). Promoting to `.resume-document`
+ * ensures the background covers the full A4 canvas including padding.
+ *
+ * Non-background properties on the root container are left untouched.
+ */
+export function promoteContainerBackground(css: string, containerSelector: string): string {
+  if (!css.trim()) return ''
+
+  const sheet = new CSSStyleSheet()
+  try {
+    sheet.replaceSync(css)
+  } catch {
+    return css
+  }
+
+  const promotedProps: string[] = []
+  const output: string[] = []
+
+  function processStyleRule(rule: CSSStyleRule): void {
+    const selectors = rule.selectorText.split(',').map((s) => s.trim())
+    const matchesContainer = selectors.some(
+      (s) => selectorEndsWith(s, containerSelector),
+    )
+
+    if (!matchesContainer) {
+      output.push(rule.cssText)
+      return
+    }
+
+    const bgProps: string[] = []
+    const keptProps: string[] = []
+    for (let i = 0; i < rule.style.length; i++) {
+      const prop = rule.style[i]
+      const value = rule.style.getPropertyValue(prop)
+      const priority = rule.style.getPropertyPriority(prop)
+      const propStr = `${prop}: ${value}${priority ? ` !${priority}` : ''};`
+
+      if (isBackgroundProperty(prop)) {
+        bgProps.push(propStr)
+      } else {
+        keptProps.push(propStr)
+      }
+    }
+
+    promotedProps.push(...bgProps)
+
+    if (keptProps.length > 0) {
+      output.push(`${rule.selectorText} {\n  ${keptProps.join('\n  ')}\n}`)
+    }
+    // If all props were background-related, the rule is dropped (promoted instead)
+  }
+
+  for (let i = 0; i < sheet.cssRules.length; i++) {
+    const rule = sheet.cssRules[i]
+
+    if (rule instanceof CSSStyleRule) {
+      processStyleRule(rule)
+    } else if (rule instanceof CSSMediaRule) {
+      const mediaText = (rule as CSSMediaRule).media.mediaText
+      if (/print/i.test(mediaText)) {
+        output.push(rule.cssText)
+        continue
+      }
+
+      const mediaRule = rule as CSSMediaRule
+      const inner: string[] = []
+      for (let j = 0; j < mediaRule.cssRules.length; j++) {
+        const innerRule = mediaRule.cssRules[j]
+        if (innerRule instanceof CSSStyleRule) {
+          processStyleRule(innerRule)
+        } else {
+          inner.push(innerRule.cssText)
+        }
+      }
+      if (inner.length > 0) {
+        output.push(`@media ${mediaText} {\n${inner.join('\n')}\n}`)
+      }
+    } else {
+      output.push(rule.cssText)
+    }
+  }
+
+  if (promotedProps.length > 0) {
+    // Deduplicate props (same property may appear from multiple container classes)
+    const uniqueProps = [...new Set(promotedProps)]
+    const bgRule = `.resume-document {\n  ${uniqueProps.join('\n  ')}\n}`
+    output.unshift(bgRule)
+  }
+
+  return output.join('\n')
+}
+
 // ─── getRootContainerClasses ──────────────────────────────────────────
 
 /**
@@ -305,6 +411,11 @@ export function extractStyles(html: string): ExtractedStyles {
   const containerClasses = getRootContainerClasses(doc)
   for (const cls of containerClasses) {
     scopedCSS = stripContainerDimensions(scopedCSS, `.${cls}`)
+  }
+
+  // Promote root container background to .resume-document for full A4 canvas coverage
+  for (const cls of containerClasses) {
+    scopedCSS = promoteContainerBackground(scopedCSS, `.${cls}`)
   }
 
   return { bodyHtml, scopedCSS }

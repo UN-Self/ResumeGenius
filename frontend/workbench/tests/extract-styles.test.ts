@@ -4,6 +4,7 @@ import {
   scopeSelectors,
   stripContainerDimensions,
   getRootContainerClasses,
+  promoteContainerBackground,
 } from '@/lib/extract-styles'
 
 // ─── Shared test fixtures ─────────────────────────────────────────────
@@ -215,6 +216,49 @@ describe('getRootContainerClasses', () => {
   })
 })
 
+// ─── promoteContainerBackground ────────────────────────────────────
+
+describe('promoteContainerBackground', () => {
+  it('promotes background-color from root container to .resume-document', () => {
+    const css = '.resume-document .resume { background-color: #f0f0f0; color: #333; }'
+    const result = promoteContainerBackground(css, '.resume')
+    // Background should be on .resume-document
+    expect(result).toMatch(/\.resume-document\s*\{[^}]*background-color/)
+    // Root container should still have non-background properties
+    expect(result).toContain('color:')
+    // Root container should NOT have background-color anymore
+    const resumeRuleMatch = result.match(/\.resume-document\s+\.resume\s*\{([^}]*)\}/)
+    expect(resumeRuleMatch).not.toBeNull()
+    expect(resumeRuleMatch![1]).not.toContain('background')
+  })
+
+  it('promotes background shorthand (expanded by CSSOM)', () => {
+    const css = '.resume-document .resume { background: #f0f0f0; color: #333; }'
+    const result = promoteContainerBackground(css, '.resume')
+    // CSSOM expands shorthand — background-color should be promoted
+    expect(result).toMatch(/\.resume-document\s*\{[^}]*background/)
+  })
+
+  it('does not affect non-container selectors', () => {
+    const css = '.resume-document .section { background: #eee; } .resume-document .resume { background: #f0f0f0; }'
+    const result = promoteContainerBackground(css, '.resume')
+    // .section background should remain untouched
+    expect(result).toContain('.resume-document .section')
+    expect(result).toMatch(/\.resume-document\s+\.section[^{]*\{[^}]*background/)
+  })
+
+  it('returns unchanged CSS when no background on container', () => {
+    const css = '.resume-document .resume { color: #333; font-size: 12pt; }'
+    const result = promoteContainerBackground(css, '.resume')
+    expect(result).not.toContain('.resume-document {')
+    expect(result).toContain('color:')
+  })
+
+  it('returns empty for empty input', () => {
+    expect(promoteContainerBackground('', '.resume')).toBe('')
+  })
+})
+
 // ─── extractStyles (integration) ──────────────────────────────────────
 
 describe('extractStyles', () => {
@@ -286,5 +330,29 @@ describe('extractStyles', () => {
     expect(scopedCSS).toContain('.resume-document .tag')
     expect(scopedCSS).toContain('background')
     expect(bodyHtml).toContain('class="resume"')
+  })
+
+  it('promotes root container background to .resume-document', () => {
+    const html = `<!DOCTYPE html>
+<html><head>
+  <style>
+    .resume { width: 210mm; min-height: 297mm; padding: 18mm 20mm; background: #f5f5f5; }
+    .section { margin-bottom: 10pt; }
+  </style>
+</head>
+<body>
+  <div class="resume">
+    <section class="section"><h2>标题</h2></section>
+  </div>
+</body></html>`
+    const { scopedCSS } = extractStyles(html)
+    // Dimensions should be stripped
+    expect(scopedCSS).not.toContain('width: 210mm')
+    expect(scopedCSS).not.toContain('min-height: 297mm')
+    expect(scopedCSS).not.toContain('padding: 18mm 20mm')
+    // Background should be promoted to .resume-document (full canvas coverage)
+    expect(scopedCSS).toMatch(/\.resume-document\s*\{[^}]*background/)
+    // .section should remain scoped normally
+    expect(scopedCSS).toContain('.resume-document .section')
   })
 })
