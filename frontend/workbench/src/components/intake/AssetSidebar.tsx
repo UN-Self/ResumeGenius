@@ -123,6 +123,11 @@ export default function AssetSidebar({
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null)
   const [creatingFolder, setCreatingFolder] = useState(false)
   const [uploadingFolder, setUploadingFolder] = useState(false)
+  const [folderUploadProgress, setFolderUploadProgress] = useState({
+    current: 0,
+    total: 0,
+    message: '',
+  })
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [reparseLoadingAssetId, setReparseLoadingAssetId] = useState<number | null>(null)
@@ -260,6 +265,11 @@ export default function AssetSidebar({
     }
 
     setUploadingFolder(true)
+    setFolderUploadProgress({
+      current: 0,
+      total: supportedFiles.length,
+      message: '正在创建文件夹结构...',
+    })
     setError('')
     let skippedDepthCount = 0
     let failedCount = 0
@@ -271,12 +281,20 @@ export default function AssetSidebar({
       const maxChildFolderDepth = MAX_FOLDER_DEPTH - (selectedFolderDepth + 1)
 
       for (const file of supportedFiles) {
+        setFolderUploadProgress((current) => ({
+          ...current,
+          message: `正在上传 ${file.name}`,
+        }))
         const segments = getDirectoryFilePath(file).split(/[\\/]+/).filter(Boolean)
         const relativeSegments = segments.length > 1 ? segments.slice(1) : segments
         const folderSegments = relativeSegments.slice(0, -1).map(sanitizeFolderName).filter(Boolean)
 
         if (folderSegments.length > maxChildFolderDepth) {
           skippedDepthCount += 1
+          setFolderUploadProgress((current) => ({
+            ...current,
+            current: current.current + 1,
+          }))
           continue
         }
 
@@ -300,10 +318,19 @@ export default function AssetSidebar({
           uploadedCount += 1
         } catch {
           failedCount += 1
+        } finally {
+          setFolderUploadProgress((current) => ({
+            ...current,
+            current: current.current + 1,
+          }))
         }
       }
 
       if (uploadedCount > 0) {
+        setFolderUploadProgress((current) => ({
+          ...current,
+          message: '文件上传完成，正在解析内容...',
+        }))
         await parsingApi.parseProject(projectId)
       }
 
@@ -317,6 +344,10 @@ export default function AssetSidebar({
       setError(uploadFolderError instanceof Error ? uploadFolderError.message : '上传文件夹失败')
     } finally {
       setUploadingFolder(false)
+      setFolderUploadProgress((current) => ({
+        ...current,
+        message: '上传完成',
+      }))
       await refreshAssets()
     }
   }
@@ -477,6 +508,34 @@ export default function AssetSidebar({
             {creatingFolder ? '创建中...' : '创建'}
           </Button>
         </ModalFooter>
+      </Modal>
+      <Modal open={uploadingFolder} onClose={() => undefined} maxWidth="max-w-md">
+        <ModalHeader>上传文件夹</ModalHeader>
+        <ModalBody>
+          <div className="mt-4 rounded-2xl border border-border bg-background/70 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm font-medium text-foreground">正在上传文件夹...</p>
+              <span className="text-xs font-semibold text-primary">
+                {folderUploadProgress.total > 0
+                  ? `${folderUploadProgress.current}/${folderUploadProgress.total}`
+                  : '0/0'}
+              </span>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-300"
+                style={{
+                  width: `${folderUploadProgress.total > 0
+                    ? Math.min(100, Math.round((folderUploadProgress.current / folderUploadProgress.total) * 100))
+                    : 0}%`,
+                }}
+              />
+            </div>
+            <p className="mt-3 truncate text-xs leading-5 text-muted-foreground">
+              {folderUploadProgress.message || '正在准备上传任务，请稍候。'}
+            </p>
+          </div>
+        </ModalBody>
       </Modal>
       <DeleteConfirm
         open={deleteTarget !== null}

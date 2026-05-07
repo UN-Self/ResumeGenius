@@ -91,7 +91,13 @@ export default function EditorPage() {
     saveUrl: draftId ? `/api/v1/drafts/${draftId}` : undefined,
   })
 
-  const { exportPdf, status: exportStatus } = useExport()
+  const {
+    exportPdf,
+    status: exportStatus,
+    error: exportError,
+    progress: exportProgress,
+    message: exportMessage,
+  } = useExport()
 
   const {
     versions,
@@ -630,6 +636,38 @@ export default function EditorPage() {
         onClose={() => setRollbackDialogOpen(false)}
         onConfirm={handleRollback}
       />
+      <Modal
+        open={exportStatus === 'exporting' || exportStatus === 'completed' || exportStatus === 'failed'}
+        onClose={() => undefined}
+        maxWidth="max-w-md"
+      >
+        <ModalHeader>导出 PDF</ModalHeader>
+        <ModalBody>
+          <div className="mt-4 rounded-2xl border border-border bg-background/70 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm font-medium text-foreground">
+                {exportStatus === 'completed'
+                  ? '导出完成'
+                  : exportStatus === 'failed'
+                    ? '导出失败'
+                    : '正在导出 PDF...'}
+              </p>
+              <span className="text-xs font-semibold text-primary">
+                {Math.round(exportProgress)}%
+              </span>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-300"
+                style={{ width: `${Math.max(0, Math.min(exportProgress, 100))}%` }}
+              />
+            </div>
+            <p className="mt-3 text-xs leading-5 text-muted-foreground">
+              {exportError || exportMessage || '正在准备导出任务，请稍候。'}
+            </p>
+          </div>
+        </ModalBody>
+      </Modal>
       <Modal
         open={pendingCloseAsset !== null}
         onClose={() => setPendingCloseAsset(null)}
