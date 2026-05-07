@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { FolderPlus } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { FolderUp, FolderPlus } from 'lucide-react'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,8 +10,10 @@ import DeleteConfirm from './DeleteConfirm'
 import GitRepoDialog from './GitRepoDialog'
 import NoteDialog from './NoteDialog'
 import UploadDialog from './UploadDialog'
+import { getExt } from './fileVisuals'
 
 const MAX_FOLDER_DEPTH = 7
+const FOLDER_UPLOAD_ALLOWED_EXTENSIONS = new Set(['.pdf', '.docx', '.png', '.jpg', '.jpeg'])
 
 interface AssetSidebarProps {
   projectId: number
@@ -97,6 +99,14 @@ function getFolderDepth(folderId: number | null, folders: Asset[]) {
   return depth
 }
 
+function getDirectoryFilePath(file: File) {
+  return (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name
+}
+
+function sanitizeFolderName(value: string) {
+  return value.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
 export default function AssetSidebar({
   projectId,
   assets,
@@ -112,9 +122,11 @@ export default function AssetSidebar({
   const [folderName, setFolderName] = useState('')
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null)
   const [creatingFolder, setCreatingFolder] = useState(false)
+  const [uploadingFolder, setUploadingFolder] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [reparseLoadingAssetId, setReparseLoadingAssetId] = useState<number | null>(null)
+  const folderUploadInputRef = useRef<HTMLInputElement>(null)
 
   const visibleAssets = useMemo(
     () =>
@@ -228,6 +240,87 @@ export default function AssetSidebar({
     }
   }
 
+  const handleUploadFolderInput = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files ?? [])
+    event.currentTarget.value = ''
+    if (selectedFiles.length === 0 || folderDepthLimitReached) return
+
+    const supportedFiles = selectedFiles.filter((file) => FOLDER_UPLOAD_ALLOWED_EXTENSIONS.has(getExt(file.name)))
+    const ignoredUnsupportedCount = selectedFiles.length - supportedFiles.length
+    if (supportedFiles.length === 0) {
+      setError('该文件夹里没有可上传的 PDF、DOCX、PNG 或 JPG 文件')
+      return
+    }
+
+    const firstPath = getDirectoryFilePath(supportedFiles[0]).split(/[\\/]+/).filter(Boolean)
+    const rootFolderName = sanitizeFolderName(firstPath.length > 1 ? firstPath[0] : '上传文件夹')
+    if (!rootFolderName) {
+      setError('无法识别文件夹名称')
+      return
+    }
+
+    setUploadingFolder(true)
+    setError('')
+    let skippedDepthCount = 0
+    let failedCount = 0
+    let uploadedCount = 0
+
+    try {
+      const rootFolder = await intakeApi.createFolder(projectId, rootFolderName, selectedFolderId)
+      const folderCache = new Map<string, number>([['', rootFolder.id]])
+      const maxChildFolderDepth = MAX_FOLDER_DEPTH - (selectedFolderDepth + 1)
+
+      for (const file of supportedFiles) {
+        const segments = getDirectoryFilePath(file).split(/[\\/]+/).filter(Boolean)
+        const relativeSegments = segments.length > 1 ? segments.slice(1) : segments
+        const folderSegments = relativeSegments.slice(0, -1).map(sanitizeFolderName).filter(Boolean)
+
+        if (folderSegments.length > maxChildFolderDepth) {
+          skippedDepthCount += 1
+          continue
+        }
+
+        let parentFolderId = rootFolder.id
+        let folderPath = ''
+        try {
+          for (const folderName of folderSegments) {
+            folderPath = folderPath ? `${folderPath}/${folderName}` : folderName
+            const cachedFolderId = folderCache.get(folderPath)
+            if (cachedFolderId !== undefined) {
+              parentFolderId = cachedFolderId
+              continue
+            }
+
+            const folder = await intakeApi.createFolder(projectId, folderName, parentFolderId)
+            folderCache.set(folderPath, folder.id)
+            parentFolderId = folder.id
+          }
+
+          await intakeApi.uploadFile(projectId, file, undefined, parentFolderId)
+          uploadedCount += 1
+        } catch {
+          failedCount += 1
+        }
+      }
+
+      if (uploadedCount > 0) {
+        await parsingApi.parseProject(projectId)
+      }
+
+      const notices = []
+      if (ignoredUnsupportedCount > 0) notices.push(`已忽略 ${ignoredUnsupportedCount} 个不支持的文件`)
+      if (skippedDepthCount > 0) notices.push(`已忽略 ${skippedDepthCount} 个超过 ${MAX_FOLDER_DEPTH} 层的文件`)
+      if (failedCount > 0) notices.push(`${failedCount} 个文件上传失败`)
+      setSelectedFolderId(rootFolder.id)
+      setError(notices.join('，'))
+    } catch (uploadFolderError) {
+      setError(uploadFolderError instanceof Error ? uploadFolderError.message : '上传文件夹失败')
+    } finally {
+      setUploadingFolder(false)
+      await refreshAssets()
+    }
+  }
+
   const handleDeleteAsset = async () => {
     if (!deleteTarget) return
     try {
@@ -274,11 +367,14 @@ export default function AssetSidebar({
         <Button size="sm" onClick={() => setUploadOpen(true)}>
           上传文件
         </Button>
-        <Button size="sm" variant="secondary" onClick={() => setGitOpen(true)}>
-          接入 Git
-        </Button>
-        <Button size="sm" variant="secondary" onClick={() => setNoteOpen(true)}>
-          添加备注
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => folderUploadInputRef.current?.click()}
+          disabled={uploadingFolder || folderDepthLimitReached}
+        >
+          <FolderUp className="h-3.5 w-3.5" />
+          {uploadingFolder ? '上传中...' : '上传文件夹'}
         </Button>
         <Button
           size="sm"
@@ -288,6 +384,20 @@ export default function AssetSidebar({
         >
           <FolderPlus className="h-3.5 w-3.5" />
           {creatingFolder ? '创建中...' : '新建文件夹'}
+        </Button>
+        <input
+          ref={folderUploadInputRef}
+          type="file"
+          className="hidden"
+          multiple
+          onChange={handleUploadFolderInput}
+          {...{ webkitdirectory: '', directory: '' }}
+        />
+        <Button size="sm" variant="secondary" onClick={() => setGitOpen(true)}>
+          接入 Git
+        </Button>
+        <Button size="sm" variant="secondary" onClick={() => setNoteOpen(true)}>
+          添加备注
         </Button>
       </div>
 

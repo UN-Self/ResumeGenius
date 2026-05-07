@@ -210,7 +210,7 @@ func (s *AssetService) UploadFileWithReplacement(userID string, projectID uint, 
 	}
 
 	fileHash := storage.SHA256Hex(data)
-	restoredAsset, err := s.restoreDeletedAssetByFileHash(userID, projectID, filename, assetType, fileHash, replaceAsset, folderID)
+	restoredAsset, err := s.restoreDeletedAssetByFileHash(userID, projectID, filename, assetType, fileHash, ext, data, replaceAsset, folderID)
 	if err != nil {
 		return nil, err
 	}
@@ -607,7 +607,8 @@ func (s *AssetService) findDeletedAssetByFileHash(userID, fileHash string) (*mod
 func (s *AssetService) restoreDeletedAssetByFileHash(
 	userID string,
 	projectID uint,
-	filename, assetType, fileHash string,
+	filename, assetType, fileHash, ext string,
+	data []byte,
 	replaceAsset *models.Asset,
 	folderID *uint,
 ) (*models.Asset, error) {
@@ -617,6 +618,10 @@ func (s *AssetService) restoreDeletedAssetByFileHash(
 	}
 
 	restoredMetadata := withAssetFolderMetadata(withAssetOriginalFilenameMetadata(deletedAsset.Metadata, filename), folderID)
+	restoredURI, err := s.storage.Save(userID, fileHash, ext, data)
+	if err != nil {
+		return nil, fmt.Errorf("restore asset file: %w", err)
+	}
 	derivedIDs := derivedImageAssetIDsFromAssetMetadata(deletedAsset.Metadata)
 	restoredAssetID := deletedAsset.ID
 
@@ -630,6 +635,7 @@ func (s *AssetService) restoreDeletedAssetByFileHash(
 		updates := map[string]interface{}{
 			"project_id": projectID,
 			"type":       assetType,
+			"uri":        restoredURI,
 			"label":      nil,
 			"file_hash":  fileHash,
 			"metadata":   restoredMetadata,

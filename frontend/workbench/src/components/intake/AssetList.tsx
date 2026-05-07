@@ -204,6 +204,7 @@ export default function AssetList({
   const [renameValue, setRenameValue] = useState('')
   const [renameSavingAssetId, setRenameSavingAssetId] = useState<number | null>(null)
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<number>>(() => new Set())
+  const [rootCollapsed, setRootCollapsed] = useState(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -289,21 +290,30 @@ export default function AssetList({
       <div className="rounded-2xl border border-border bg-card/70 p-2">
         <button
           type="button"
-          onClick={() => onSelectFolder?.(null)}
+          onClick={() => {
+            onSelectFolder?.(null)
+            setRootCollapsed((value) => !value)
+          }}
           className={[
             'flex w-full items-center gap-2 rounded-xl px-2 py-2 text-left transition-colors hover:bg-surface-hover',
             selectedFolderId === null ? 'bg-primary/10 text-foreground' : 'text-muted-foreground',
           ].join(' ')}
         >
-          <ChevronDown className="h-4 w-4" />
+          <ChevronDown className={`h-4 w-4 transition-transform ${rootCollapsed ? '-rotate-90' : ''}`} />
           <Folder className="h-4 w-4 text-cyan-500" />
           <span className="min-w-0 flex-1 truncate text-sm font-semibold">根目录</span>
           <span className="text-[11px]">{childFoldersOf(null).length + rootFiles.length}</span>
         </button>
-        <div className="mt-2 space-y-2 pl-5">
-          {childFoldersOf(null).map((folder) => renderFolder(folder))}
-          {rootFiles.map((asset) => renderAsset(asset))}
-        </div>
+        {!rootCollapsed && (
+          <div className="mt-2 space-y-2">
+            {childFoldersOf(null).length > 0 && (
+              <div className="space-y-2 pl-5">
+                {childFoldersOf(null).map((folder) => renderFolder(folder))}
+              </div>
+            )}
+            {rootFiles.map((asset) => renderAsset(asset))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -411,14 +421,14 @@ export default function AssetList({
               onOpenAsset(asset)
             }}
             className={[
-              'rounded-xl border bg-card/85 p-2 shadow-sm transition-colors',
+              'rounded-xl border bg-card/85 px-2 py-1.5 shadow-sm transition-colors',
               onOpenAsset ? 'cursor-pointer hover:border-primary-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35' : 'hover:border-primary-200',
               selectedAssetId === asset.id ? 'border-primary/60 bg-primary/10' : 'border-border',
             ].join(' ')}
           >
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2">
               <div
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${visual.iconWrapperClassName}`}
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border ${visual.iconWrapperClassName}`}
               >
                 <Icon className={`h-4 w-4 ${visual.iconClassName}`} />
               </div>
@@ -426,7 +436,7 @@ export default function AssetList({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="flex min-h-7 min-w-0 items-center gap-2">
+                    <div className="flex min-h-6 min-w-0 items-center gap-2">
                       {renaming ? (
                         <input
                           ref={renameInputRef}
