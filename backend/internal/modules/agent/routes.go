@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -20,6 +21,12 @@ func normalizeAIURL(raw string) string {
 }
 
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
+	skillLoader, err := NewSkillLoader()
+	if err != nil {
+		log.Printf("agent: failed to load skills (non-fatal): %v", err)
+		skillLoader = nil
+	}
+
 	sessionSvc := NewSessionService(db)
 
 	var provider ProviderAdapter
@@ -33,7 +40,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 		)
 	}
 
-	toolExecutor := NewAgentToolExecutor(db)
+	toolExecutor := NewAgentToolExecutor(db, skillLoader)
 	maxIterations := 3
 	if v := os.Getenv("AGENT_MAX_ITERATIONS"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {

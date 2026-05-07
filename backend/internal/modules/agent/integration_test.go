@@ -38,7 +38,7 @@ func TestFullFlow_Integration(t *testing.T) {
 
 	ctx := WithDraftID(context.Background(), draft.ID)
 	ctx = WithProjectID(ctx, project.ID)
-	executor := NewAgentToolExecutor(db)
+	executor := NewAgentToolExecutor(db, nil)
 
 	// 1. get_draft — full HTML
 	result, err := executor.Execute(ctx, "get_draft", nil)

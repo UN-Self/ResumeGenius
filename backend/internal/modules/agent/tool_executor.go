@@ -56,15 +56,16 @@ type ToolExecutor interface {
 
 // AgentToolExecutor implements ToolExecutor using database queries.
 type AgentToolExecutor struct {
-	db *gorm.DB
+	db          *gorm.DB
+	skillLoader *SkillLoader
 }
 
 // NewAgentToolExecutor creates a new AgentToolExecutor.
-func NewAgentToolExecutor(db *gorm.DB) *AgentToolExecutor {
-	return &AgentToolExecutor{db: db}
+func NewAgentToolExecutor(db *gorm.DB, skillLoader *SkillLoader) *AgentToolExecutor {
+	return &AgentToolExecutor{db: db, skillLoader: skillLoader}
 }
 
-// Tools returns the three AI-callable tool definitions.
+// Tools returns the four AI-callable tool definitions.
 func (e *AgentToolExecutor) Tools() []ToolDef {
 	return []ToolDef{
 		{
@@ -117,6 +118,28 @@ func (e *AgentToolExecutor) Tools() []ToolDef {
 				"required": []string{},
 			},
 		},
+		{
+			Name:        "search_skills",
+			Description: "搜索简历优化技能库（面经）。根据用户目标岗位的关键词（如'测试工程师'、'QA'）或分类查找匹配的面经和简历修改建议。不传参数返回全部技能摘要。",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"keyword": map[string]interface{}{
+						"type":        "string",
+						"description": "搜索关键词，按岗位名或技能名匹配，如'测试工程师'、'QA'、'自动化测试'",
+					},
+					"category": map[string]interface{}{
+						"type":        "string",
+						"description": "技能分类名，如'test'、'tech'、'management'",
+					},
+					"limit": map[string]interface{}{
+						"type":        "integer",
+						"description": "返回数量上限，默认 3",
+					},
+				},
+				"required": []string{},
+			},
+		},
 	}
 }
 
@@ -129,6 +152,8 @@ func (e *AgentToolExecutor) Execute(ctx context.Context, toolName string, params
 		return e.applyEdits(ctx, params)
 	case "search_assets":
 		return e.searchAssets(ctx, params)
+	case "search_skills":
+		return e.searchSkills(ctx, params)
 	default:
 		return "", fmt.Errorf("unknown tool: %s", toolName)
 	}
@@ -365,6 +390,37 @@ func (e *AgentToolExecutor) searchAssets(ctx context.Context, params map[string]
 	b, err := json.Marshal(resultData)
 	if err != nil {
 		return "", fmt.Errorf("marshal result: %w", err)
+	}
+	return string(b), nil
+}
+
+// ---------------------------------------------------------------------------
+// search_skills
+// ---------------------------------------------------------------------------
+
+func (e *AgentToolExecutor) searchSkills(ctx context.Context, params map[string]interface{}) (string, error) {
+	if e.skillLoader == nil {
+		return `{"skills":[],"message":"技能库未加载"}`, nil
+	}
+
+	keyword, _ := params["keyword"].(string)
+	category, _ := params["category"].(string)
+	limit := 3
+	if _, ok := params["limit"]; ok {
+		if n, err := getIntParam(params, "limit"); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	summaryOnly := keyword == "" && category == ""
+	results := e.skillLoader.Search(keyword, category, limit, summaryOnly)
+
+	resp := map[string]interface{}{
+		"skills": results,
+	}
+	b, err := json.Marshal(resp)
+	if err != nil {
+		return "", fmt.Errorf("marshal search results: %w", err)
 	}
 	return string(b), nil
 }
