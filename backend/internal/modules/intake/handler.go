@@ -14,11 +14,11 @@ import (
 const (
 	CodeParamInvalid      = 1001 // request parameter invalid
 	CodeInternalError     = 1999 // internal server error
-	CodeUnsupportedFormat = 1001  // unsupported file format
-	CodeFileTooLarge      = 1002  // file size exceeds limit
-	CodeInvalidGitURL     = 1003  // invalid git URL
-	CodeProjectNotFound   = 1004  // project not found
-	CodeAssetNotFound     = 1006  // asset not found
+	CodeUnsupportedFormat = 1001 // unsupported file format
+	CodeFileTooLarge      = 1002 // file size exceeds limit
+	CodeInvalidGitURL     = 1003 // invalid git URL
+	CodeProjectNotFound   = 1004 // project not found
+	CodeAssetNotFound     = 1006 // asset not found
 )
 
 type Handler struct {
@@ -240,6 +240,35 @@ func (h *Handler) ListAssets(c *gin.Context) {
 	}
 
 	response.Success(c, assets)
+}
+
+// GetAssetFile handles GET /assets/:asset_id/file
+func (h *Handler) GetAssetFile(c *gin.Context) {
+	assetID, err := strconv.ParseUint(c.Param("asset_id"), 10, 64)
+	if err != nil {
+		response.Error(c, CodeParamInvalid, "invalid asset_id")
+		return
+	}
+
+	asset, path, err := h.assetSvc.ResolveAssetFile(userID(c), uint(assetID))
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrAssetNotFound), errors.Is(err, ErrAssetURIMissing):
+			response.Error(c, CodeAssetNotFound, "asset file not found")
+		case errors.Is(err, ErrProjectNotFound):
+			response.Error(c, CodeProjectNotFound, "project not found")
+		default:
+			response.Error(c, CodeInternalError, "failed to load asset file")
+		}
+		return
+	}
+
+	if asset.Type != "resume_image" {
+		response.Error(c, CodeUnsupportedFormat, "asset file preview is only available for images")
+		return
+	}
+
+	c.File(path)
 }
 
 // DeleteAsset handles DELETE /assets/:asset_id

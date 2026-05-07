@@ -9,6 +9,8 @@ type AssetItem = Asset & { label?: string; content?: string; uri?: string }
 interface AssetListProps {
   assets: AssetItem[]
   onDelete: (id: number) => void
+  onOpenAsset?: (asset: AssetItem) => void
+  selectedAssetId?: number | null
   onRenameAsset?: (asset: AssetItem, label: string) => Promise<void> | void
   onReparseAsset?: (asset: AssetItem) => void
   canReparseAsset?: (asset: AssetItem) => boolean
@@ -90,7 +92,10 @@ function AssetMoreMenu({
         aria-label="更多素材操作"
         aria-expanded={open}
         aria-haspopup="menu"
-        onClick={() => setOpen((value) => !value)}
+        onClick={(event) => {
+          event.stopPropagation()
+          setOpen((value) => !value)
+        }}
         className={[
           'flex h-8 w-8 items-center justify-center rounded-full border border-transparent text-muted-foreground transition-all',
           'hover:border-border hover:bg-popover/80 hover:text-foreground hover:shadow-[0_10px_28px_rgba(2,8,23,0.18)]',
@@ -141,7 +146,7 @@ function AssetMoreMenu({
   )
 }
 
-function getDisplayTitle(asset: AssetItem, fallbackLabel: string) {
+export function getDisplayTitle(asset: AssetItem, fallbackLabel: string) {
   if (asset.label?.trim() && !isGenericAssetLabel(asset, asset.label.trim())) {
     return getDisplayAssetTitle(asset.type, asset.label) || asset.label.trim()
   }
@@ -178,22 +183,11 @@ function isGenericAssetLabel(asset: AssetItem, label: string) {
   return normalized === visual.chipLabel.toLowerCase() || normalized === visual.typeLabel.toLowerCase()
 }
 
-function getContentPreview(asset: AssetItem) {
-  const raw = asset.content?.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim() ?? ''
-  if (!raw) {
-    return ''
-  }
-
-  if (asset.type === 'note' && asset.label?.trim() && raw.startsWith(asset.label.trim())) {
-    return raw.slice(asset.label.trim().length).replace(/^\s+/, '').replace(/\n{3,}/g, '\n\n')
-  }
-
-  return raw.replace(/\n{3,}/g, '\n\n')
-}
-
 export default function AssetList({
   assets,
   onDelete,
+  onOpenAsset,
+  selectedAssetId,
   onRenameAsset,
   onReparseAsset,
   canReparseAsset,
@@ -264,7 +258,6 @@ export default function AssetList({
         const visual = getAssetVisual(asset.type, asset.uri)
         const Icon = visual.icon
         const title = getDisplayTitle(asset, visual.chipLabel)
-        const contentPreview = getContentPreview(asset)
         const renameable = onRenameAsset !== undefined
         const renaming = renamingAssetId === asset.id
         const renameSaving = renameSavingAssetId === asset.id
@@ -274,7 +267,20 @@ export default function AssetList({
         return (
           <div
             key={asset.id}
-            className="rounded-2xl border border-border bg-card/90 p-3.5 shadow-sm transition-colors hover:border-primary-200"
+            role={onOpenAsset ? 'button' : undefined}
+            tabIndex={onOpenAsset ? 0 : undefined}
+            onClick={() => onOpenAsset?.(asset)}
+            onKeyDown={(event) => {
+              if (!onOpenAsset) return
+              if (event.key !== 'Enter' && event.key !== ' ') return
+              event.preventDefault()
+              onOpenAsset(asset)
+            }}
+            className={[
+              'rounded-2xl border bg-card/90 p-3.5 shadow-sm transition-colors',
+              onOpenAsset ? 'cursor-pointer hover:border-primary-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35' : 'hover:border-primary-200',
+              selectedAssetId === asset.id ? 'border-primary/60 bg-primary/10' : 'border-border',
+            ].join(' ')}
           >
             <div className="flex items-start gap-3">
               <div
@@ -339,16 +345,6 @@ export default function AssetList({
                     />
                   </div>
                 </div>
-
-                {contentPreview ? (
-                  <div className="mt-3 max-h-36 overflow-y-auto rounded-xl border border-border/80 bg-background px-3 py-2.5 text-[13px] leading-relaxed text-muted-foreground whitespace-pre-wrap break-words">
-                    {contentPreview}
-                  </div>
-                ) : (
-                  <div className="mt-3 rounded-xl border border-dashed border-border/80 bg-background/60 px-3 py-2.5 text-xs text-muted-foreground">
-                    该素材当前没有可展示的正文内容。
-                  </div>
-                )}
               </div>
             </div>
           </div>
