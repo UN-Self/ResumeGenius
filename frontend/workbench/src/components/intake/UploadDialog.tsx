@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Upload } from 'lucide-react'
 import { Modal, ModalFooter, ModalHeader } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
@@ -18,8 +18,10 @@ const ALLOWED = ['.pdf', '.docx', '.png', '.jpg', '.jpeg']
 interface UploadDialogProps {
   open: boolean
   onClose: () => void
-  onUpload: (file: File, replaceAssetId?: number) => Promise<void>
+  onUpload: (file: File, replaceAssetId?: number, folderId?: number | null) => Promise<void>
   existingAssets?: Asset[]
+  folders?: Asset[]
+  defaultFolderId?: number | null
 }
 
 function isDerivedImageAsset(asset: Asset) {
@@ -35,7 +37,12 @@ function isDerivedImageAsset(asset: Asset) {
   return (parsing as Record<string, unknown>).derived === true
 }
 
-function findDuplicateAsset(assets: Asset[], file: File) {
+function getAssetFolderId(asset: Asset) {
+  const raw = asset.metadata?.folder_id
+  return typeof raw === 'number' ? raw : null
+}
+
+function findDuplicateAsset(assets: Asset[], file: File, folderId: number | null) {
   const uploadType = getUploadAssetType(file.name)
   if (!uploadType) {
     return null
@@ -49,18 +56,68 @@ function findDuplicateAsset(assets: Asset[], file: File) {
       }
 
       const originalFilename = getOriginalFilenameFromAsset(asset)
-      return originalFilename.trim().toLowerCase() === normalizedFilename
+      return getAssetFolderId(asset) === folderId && originalFilename.trim().toLowerCase() === normalizedFilename
     }) ?? null
   )
 }
 
-export default function UploadDialog({ open, onClose, onUpload, existingAssets = [] }: UploadDialogProps) {
+function getFolderName(folder: Asset) {
+  return folder.label?.replace(/\s+/g, ' ').trim() || '未命名文件夹'
+}
+
+function buildFolderOptions(folders: Asset[]) {
+  const folderIdSet = new Set(folders.map((folder) => folder.id))
+  const parentIdForFolder = (folder: Asset) => {
+    const raw = folder.metadata?.folder_id
+    if (typeof raw !== 'number' || raw === folder.id || !folderIdSet.has(raw)) {
+      return null
+    }
+    return raw
+  }
+  const childrenOf = (parentId: number | null) =>
+    folders
+      .filter((folder) => parentIdForFolder(folder) === parentId)
+      .sort((left, right) => getFolderName(left).localeCompare(getFolderName(right), 'zh-Hans-CN'))
+  const options: Array<{ id: number; label: string }> = []
+  const visited = new Set<number>()
+
+  const walk = (parentId: number | null, depth: number) => {
+    for (const folder of childrenOf(parentId)) {
+      if (visited.has(folder.id)) continue
+      visited.add(folder.id)
+      options.push({
+        id: folder.id,
+        label: `${'　'.repeat(depth)}${getFolderName(folder)}`,
+      })
+      walk(folder.id, depth + 1)
+    }
+  }
+
+  walk(null, 0)
+  return options
+}
+
+export default function UploadDialog({
+  open,
+  onClose,
+  onUpload,
+  existingAssets = [],
+  folders = [],
+  defaultFolderId = null,
+}: UploadDialogProps) {
   const [dragging, setDragging] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [replacementTarget, setReplacementTarget] = useState<Asset | null>(null)
+  const [folderId, setFolderId] = useState<number | null>(defaultFolderId)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (open) {
+      setFolderId(defaultFolderId)
+    }
+  }, [defaultFolderId, open])
 
   const validate = useCallback((nextFile: File) => {
     if (!ALLOWED.includes(getExt(nextFile.name))) {
@@ -125,7 +182,7 @@ export default function UploadDialog({ open, onClose, onUpload, existingAssets =
     try {
       setUploading(true)
       setError('')
-      await onUpload(file, replaceAssetId)
+      await onUpload(file, replaceAssetId, folderId)
       setFile(null)
       setReplacementTarget(null)
       onClose()
@@ -139,7 +196,7 @@ export default function UploadDialog({ open, onClose, onUpload, existingAssets =
   const handleSubmit = async () => {
     if (!file) return
 
-    const duplicateAsset = findDuplicateAsset(existingAssets, file)
+    const duplicateAsset = findDuplicateAsset(existingAssets, file, folderId)
     if (duplicateAsset) {
       setReplacementTarget(duplicateAsset)
       return
@@ -153,12 +210,14 @@ export default function UploadDialog({ open, onClose, onUpload, existingAssets =
     setFile(null)
     setError('')
     setReplacementTarget(null)
+    setFolderId(defaultFolderId)
     onClose()
   }
 
   const selectedVisual = file ? getUploadFileVisual(file.name) : null
   const SelectedIcon = selectedVisual?.icon
   const replacementFilename = replacementTarget ? getOriginalFilenameFromAsset(replacementTarget) : ''
+  const folderOptions = buildFolderOptions(folders)
 
   if (replacementTarget && file) {
     return (
@@ -216,6 +275,22 @@ export default function UploadDialog({ open, onClose, onUpload, existingAssets =
     <Modal open={open} onClose={handleClose}>
       <ModalHeader>{'\u4e0a\u4f20\u6587\u4ef6'}</ModalHeader>
       <p className="mt-1 text-xs text-muted-foreground">{'\u652f\u6301 PDF\u3001DOCX\u3001PNG\u3001JPG\uff0c\u6700\u5927 20MB'}</p>
+
+      <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        保存位置
+      </label>
+      <select
+        value={folderId ?? ''}
+        onChange={(event) => setFolderId(event.target.value ? Number(event.target.value) : null)}
+        className="mt-2 h-10 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-ring/35"
+      >
+        <option value="">根目录</option>
+        {folderOptions.map((folder) => (
+          <option key={folder.id} value={folder.id}>
+            {folder.label}
+          </option>
+        ))}
+      </select>
 
       <div
         onDrop={handleDrop}

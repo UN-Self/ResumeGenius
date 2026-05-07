@@ -51,6 +51,12 @@ type createNoteReq struct {
 	Label     string `json:"label"`
 }
 
+type createFolderReq struct {
+	ProjectID      uint   `json:"project_id"`
+	Name           string `json:"name"`
+	ParentFolderID *uint  `json:"parent_folder_id"`
+}
+
 type updateNoteReq struct {
 	Content string `json:"content"`
 	Label   string `json:"label"`
@@ -156,6 +162,18 @@ func (h *Handler) UploadFile(c *gin.Context) {
 		replaceAssetID = &typedReplaceID
 	}
 
+	var folderID *uint
+	folderIDStr := c.PostForm("folder_id")
+	if folderIDStr != "" {
+		parsedFolderID, parseErr := strconv.ParseUint(folderIDStr, 10, 64)
+		if parseErr != nil {
+			response.Error(c, CodeParamInvalid, "invalid folder_id")
+			return
+		}
+		typedFolderID := uint(parsedFolderID)
+		folderID = &typedFolderID
+	}
+
 	file, err := c.FormFile("file")
 	if err != nil {
 		response.Error(c, CodeParamInvalid, "file is required")
@@ -175,7 +193,7 @@ func (h *Handler) UploadFile(c *gin.Context) {
 		return
 	}
 
-	asset, err := h.assetSvc.UploadFileWithReplacement(userID(c), uint(projectID), file.Filename, data, file.Size, replaceAssetID)
+	asset, err := h.assetSvc.UploadFileWithReplacement(userID(c), uint(projectID), file.Filename, data, file.Size, replaceAssetID, folderID)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrUnsupportedFormat):
@@ -188,6 +206,30 @@ func (h *Handler) UploadFile(c *gin.Context) {
 			response.Error(c, CodeParamInvalid, "replacement asset does not match uploaded file")
 		default:
 			response.Error(c, CodeInternalError, "failed to upload file")
+		}
+		return
+	}
+
+	response.Success(c, asset)
+}
+
+// CreateFolder handles POST /assets/folders
+func (h *Handler) CreateFolder(c *gin.Context) {
+	var req createFolderReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, CodeParamInvalid, "invalid request body")
+		return
+	}
+
+	asset, err := h.assetSvc.CreateFolder(userID(c), req.ProjectID, req.Name, req.ParentFolderID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrProjectNotFound):
+			response.Error(c, CodeProjectNotFound, "project not found")
+		case errors.Is(err, ErrInvalidFolderName):
+			response.Error(c, CodeParamInvalid, "folder name is required")
+		default:
+			response.Error(c, CodeInternalError, "failed to create folder")
 		}
 		return
 	}

@@ -1,5 +1,5 @@
-import { Save } from 'lucide-react'
-import { useRef } from 'react'
+import { ImageOff, Save } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { Asset } from '@/lib/api-client'
 import { getAssetVisual } from './fileVisuals'
@@ -36,8 +36,13 @@ export function AssetWorkspace({
   onSave,
 }: AssetWorkspaceProps) {
   const lineNumberRef = useRef<HTMLPreElement>(null)
+  const [imageError, setImageError] = useState(false)
   const visual = getAssetVisual(asset.type, asset.uri)
   const title = getDisplayTitle(asset, visual.chipLabel)
+
+  useEffect(() => {
+    setImageError(false)
+  }, [asset.id])
 
   if (isImageAsset(asset)) {
     return (
@@ -49,11 +54,23 @@ export function AssetWorkspace({
           </div>
         </div>
         <div className="asset-image-stage">
-          <img
-            src={`/api/v1/assets/${asset.id}/file`}
-            alt={title}
-            className="asset-image-preview"
-          />
+          {imageError ? (
+            <div className="asset-image-error">
+              <ImageOff className="h-8 w-8" />
+              <p className="mt-3 text-sm font-semibold text-foreground">图片文件暂时不可预览</p>
+              <p className="mt-2 max-w-sm text-center text-xs leading-5 text-muted-foreground">
+                原始图片文件不在当前后端存储目录中。重新上传一次后，后续会保存在持久化目录里。
+              </p>
+            </div>
+          ) : (
+            <img
+              key={asset.id}
+              src={`/api/v1/assets/${asset.id}/file`}
+              alt={title}
+              className="asset-image-preview"
+              onError={() => setImageError(true)}
+            />
+          )}
         </div>
       </div>
     )

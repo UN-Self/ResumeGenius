@@ -529,6 +529,20 @@
   box-shadow: 0 24px 80px rgba(2, 8, 23, 0.28);
 }
 
+.asset-image-error {
+  min-width: min(360px, 92%);
+  border: 1px solid var(--color-border, #e4ddd5);
+  border-radius: 18px;
+  background: var(--color-surface-glass, rgba(255, 255, 255, 0.72));
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--color-muted-foreground, #8c8279);
+  box-shadow: 0 24px 80px rgba(2, 8, 23, 0.16);
+  backdrop-filter: blur(18px) saturate(135%);
+}
+
 .asset-unsaved-dialog {
   overflow: hidden;
   border-color: color-mix(in srgb, var(--color-primary), var(--color-border) 58%);

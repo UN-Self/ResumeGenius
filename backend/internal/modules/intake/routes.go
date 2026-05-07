@@ -20,6 +20,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, uploadDir string) {
 
 	// Asset management
 	rg.POST("/assets/upload", h.UploadFile)
+	rg.POST("/assets/folders", h.CreateFolder)
 	rg.POST("/assets/git", h.CreateGitRepo)
 	rg.GET("/assets", h.ListAssets)
 	rg.GET("/assets/:asset_id/file", h.GetAssetFile)
