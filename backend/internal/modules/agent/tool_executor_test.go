@@ -16,10 +16,10 @@ import (
 // Tool definition tests
 // ---------------------------------------------------------------------------
 
-func TestToolExecutor_Tools_ThreeDefinitions(t *testing.T) {
-	executor := NewAgentToolExecutor(nil)
+func TestToolExecutor_Tools_FourDefinitions(t *testing.T) {
+	executor := NewAgentToolExecutor(nil, nil)
 	tools := executor.Tools()
-	require.Len(t, tools, 3)
+	require.Len(t, tools, 4)
 
 	for _, tool := range tools {
 		assert.NotEmpty(t, tool.Name, "tool name must not be empty")
@@ -36,7 +36,7 @@ func TestToolExecutor_Tools_ThreeDefinitions(t *testing.T) {
 }
 
 func TestToolExecutor_Tools_NamesAreCorrect(t *testing.T) {
-	executor := NewAgentToolExecutor(nil)
+	executor := NewAgentToolExecutor(nil, nil)
 	tools := executor.Tools()
 
 	names := make([]string, len(tools))
@@ -48,12 +48,13 @@ func TestToolExecutor_Tools_NamesAreCorrect(t *testing.T) {
 		"get_draft",
 		"apply_edits",
 		"search_assets",
+		"search_skills",
 	}
 	assert.Equal(t, expected, names)
 }
 
 func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
-	executor := NewAgentToolExecutor(nil)
+	executor := NewAgentToolExecutor(nil, nil)
 	tools := executor.Tools()
 	toolByName := make(map[string]ToolDef)
 	for _, tool := range tools {
@@ -97,6 +98,17 @@ func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
 		req := tool.Parameters["required"].([]string)
 		assert.Empty(t, req)
 	}
+
+	// search_skills: all optional, required = []
+	{
+		tool := toolByName["search_skills"]
+		props := tool.Parameters["properties"].(map[string]interface{})
+		assert.Contains(t, props, "keyword")
+		assert.Contains(t, props, "category")
+		assert.Contains(t, props, "limit")
+		req := tool.Parameters["required"].([]string)
+		assert.Empty(t, req)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -105,7 +117,7 @@ func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
 
 func TestGetDraft_Full(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db)
+	executor := NewAgentToolExecutor(db, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -122,7 +134,7 @@ func TestGetDraft_Full(t *testing.T) {
 
 func TestGetDraft_Selector(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db)
+	executor := NewAgentToolExecutor(db, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -141,7 +153,7 @@ func TestGetDraft_Selector(t *testing.T) {
 
 func TestGetDraft_ContextMissing(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db)
+	executor := NewAgentToolExecutor(db, nil)
 
 	_, err := executor.Execute(context.Background(), "get_draft", nil)
 	require.Error(t, err)
@@ -154,7 +166,7 @@ func TestGetDraft_ContextMissing(t *testing.T) {
 
 func TestApplyEdits_Success(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db)
+	executor := NewAgentToolExecutor(db, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -227,7 +239,7 @@ func TestApplyEdits_Success(t *testing.T) {
 
 func TestApplyEdits_OldStringNotFound(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db)
+	executor := NewAgentToolExecutor(db, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -262,7 +274,7 @@ func TestApplyEdits_OldStringNotFound(t *testing.T) {
 
 func TestApplyEdits_BaseSnapshot(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db)
+	executor := NewAgentToolExecutor(db, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -295,7 +307,7 @@ func TestApplyEdits_BaseSnapshot(t *testing.T) {
 
 func TestSearchAssets(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db)
+	executor := NewAgentToolExecutor(db, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -339,7 +351,7 @@ func TestSearchAssets(t *testing.T) {
 
 func TestSearchAssets_Empty(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db)
+	executor := NewAgentToolExecutor(db, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -358,11 +370,24 @@ func TestSearchAssets_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// search_skills
+// ---------------------------------------------------------------------------
+
+func TestSearchSkills_NotFound(t *testing.T) {
+	executor := NewAgentToolExecutor(nil, nil)
+	result, err := executor.Execute(context.Background(), "search_skills", map[string]interface{}{
+		"keyword": "nonexistent",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, `"skills":[]`)
+}
+
+// ---------------------------------------------------------------------------
 // Unknown tool
 // ---------------------------------------------------------------------------
 
 func TestExecute_UnknownTool(t *testing.T) {
-	executor := NewAgentToolExecutor(nil)
+	executor := NewAgentToolExecutor(nil, nil)
 	_, err := executor.Execute(context.Background(), "nonexistent_tool", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown tool")
