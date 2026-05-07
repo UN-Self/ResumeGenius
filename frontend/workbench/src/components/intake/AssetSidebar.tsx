@@ -3,7 +3,6 @@ import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { intakeApi, parsingApi, type Asset } from '@/lib/api-client'
 import AssetList from './AssetList'
-import AssetEditorDialog from './AssetEditorDialog'
 import DeleteConfirm from './DeleteConfirm'
 import GitRepoDialog from './GitRepoDialog'
 import NoteDialog from './NoteDialog'
@@ -42,10 +41,6 @@ function isDerivedImageAsset(asset: Asset) {
   return asset.type === 'resume_image' && getParsingMetadata(asset)?.derived === true
 }
 
-function canEditAsset(asset: Asset) {
-  return asset.type !== 'resume_image'
-}
-
 function canReparseAsset(asset: Asset) {
   if (asset.type === 'git_repo') {
     return true
@@ -67,7 +62,6 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
   const [uploadOpen, setUploadOpen] = useState(false)
   const [gitOpen, setGitOpen] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
-  const [editingAsset, setEditingAsset] = useState<Asset | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [reparseLoadingAssetId, setReparseLoadingAssetId] = useState<number | null>(null)
@@ -133,14 +127,12 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
     }
   }
 
-  const handleUpdateAsset = async (content: string, label: string) => {
-    if (!editingAsset) return
+  const handleRenameAsset = async (asset: Asset, label: string) => {
     setError('')
     try {
-      await intakeApi.updateAsset(editingAsset.id, { content, label })
-      setEditingAsset(null)
-    } catch (updateAssetError) {
-      setError(updateAssetError instanceof Error ? updateAssetError.message : '更新素材失败')
+      await intakeApi.updateAsset(asset.id, { label })
+    } catch (renameError) {
+      setError(renameError instanceof Error ? renameError.message : '重命名素材失败')
     } finally {
       await refreshAssets()
     }
@@ -219,8 +211,7 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
             const target = visibleAssets.find((asset) => asset.id === id) ?? null
             setDeleteTarget(target)
           }}
-          onEditAsset={(asset) => setEditingAsset(asset)}
-          canEditAsset={canEditAsset}
+          onRenameAsset={handleRenameAsset}
           onReparseAsset={handleReparseAsset}
           canReparseAsset={canReparseAsset}
           reparseLoadingAssetId={reparseLoadingAssetId}
@@ -242,12 +233,6 @@ export default function AssetSidebar({ projectId, assets, onReload }: AssetSideb
         open={noteOpen}
         onClose={() => setNoteOpen(false)}
         onSubmit={handleCreateNote}
-      />
-      <AssetEditorDialog
-        open={editingAsset !== null}
-        asset={editingAsset}
-        onClose={() => setEditingAsset(null)}
-        onSubmit={handleUpdateAsset}
       />
       <DeleteConfirm
         open={deleteTarget !== null}
