@@ -1,30 +1,139 @@
+import {
+  CheckCircle2,
+  ChevronDown,
+  FileText,
+  LoaderCircle,
+  Palette,
+  PencilLine,
+  Search,
+  XCircle,
+} from 'lucide-react'
+import type { ComponentType } from 'react'
 import type { ToolCallEntry } from '@/lib/api-client'
 
-const TOOL_LABELS: Record<string, string> = {
-  get_draft: '读取简历',
-  apply_edits: '应用修改',
-  search_assets: '搜索资料',
+const TOOL_META: Record<string, { label: string; icon: ComponentType<{ className?: string }> }> = {
+  get_draft: { label: '读取简历', icon: FileText },
+  apply_edits: { label: '应用修改', icon: PencilLine },
+  search_assets: { label: '搜索资料', icon: Search },
+  search_skills: { label: '搜索技能库', icon: Search },
+  search_design_skill: { label: '设计参考', icon: Palette },
 }
 
 interface Props {
   calls: ToolCallEntry[]
+  compact?: boolean
 }
 
-export function ToolCallLog({ calls }: Props) {
+interface ToolCallGroup {
+  name: string
+  calls: ToolCallEntry[]
+  status: ToolCallEntry['status']
+}
+
+function groupCalls(calls: ToolCallEntry[]): ToolCallGroup[] {
+  const groups = new Map<string, ToolCallEntry[]>()
+  for (const call of calls) {
+    const current = groups.get(call.name) ?? []
+    current.push(call)
+    groups.set(call.name, current)
+  }
+
+  return Array.from(groups.entries()).map(([name, groupCalls]) => {
+    const status = groupCalls.some((call) => call.status === 'running')
+      ? 'running'
+      : groupCalls.some((call) => call.status === 'failed')
+        ? 'failed'
+        : 'completed'
+
+    return { name, calls: groupCalls, status }
+  })
+}
+
+function getGroupPayload(group: ToolCallGroup) {
+  if (group.calls.length === 1) {
+    return getPayload(group.calls[0])
+  }
+
+  const attempts = group.calls.map((call, index) => ({
+    index: index + 1,
+    status: call.status,
+    params: call.params ?? {},
+    result: formatResult(call.result),
+  }))
+  const latest = group.calls[group.calls.length - 1]
+
+  return JSON.stringify({
+    total: group.calls.length,
+    running: group.calls.filter((call) => call.status === 'running').length,
+    completed: group.calls.filter((call) => call.status === 'completed').length,
+    failed: group.calls.filter((call) => call.status === 'failed').length,
+    latest: {
+      params: latest?.params ?? {},
+      result: formatResult(latest?.result),
+    },
+    attempts,
+  }, null, 2)
+}
+
+function getPayload(call: ToolCallEntry) {
+  const result = formatResult(call.result)
+  return JSON.stringify({ params: call.params ?? {}, result }, null, 2)
+}
+
+function formatResult(result?: string) {
+  if (typeof result !== 'string') return result
+  try {
+    return JSON.parse(result)
+  } catch {
+    return result
+  }
+}
+
+function StatusIcon({ status }: { status: ToolCallEntry['status'] }) {
+  if (status === 'running') return <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+  if (status === 'failed') return <XCircle className="h-3.5 w-3.5" />
+  return <CheckCircle2 className="h-3.5 w-3.5" />
+}
+
+export function ToolCallLog({ calls, compact = false }: Props) {
   if (calls.length === 0) return null
+  const groups = groupCalls(calls)
+
   return (
-    <div className="mt-1 space-y-1 text-xs text-[var(--color-text-secondary)]">
-      {calls.map((call, i) => (
-        <details key={i} className="group">
-          <summary className="flex cursor-pointer items-center gap-1 hover:text-[var(--color-text-main)]">
-            <span>{call.status === 'running' ? '...' : call.status === 'completed' ? 'OK' : 'FAIL'}</span>
-            <span>{TOOL_LABELS[call.name] || call.name}</span>
-          </summary>
-          <pre className="mt-1 max-h-32 overflow-auto rounded border border-[var(--color-divider)] bg-[var(--color-card)] p-2 text-[10px] text-[var(--color-text-main)]">
-            {JSON.stringify({ params: call.params, result: call.result }, null, 2)}
-          </pre>
-        </details>
-      ))}
+    <div className={`ai-tool-log ${compact ? 'is-compact' : ''}`}>
+      {groups.map((group) => {
+        const meta = TOOL_META[group.name] ?? { label: group.name, icon: FileText }
+        const Icon = meta.icon
+        const failedCount = group.calls.filter((call) => call.status === 'failed').length
+
+        return (
+          <details key={group.name} className="ai-tool-item">
+            <summary>
+              <span className="ai-tool-left">
+                <span className="ai-tool-glyph">
+                  <Icon className="h-3.5 w-3.5" />
+                </span>
+                <span className="ai-tool-name">{meta.label}</span>
+                {group.calls.length > 1 && (
+                  <span className="ai-tool-count">×{group.calls.length}</span>
+                )}
+              </span>
+              <span className={`ai-tool-status is-${group.status}`}>
+                <StatusIcon status={group.status} />
+                <span>
+                  {group.status === 'running'
+                    ? '处理中'
+                    : failedCount > 0
+                      ? `${failedCount} 次失败`
+                      : '完成'}
+                </span>
+              </span>
+              <ChevronDown className="ai-tool-chevron h-3.5 w-3.5" />
+            </summary>
+            <pre>{getGroupPayload(group)}</pre>
+          </details>
+        )
+      })}
     </div>
   )
 }

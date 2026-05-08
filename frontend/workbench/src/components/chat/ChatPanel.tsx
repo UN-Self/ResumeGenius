@@ -1,7 +1,17 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
-import { Sparkles, Send, Plus } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  CheckCircle2,
+  LoaderCircle,
+  Plus,
+  Redo2,
+  Send,
+  Sparkles,
+  Undo2,
+  WandSparkles,
+} from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
-import { agentApi, undoDraft, redoDraft, type AISession, type ToolCallEntry } from '@/lib/api-client'
+import { agentApi, redoDraft, undoDraft, type AISession, type ToolCallEntry } from '@/lib/api-client'
+import '@/styles/editor.css'
 import { ToolCallLog } from './ToolCallLog'
 
 interface Message {
@@ -15,6 +25,108 @@ interface Props {
   onRestoreHtml?: (html: string) => void
 }
 
+interface StreamEvent {
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'edit' | 'done' | 'text' | 'error'
+  content?: string
+  name?: string
+  status?: ToolCallEntry['status']
+  params?: Record<string, unknown>
+  result?: string
+  message?: string
+}
+
+function updateLatestToolCall(
+  calls: ToolCallEntry[],
+  name: string | undefined,
+  patch: Partial<ToolCallEntry>,
+) {
+  const updated = [...calls]
+  const targetIndex = name
+    ? updated.map((call) => call.name).lastIndexOf(name)
+    : updated.length - 1
+
+  if (targetIndex >= 0) {
+    updated[targetIndex] = { ...updated[targetIndex], ...patch }
+  }
+
+  return updated
+}
+
+function getFriendlyErrorMessage(message: string) {
+  const normalized = message.toLowerCase()
+  const isRateLimited =
+    normalized.includes('status 429') ||
+    normalized.includes('too many requests') ||
+    normalized.includes('rate limit') ||
+    normalized.includes('"code":"1302"') ||
+    normalized.includes('"code": "1302"') ||
+    message.includes('速率限制') ||
+    message.includes('请求频率')
+
+  if (isRateLimited) {
+    return '模型服务触发限流了，请等 30-60 秒后再试；连续点“重试”会更容易触发。'
+  }
+
+  const isTimeout =
+    normalized.includes('model call timeout') ||
+    normalized.includes('context deadline exceeded') ||
+    normalized.includes('client.timeout exceeded') ||
+    normalized.includes('awaiting headers') ||
+    normalized.includes('http 504') ||
+    normalized.includes('gateway timeout')
+
+  if (isTimeout) {
+    return '模型服务响应超时了。通常是上游排队或网络波动，请稍后再试；这次没有应用任何修改。'
+  }
+
+  if (message.includes('max tool-calling iterations exceeded')) {
+    return '这轮 AI 一直在查资料但没有生成可应用修改，我已停止本轮。请再发一句明确目标，我会直接把修改写入画布。'
+  }
+  return message
+}
+
+function ThinkingBubble({
+  toolCalls,
+  elapsedSeconds,
+}: {
+  toolCalls: ToolCallEntry[]
+  elapsedSeconds: number
+}) {
+  const runningTool = [...toolCalls].reverse().find((call) => call.status === 'running')
+  const label = runningTool
+    ? runningTool.name === 'apply_edits'
+      ? '正在同步到画布'
+      : runningTool.name === 'search_design_skill'
+        ? '正在查找设计参考'
+        : '正在处理资料'
+    : '正在构思简历方案'
+
+  return (
+    <div className="ai-thinking-card" role="status" aria-live="polite">
+      <div className="ai-thinking-main">
+        <span className="ai-thinking-mark">
+          <Sparkles className="h-3.5 w-3.5" />
+        </span>
+        <div className="min-w-0">
+          <div className="ai-thinking-title">{label}</div>
+          <div className="ai-thinking-subtitle">AI 正在把内容、结构和视觉细节对齐</div>
+          <div className="ai-thinking-subtitle">已等待 {elapsedSeconds}s</div>
+        </div>
+      </div>
+      {elapsedSeconds >= 20 && (
+        <div className="ai-wait-note">
+          模型首个响应偏慢，通常是上游排队、限流或网络抖动。
+        </div>
+      )}
+      <div className="ai-thinking-flow" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+    </div>
+  )
+}
+
 export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
   const [session, setSession] = useState<AISession | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -25,7 +137,12 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
   const [toolCalls, setToolCalls] = useState<ToolCallEntry[]>([])
   const [editsApplied, setEditsApplied] = useState(false)
   const [undoRedoLoading, setUndoRedoLoading] = useState(false)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [planeCrashing, setPlaneCrashing] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const cancelRequestedRef = useRef(false)
+  const crashTimerRef = useRef<number | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -35,6 +152,7 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
     setThinking('')
     setToolCalls([])
     setError(null)
+    setEditsApplied(false)
     /* eslint-enable react-hooks/set-state-in-effect */
 
     const init = async () => {
@@ -69,24 +187,65 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView?.({ behavior: 'smooth' })
-  }, [messages, toolCalls])
+  }, [messages, toolCalls, streaming, editsApplied])
+
+  useEffect(() => {
+    if (!streaming) {
+      setElapsedSeconds(0)
+      return
+    }
+
+    const startedAt = Date.now()
+    const timer = window.setInterval(() => {
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)))
+    }, 1000)
+
+    return () => window.clearInterval(timer)
+  }, [streaming])
+
+  useEffect(() => {
+    return () => {
+      if (crashTimerRef.current !== null) {
+        window.clearTimeout(crashTimerRef.current)
+      }
+    }
+  }, [])
+
+  const restoreHtml = useCallback(async (direction: 'undo' | 'redo') => {
+    setUndoRedoLoading(true)
+    try {
+      const result = direction === 'undo'
+        ? await undoDraft(draftId)
+        : await redoDraft(draftId)
+      onRestoreHtml?.(result.html_content)
+    } catch (restoreError) {
+      setError(restoreError instanceof Error ? restoreError.message : '恢复画布失败')
+    } finally {
+      setUndoRedoLoading(false)
+    }
+  }, [draftId, onRestoreHtml])
 
   const handleSend = useCallback(async () => {
     const text = input.trim()
     if (!text || !session || streaming) return
 
     setInput('')
-    setThinking('')
+    setThinking('已发送请求，等待模型服务响应...\n')
     setToolCalls([])
     setEditsApplied(false)
     setError(null)
+    setPlaneCrashing(false)
+    cancelRequestedRef.current = false
     setMessages((prev) => [...prev, { role: 'user', text }])
     setStreaming(true)
 
     try {
+      const abortController = new AbortController()
+      abortControllerRef.current = abortController
       const resp = await fetch(`/api/v1/ai/sessions/${session.id}/chat`, {
         method: 'POST',
         credentials: 'include',
+        signal: abortController.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text }),
       })
@@ -98,6 +257,7 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
       let buffer = ''
       let currentText = ''
       let gotDone = false
+      let receivedEdit = false
 
       while (true) {
         const { done, value } = await reader.read()
@@ -112,31 +272,49 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
           if (!trimmed.startsWith('data: ')) continue
 
           try {
-            const event = JSON.parse(trimmed.slice(6))
+            const event = JSON.parse(trimmed.slice(6)) as StreamEvent
             switch (event.type) {
               case 'thinking':
-                setThinking(prev => prev + event.content)
+                setThinking((prev) => prev + (event.content ?? ''))
                 break
               case 'tool_call':
-                setToolCalls(prev => [...prev, { name: event.name, status: 'running', params: event.params }])
+                if (event.name) {
+                  setToolCalls((prev) => [
+                    ...prev,
+                    { name: event.name!, status: 'running', params: event.params },
+                  ])
+                }
                 break
               case 'tool_result':
-                setToolCalls(prev => {
-                  const updated = [...prev]
-                  const last = updated[updated.length - 1]
-                  if (last) updated[updated.length - 1] = { ...last, status: event.status }
-                  return updated
+                setToolCalls((prev) => {
+                  const patch: Partial<ToolCallEntry> = { status: event.status ?? 'completed' }
+                  if (event.result !== undefined) patch.result = event.result
+                  return updateLatestToolCall(prev, event.name, patch)
                 })
+                break
+              case 'edit':
+                receivedEdit = true
+                setToolCalls((prev) => updateLatestToolCall(prev, event.name ?? 'apply_edits', {
+                  status: 'completed',
+                  result: event.result,
+                }))
                 break
               case 'done':
                 gotDone = true
-                if (onApplyEdits) {
-                  await onApplyEdits()
-                  setEditsApplied(true)
+                setToolCalls((prev) => prev.map((call) => (
+                  call.status === 'running' ? { ...call, status: 'completed' } : call
+                )))
+                if (receivedEdit && onApplyEdits) {
+                  try {
+                    await onApplyEdits()
+                    setEditsApplied(true)
+                  } catch (applyError) {
+                    setError(applyError instanceof Error ? applyError.message : '应用到画布失败')
+                  }
                 }
                 break
               case 'text':
-                currentText += event.content
+                currentText += event.content ?? ''
                 setMessages((prev) => {
                   const last = prev[prev.length - 1]
                   if (last?.role === 'assistant') {
@@ -146,23 +324,46 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
                 })
                 break
               case 'error':
-                setError(event.message || 'AI 响应出错')
+                setError(getFriendlyErrorMessage(event.message || 'AI 响应出错'))
                 break
             }
           } catch {
-            // Skip unparseable lines
+            // Skip unparseable SSE lines.
           }
         }
       }
       if (!gotDone) {
-        setError('连接中断，AI 回复可能不完整')
+        setError(cancelRequestedRef.current ? '已停止本轮请求。' : '连接中断，AI 回复可能不完整')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : '连接失败')
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setError('已停止本轮请求。')
+      } else {
+        setError(getFriendlyErrorMessage(err instanceof Error ? err.message : '连接失败'))
+      }
     } finally {
+      abortControllerRef.current = null
+      cancelRequestedRef.current = false
       setStreaming(false)
     }
-  }, [input, session, streaming, onApplyEdits])
+  }, [input, onApplyEdits, session, streaming])
+
+  const handleCancelStreaming = useCallback(() => {
+    const controller = abortControllerRef.current
+    if (!controller) return
+
+    setPlaneCrashing(true)
+    cancelRequestedRef.current = true
+    controller.abort()
+
+    if (crashTimerRef.current !== null) {
+      window.clearTimeout(crashTimerRef.current)
+    }
+    crashTimerRef.current = window.setTimeout(() => {
+      setPlaneCrashing(false)
+      crashTimerRef.current = null
+    }, 760)
+  }, [])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -185,110 +386,107 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
     }
   }, [draftId])
 
+  const waitingForAssistant = streaming && messages[messages.length - 1]?.role !== 'assistant'
+  const canSend = Boolean(input.trim() && session && !streaming)
+
   return (
-    <div className="flex flex-col h-full bg-[var(--color-page-bg)]">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--color-divider)]">
-        <Sparkles size={16} className="text-[var(--color-primary)]" />
-        <span className="text-sm font-medium text-[var(--color-text-main)]">AI 助手</span>
-        <div className="flex-1" />
+    <div className="ai-chat-panel">
+      <div className="ai-chat-header">
+        <div className="ai-chat-title">
+          <span className="ai-chat-title-icon">
+            <WandSparkles className="h-4 w-4" />
+          </span>
+          <span>AI 助手</span>
+        </div>
         <button
+          type="button"
           onClick={handleNewChat}
           disabled={streaming}
           aria-label="新对话"
-          className="text-[var(--color-text-secondary)] hover:text-[var(--color-text-main)] disabled:opacity-50 cursor-pointer"
+          className="ai-chat-icon-button"
         >
           <Plus size={16} />
         </button>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
-        {/* Thinking collapsible */}
-        {thinking && (
-          <details className="bg-[var(--color-page-bg)] border border-[var(--color-divider)] rounded-lg text-sm">
-            <summary className="px-3 py-1.5 text-xs font-medium text-[var(--color-text-secondary)] cursor-pointer select-none">
-              AI 推理过程
-            </summary>
-            <pre className="px-3 py-2 text-xs text-[var(--color-text-secondary)] whitespace-pre-wrap max-h-40 overflow-y-auto border-t border-[var(--color-divider)]">{thinking}</pre>
-          </details>
-        )}
-
+      <div className="ai-chat-scroll">
         {messages.length === 0 && !streaming && (
-          <p className="text-xs text-[var(--color-text-secondary)] text-center mt-8">
-            输入你的需求，AI 将帮你优化简历内容
-          </p>
+          <div className="ai-empty-chat">
+            <Sparkles className="h-5 w-5" />
+            <p>告诉我你想优化的方向，我会把修改直接同步到画布。</p>
+          </div>
         )}
 
         {messages.map((msg, i) => (
-          <div key={i}>
-            <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div
-                data-message-role={msg.role}
-                className={`max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap shadow-sm ${
-                msg.role === 'user'
-                  ? 'bg-[var(--color-primary)] text-[var(--color-primary-foreground)]'
-                  : 'border border-[var(--color-divider)] bg-[var(--color-card)] text-[var(--color-text-main)] backdrop-blur-xl'
-              }`}
-              >
-                {msg.role === 'user' ? (
-                  msg.text
-                ) : (
+          <div key={i} className={`ai-message-row ${msg.role === 'user' ? 'is-user' : 'is-assistant'}`}>
+            <div data-message-role={msg.role} className="ai-message-bubble">
+              {msg.role === 'user' ? (
+                msg.text
+              ) : (
+                <div className="ai-markdown">
                   <ReactMarkdown>{msg.text}</ReactMarkdown>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-            {/* Show tool calls after the last assistant message */}
-            {msg.role === 'assistant' && i === messages.length - 1 && !streaming && toolCalls.length > 0 && (
-              <ToolCallLog calls={toolCalls} />
-            )}
-            {/* Show undo/redo after the last assistant message when edits were applied */}
-            {msg.role === 'assistant' && i === messages.length - 1 && !streaming && editsApplied && (
-              <div className="flex gap-1 mt-1">
-                <button
-                  onClick={async () => {
-                    setUndoRedoLoading(true)
-                    try {
-                      const result = await undoDraft(draftId)
-                      onRestoreHtml?.(result.html_content)
-                    } finally { setUndoRedoLoading(false) }
-                  }}
-                  disabled={undoRedoLoading}
-                  aria-label="Undo"
-                  className="px-2 py-1 text-xs rounded border border-transparent bg-[var(--color-surface-hover)] text-[var(--color-text-main)] hover:border-[var(--color-border-glow)] disabled:opacity-50 cursor-pointer"
-                >
-                  Undo
-                </button>
-                <button
-                  onClick={async () => {
-                    setUndoRedoLoading(true)
-                    try {
-                      const result = await redoDraft(draftId)
-                      onRestoreHtml?.(result.html_content)
-                    } finally { setUndoRedoLoading(false) }
-                  }}
-                  disabled={undoRedoLoading}
-                  aria-label="Redo"
-                  className="px-2 py-1 text-xs rounded border border-transparent bg-[var(--color-surface-hover)] text-[var(--color-text-main)] hover:border-[var(--color-border-glow)] disabled:opacity-50 cursor-pointer"
-                >
-                  Redo
-                </button>
-              </div>
-            )}
           </div>
         ))}
 
-        {/* Active tool indicator */}
-        {streaming && toolCalls.some(c => c.status === 'running') && (
-          <div className="flex items-center gap-2 px-3 py-2 text-xs text-[var(--color-text-secondary)] bg-[var(--color-page-bg)] border border-[var(--color-divider)] rounded-lg">
-            <span className="animate-spin">...</span>
-            <span>正在执行工具...</span>
+        {waitingForAssistant && (
+          <ThinkingBubble
+            toolCalls={toolCalls}
+            elapsedSeconds={elapsedSeconds}
+          />
+        )}
+
+        {thinking && (
+          <details className="ai-reasoning-panel" open={streaming || undefined}>
+            <summary>推理过程</summary>
+            <pre>{thinking}</pre>
+          </details>
+        )}
+
+        {toolCalls.length > 0 && (
+          <ToolCallLog calls={toolCalls} compact={streaming} />
+        )}
+
+        {!streaming && editsApplied && (
+          <div className="ai-apply-card">
+            <div className="ai-apply-status">
+              <span className="ai-apply-icon">
+                <CheckCircle2 className="h-4 w-4" />
+              </span>
+              <div>
+                <div className="ai-apply-title">已应用到画布</div>
+                <div className="ai-apply-subtitle">样式和内容已刷新，可以继续追问或回退。</div>
+              </div>
+            </div>
+            <div className="ai-apply-actions">
+              <button
+                type="button"
+                onClick={() => void restoreHtml('undo')}
+                disabled={undoRedoLoading}
+                aria-label="撤销本次修改"
+                className="ai-history-button"
+              >
+                {undoRedoLoading ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />}
+                <span>撤销</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void restoreHtml('redo')}
+                disabled={undoRedoLoading}
+                aria-label="重做修改"
+                className="ai-history-button"
+              >
+                {undoRedoLoading ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Redo2 className="h-3.5 w-3.5" />}
+                <span>重做</span>
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Error */}
         {error && (
-          <div className="rounded border border-[color-mix(in_srgb,var(--color-destructive),transparent_68%)] bg-[color-mix(in_srgb,var(--color-destructive),transparent_90%)] px-3 py-2 text-center text-xs text-[var(--color-destructive)]">
+          <div className="ai-error-card">
             {error}
           </div>
         )}
@@ -296,9 +494,8 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
         <div ref={scrollRef} />
       </div>
 
-      {/* Input */}
-      <div className="border-t border-[var(--color-divider)] p-3">
-        <div className="flex gap-2">
+      <div className="ai-composer">
+        <div className="ai-composer-shell">
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -306,15 +503,19 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
             placeholder="输入你的需求..."
             disabled={streaming || !session}
             rows={2}
-            className="flex-1 rounded-md border border-[var(--color-divider)] bg-[var(--color-card)] px-3 py-2 text-sm text-[var(--color-text-main)] placeholder:text-[var(--color-text-secondary)] resize-none focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] disabled:bg-[var(--color-muted)] disabled:text-[var(--color-text-disabled)]"
+            className="ai-composer-input"
           />
           <button
-            onClick={handleSend}
-            disabled={streaming || !input.trim() || !session}
-            className="self-end bg-[var(--color-primary)] text-[var(--color-primary-foreground)] p-2 rounded-md hover:opacity-90 disabled:opacity-50 transition-opacity cursor-pointer"
-            aria-label="发送"
+            type="button"
+            onClick={streaming ? handleCancelStreaming : handleSend}
+            disabled={!streaming && !canSend}
+            className={`ai-send-button ${streaming ? 'is-streaming' : ''} ${planeCrashing ? 'is-crashing' : ''}`}
+            aria-label={streaming ? '停止对话' : '发送'}
+            data-tooltip={streaming ? '停止对话' : undefined}
           >
-            <Send size={16} />
+            <span className="send-trail trail-one" aria-hidden="true" />
+            <span className="send-trail trail-two" aria-hidden="true" />
+            <Send className="send-plane h-4 w-4" />
           </button>
         </div>
       </div>

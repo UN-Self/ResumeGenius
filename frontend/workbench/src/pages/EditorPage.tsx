@@ -7,6 +7,7 @@ import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
 import { TextStyleKit } from '@tiptap/extension-text-style'
 import { A4Canvas } from '@/components/editor/A4Canvas'
+import { Div, PresetAttributes, Span } from '@/components/editor/extensions'
 import { ActionBar } from '@/components/editor/ActionBar'
 import { SaveIndicator } from '@/components/editor/SaveIndicator'
 import { ChatPanel } from '@/components/chat/ChatPanel'
@@ -29,6 +30,7 @@ import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/ui/modal'
+import { extractStyles } from '@/lib/extract-styles'
 
 export default function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -57,6 +59,9 @@ export default function EditorPage() {
       StarterKit.configure({ strike: false }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       TextStyleKit,
+      PresetAttributes,
+      Div,
+      Span,
     ],
     content: '',
     editorProps: {
@@ -77,6 +82,7 @@ export default function EditorPage() {
   })
 
   const [pendingHtml, setPendingHtml] = useState<string | null>(null)
+  const [scopedCSS, setScopedCSS] = useState('')
 
   const { scheduleSave, flush, retry, status, lastSavedAt } = useAutoSave({
     save: async (html: string) => {
@@ -120,25 +126,58 @@ export default function EditorPage() {
   const { toasts, toast, dismissToast } = useToast()
 
   // Save editor content before preview so we can restore it on exit
-  const savedContentBeforePreview = useRef<string | null>(null)
+  const savedContentBeforePreview = useRef<{ html: string; scopedCSS: string } | null>(null)
   const didRecenterAfterPreviewRef = useRef(false)
   const restoringContent = useRef(false)
+
+  const applyHtmlToEditor = useCallback((html: string) => {
+    if (!editor) return
+
+    const { bodyHtml, scopedCSS: nextScopedCSS } = extractStyles(html)
+    restoringContent.current = true
+    setScopedCSS(nextScopedCSS)
+    editor.commands.setContent(bodyHtml || html)
+    restoringContent.current = false
+  }, [editor])
+
+  const getPersistableHTML = useCallback(() => {
+    if (!editor) return ''
+
+    const bodyHtml = editor.getHTML()
+    if (!scopedCSS.trim()) return bodyHtml
+
+    return [
+      '<!DOCTYPE html>',
+      '<html>',
+      '<head>',
+      '<meta charset="utf-8">',
+      `<style>${scopedCSS}</style>`,
+      '</head>',
+      '<body>',
+      bodyHtml,
+      '</body>',
+      '</html>',
+    ].join('')
+  }, [editor, scopedCSS])
 
   // When preview HTML is ready, load it into the editor and make read-only
   useLayoutEffect(() => {
     if (previewMode === 'previewing' && previewHtml && editor) {
-      editor.commands.setContent(previewHtml)
+      applyHtmlToEditor(previewHtml)
       editor.setEditable(false)
       didRecenterAfterPreviewRef.current = false
     }
-  }, [previewMode, previewHtml, editor])
+  }, [previewMode, previewHtml, editor, applyHtmlToEditor])
 
   const handleStartPreview = useCallback(async (version: Parameters<typeof startPreview>[0]) => {
     if (editor) {
-      savedContentBeforePreview.current = editor.getHTML()
+      savedContentBeforePreview.current = {
+        html: editor.getHTML(),
+        scopedCSS,
+      }
     }
     await startPreview(version)
-  }, [editor, startPreview])
+  }, [editor, scopedCSS, startPreview])
 
   const handleExitPreview = useCallback(() => {
     if (editor) {
@@ -146,7 +185,8 @@ export default function EditorPage() {
       const saved = savedContentBeforePreview.current
       if (saved) {
         restoringContent.current = true
-        editor.commands.setContent(saved)
+        setScopedCSS(saved.scopedCSS)
+        editor.commands.setContent(saved.html)
         restoringContent.current = false
       }
       savedContentBeforePreview.current = null
@@ -240,7 +280,7 @@ export default function EditorPage() {
     try {
       await flush()
       const html = await rollbackVersion()
-      editor?.commands.setContent(html)
+      applyHtmlToEditor(html)
       setRollbackDialogOpen(false)
     } catch (e) {
       toast(e instanceof Error ? e.message : '回滚失败')
@@ -304,10 +344,16 @@ export default function EditorPage() {
 
         if (!project.current_draft_id) {
           try {
-            const draft = await workbenchApi.createDraft(pid)
+            const [draft, nextAssets] = await Promise.all([
+              workbenchApi.createDraft(pid),
+              intakeApi.listAssets(pid),
+            ])
             if (cancelled) return
+            setProjectTitle(project.title)
             setDraftId(String(draft.id))
             setPendingHtml(draft.html_content || '')
+            setAssets(nextAssets)
+            setError(null)
           } catch (createErr) {
             if (cancelled) return
             setError(createErr instanceof ApiError ? createErr.message : '创建草稿失败')
@@ -354,16 +400,16 @@ export default function EditorPage() {
   useEffect(() => {
     if (editor && pendingHtml !== null && !hasAppliedRef.current) {
       hasAppliedRef.current = true
-      editor.commands.setContent(pendingHtml)
+      applyHtmlToEditor(pendingHtml)
     }
-  }, [editor, pendingHtml])
+  }, [editor, pendingHtml, applyHtmlToEditor])
 
   useEffect(() => {
     if (!editor) return
 
     const handleUpdate = () => {
       if (!restoringContent.current) {
-        scheduleSave(editor.getHTML())
+        scheduleSave(getPersistableHTML())
       }
     }
     editor.on('update', handleUpdate)
@@ -371,7 +417,7 @@ export default function EditorPage() {
     return () => {
       editor.off('update', handleUpdate)
     }
-  }, [editor, scheduleSave])
+  }, [editor, getPersistableHTML, scheduleSave])
 
   useEffect(() => {
     return () => {
@@ -542,7 +588,7 @@ export default function EditorPage() {
                     onClose={handleExitPreview}
                   />
                 )}
-                <A4Canvas editor={editor} />
+                <A4Canvas editor={editor} scopedCSS={scopedCSS} />
                 {editor && previewMode !== 'previewing' && (
                   <BubbleMenu
                     editor={editor}
@@ -598,15 +644,11 @@ export default function EditorPage() {
               onApplyEdits={async () => {
                 if (!editor || !draftId) return
                 const draft = await workbenchApi.getDraft(Number(draftId))
-                restoringContent.current = true
-                editor.commands.setContent(draft.html_content || '')
-                restoringContent.current = false
+                applyHtmlToEditor(draft.html_content || '')
               }}
               onRestoreHtml={(html) => {
                 if (!editor) return
-                restoringContent.current = true
-                editor.commands.setContent(html)
-                restoringContent.current = false
+                applyHtmlToEditor(html)
               }}
             />
           ) : (
