@@ -11,6 +11,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"gorm.io/gorm"
 
+	"github.com/UN-Self/ResumeGenius/backend/internal/modules/designskill"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 )
 
@@ -21,7 +22,7 @@ import (
 type contextKey int
 
 const (
-	draftIDKey  contextKey = iota
+	draftIDKey contextKey = iota
 	projectIDKey
 )
 
@@ -65,7 +66,7 @@ func NewAgentToolExecutor(db *gorm.DB, skillLoader *SkillLoader) *AgentToolExecu
 	return &AgentToolExecutor{db: db, skillLoader: skillLoader}
 }
 
-// Tools returns the four AI-callable tool definitions.
+// Tools returns the AI-callable tool definitions.
 func (e *AgentToolExecutor) Tools() []ToolDef {
 	return []ToolDef{
 		{
@@ -140,6 +141,20 @@ func (e *AgentToolExecutor) Tools() []ToolDef {
 				"required": []string{},
 			},
 		},
+		{
+			Name:        "search_design_skill",
+			Description: "查询 ui-ux-pro-max 设计知识库，获取风格、配色、字体、图表、UX、技术栈建议，用于优化简历视觉表达。",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"query":  map[string]interface{}{"type": "string", "description": "设计需求，例如 modern engineer resume layout 或 简历 技能矩阵 配色"},
+					"domain": map[string]interface{}{"type": "string", "description": "可选：style | prompt | color | chart | landing | product | ux | typography"},
+					"stack":  map[string]interface{}{"type": "string", "description": "可选：react | nextjs | vue | html-tailwind | svelte | swiftui | react-native | flutter"},
+					"limit":  map[string]interface{}{"type": "integer", "description": "返回数量上限，默认 3"},
+				},
+				"required": []string{"query"},
+			},
+		},
 	}
 }
 
@@ -154,9 +169,37 @@ func (e *AgentToolExecutor) Execute(ctx context.Context, toolName string, params
 		return e.searchAssets(ctx, params)
 	case "search_skills":
 		return e.searchSkills(ctx, params)
+	case "search_design_skill":
+		return e.searchDesignSkill(ctx, params)
 	default:
 		return "", fmt.Errorf("unknown tool: %s", toolName)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// design skill tool
+// ---------------------------------------------------------------------------
+
+func (e *AgentToolExecutor) searchDesignSkill(ctx context.Context, params map[string]interface{}) (string, error) {
+	query, _ := params["query"].(string)
+	domain, _ := params["domain"].(string)
+	stack, _ := params["stack"].(string)
+	limit := 3
+	if _, ok := params["limit"]; ok {
+		if n, err := getIntParam(params, "limit"); err == nil && n > 0 {
+			limit = n
+		}
+	}
+
+	result, err := designskill.SearchSkill(query, domain, stack, limit)
+	if err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(result)
+	if err != nil {
+		return "", fmt.Errorf("marshal result: %w", err)
+	}
+	return string(b), nil
 }
 
 // ---------------------------------------------------------------------------
