@@ -60,6 +60,8 @@
   z-index: 1;
 }
 
+/* Class name source of truth: RESUME_DOCUMENT_CLASS in @/lib/extract-styles.ts */
+/* If renaming, also update: extract-styles.ts, A4Canvas.tsx, editor.css */
 .resume-document {
   background: #ffffff;
   color: #333333;

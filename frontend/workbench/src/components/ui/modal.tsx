@@ -1,4 +1,4 @@
-import * as React from "react"
+import { useEffect, type HTMLAttributes, type ReactNode } from "react"
 import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
 
@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 function ModalHeader({
   className,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+}: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn("text-base font-serif font-semibold text-foreground", className)}
@@ -19,14 +19,14 @@ function ModalHeader({
 function ModalBody({
   className,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+}: HTMLAttributes<HTMLDivElement>) {
   return <div className={cn("mt-2", className)} {...props} />
 }
 
 function ModalFooter({
   className,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) {
+}: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn("flex justify-end gap-2 mt-5", className)}
@@ -40,7 +40,7 @@ function ModalFooter({
 interface ModalProps {
   open: boolean
   onClose: () => void
-  children: React.ReactNode
+  children: ReactNode
   className?: string
   /** Override the max-width. Defaults to max-w-md. */
   maxWidth?: string
@@ -53,6 +53,23 @@ function Modal({
   className,
   maxWidth = "max-w-md",
 }: ModalProps) {
+  useEffect(() => {
+    if (!open) return
+
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [open, onClose])
+
   if (!open) return null
 
   return createPortal(

@@ -1,4 +1,5 @@
 import { Mark, mergeAttributes } from '@tiptap/core'
+import { nullSafeAttr } from './attributes'
 
 /**
  * Inline span mark that preserves <span> elements with a `class` attribute
@@ -30,10 +31,7 @@ export const Span = Mark.create({
 
   addAttributes() {
     return {
-      class: {
-        default: null,
-        parseHTML: (element: HTMLElement) => element.getAttribute('class'),
-      },
+      class: nullSafeAttr('class'),
     }
   },
 })

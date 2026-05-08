@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Editor } from '@tiptap/react'
 import { TipTapEditor } from './TipTapEditor'
 import { WatermarkOverlay } from './WatermarkOverlay'
+import { RESUME_DOCUMENT_CLASS } from '@/lib/extract-styles'
 
 interface A4CanvasProps {
   editor?: Editor | null
@@ -45,7 +46,7 @@ export function A4Canvas({ editor, children, scopedCSS }: A4CanvasProps) {
     <div ref={containerRef} className="canvas-area bg-canvas-bg">
       <div
         data-testid="a4-canvas"
-        className="resume-document relative bg-resume-paper p-[18mm_20mm] shadow-[0_22px_80px_rgba(2,8,23,0.24)] ring-1 ring-black/5"
+        className={`${RESUME_DOCUMENT_CLASS} relative bg-resume-paper p-[18mm_20mm] shadow-[0_22px_80px_rgba(2,8,23,0.24)] ring-1 ring-black/5`}
         style={{
           width: '210mm',
           minHeight: '297mm',

@@ -114,4 +114,14 @@ describe('Span with PresetAttributes integration', () => {
     expect(tagMatches).toHaveLength(2)
     editor.destroy()
   })
+
+  it('suppresses empty class attribute on span (no class="")', () => {
+    const editor = createIntegratedEditor(
+      '<div class="wrapper"><p><span class="">text</span></p></div>',
+    )
+    const html = editor.getHTML()
+    // nullSafeAttr suppresses empty class — no class="" in output
+    expect(html).not.toContain('class=""')
+    editor.destroy()
+  })
 })

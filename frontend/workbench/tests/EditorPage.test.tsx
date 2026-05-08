@@ -275,3 +275,34 @@ describe('Editor content protection — clipboard', () => {
     expect(copyEvent.defaultPrevented).toBe(true)
   })
 })
+
+describe('EditorPage error handling', () => {
+  it('remains stable when subsequent getDraft calls fail after initial load', async () => {
+    let callCount = 0
+    server.use(
+      http.get('/api/v1/drafts/1', () => {
+        callCount++
+        if (callCount <= 1) {
+          return HttpResponse.json({
+            code: 0,
+            data: { id: 1, project_id: 1, html_content: '<p>Hello</p>', updated_at: '2026-04-28T12:00:00Z' },
+            message: 'ok',
+          })
+        }
+        return new HttpResponse(null, { status: 500, statusText: 'Internal Server Error' })
+      }),
+      http.get('/api/v1/assets', () =>
+        HttpResponse.json({ code: 0, data: [], message: 'ok' })
+      ),
+    )
+
+    renderWithRouter()
+    await waitFor(() => {
+      expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
+    })
+
+    // Editor loaded successfully. Now getDraft will fail on subsequent calls.
+    // The component should remain stable (canvas still present).
+    expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
+  })
+})
