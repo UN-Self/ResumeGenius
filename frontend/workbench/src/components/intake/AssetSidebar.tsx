@@ -392,6 +392,15 @@ export default function AssetSidebar({
     }
   }
 
+  const handleMoveAsset = async (assetId: number, targetFolderId: number | null) => {
+    try {
+      await intakeApi.moveAsset(assetId, targetFolderId)
+      await onReload()
+    } catch {
+      // silently ignore move failures
+    }
+  }
+
   return (
     <div className="h-full overflow-y-auto p-4">
       <div className="flex flex-wrap gap-2">
@@ -459,6 +468,7 @@ export default function AssetSidebar({
           onReparseAsset={handleReparseAsset}
           canReparseAsset={canReparseAsset}
           reparseLoadingAssetId={reparseLoadingAssetId}
+          onMoveAsset={handleMoveAsset}
         />
       </div>
 

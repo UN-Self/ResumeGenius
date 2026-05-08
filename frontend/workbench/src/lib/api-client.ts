@@ -120,6 +120,11 @@ export const intakeApi = {
     }),
   deleteAsset: (id: number) =>
     request<null>(`/assets/${id}`, { method: 'DELETE' }),
+  moveAsset: (id: number, targetFolderId: number | null) =>
+    request<Asset>(`/assets/${id}/move`, {
+      method: 'PATCH',
+      body: JSON.stringify({ target_folder_id: targetFolderId }),
+    }),
 
   // Notes
   createNote: (projectId: number, content: string, label: string) =>
