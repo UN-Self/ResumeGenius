@@ -5,13 +5,15 @@ export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 interface UseAutoSaveOptions {
   save: (html: string) => Promise<void>
   saveUrl?: string
+  /** Transform HTML before saving (e.g. reconstruct full document). Applied in both normal saves and best-effort beforeunload saves. */
+  reconstruct?: (html: string) => string
   debounceMs?: number
   maxRetries?: number
 }
 
 interface UseAutoSaveReturn {
   scheduleSave: (html: string) => void
-  flush: () => void
+  flush: () => Promise<void>
   retry: () => void
   status: SaveStatus
   lastSavedAt: Date | null
@@ -21,6 +23,7 @@ interface UseAutoSaveReturn {
 export function useAutoSave({
   save,
   saveUrl,
+  reconstruct,
   debounceMs = 2000,
   maxRetries = 4 // 3 retries after initial = 4 total attempts
 }: UseAutoSaveOptions): UseAutoSaveReturn {
@@ -53,7 +56,7 @@ export function useAutoSave({
     setStatus('saving')
 
     try {
-      await save(html)
+      await save(reconstruct ? reconstruct(html) : html)
       setStatus('saved')
       setLastSavedAt(new Date())
       setError(null)
@@ -82,7 +85,7 @@ export function useAutoSave({
         setError(err as Error)
       }
     }
-  }, [save, maxRetries])
+  }, [save, reconstruct, maxRetries])
 
   const scheduleSave = useCallback((html: string) => {
     retryCount.current = 0
@@ -98,14 +101,15 @@ export function useAutoSave({
     }, debounceMs)
   }, [doSave, debounceMs])
 
-  const flush = useCallback(() => {
+  const flush = useCallback((): Promise<void> => {
     clearTimers()
     if (pendingHtml.current !== null) {
       const htmlToSave = pendingHtml.current
       pendingHtml.current = null
       currentSaveHtml.current = htmlToSave
-      doSave(htmlToSave)
+      return doSave(htmlToSave) ?? Promise.resolve()
     }
+    return Promise.resolve()
   }, [doSave])
 
   const retry = useCallback(() => {
@@ -120,13 +124,14 @@ export function useAutoSave({
   // Best-effort save using keepalive fetch (survives tab close)
   const bestEffortSave = useCallback((html: string) => {
     if (!saveUrl) return
+    const htmlToSend = reconstruct ? reconstruct(html) : html
     fetch(saveUrl, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ html_content: html }),
+      body: JSON.stringify({ html_content: htmlToSend }),
       keepalive: true,
     }).catch(() => {})
-  }, [saveUrl])
+  }, [saveUrl, reconstruct])
 
   // Cleanup on unmount - flush pending saves
   useEffect(() => {

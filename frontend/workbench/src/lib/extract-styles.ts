@@ -454,11 +454,27 @@ export function processScopedCSS(rawCSS: string, containerClasses: string[]): st
   return css
 }
 
+// ─── reconstructHtml ──────────────────────────────────────────────────
+
+/**
+ * Reconstruct a full HTML document from body-only HTML and raw CSS.
+ * This is the inverse of `extractStyles` — `extractStyles` breaks a full
+ * document into {bodyHtml, scopedCSS, rawCSS}, and this function puts it
+ * back together from bodyHtml + rawCSS.
+ *
+ * If rawCSS is empty, returns bodyHtml as-is (no wrapping needed).
+ */
+export function reconstructHtml(bodyHtml: string, rawCSS: string): string {
+  if (!rawCSS.trim()) return bodyHtml
+  return `<!DOCTYPE html><html><head><style>${rawCSS}</style></head><body>${bodyHtml}</body></html>`
+}
+
 // ─── extractStyles (main entry point) ─────────────────────────────────
 
 export interface ExtractedStyles {
   bodyHtml: string
   scopedCSS: string
+  rawCSS: string
 }
 
 /**
@@ -468,7 +484,7 @@ export interface ExtractedStyles {
  */
 export function extractStyles(html: string): ExtractedStyles {
   if (!html.trim()) {
-    return { bodyHtml: '', scopedCSS: '' }
+    return { bodyHtml: '', scopedCSS: '', rawCSS: '' }
   }
 
   const parser = new DOMParser()
@@ -485,11 +501,11 @@ export function extractStyles(html: string): ExtractedStyles {
 
   // If no styles found, return body only
   if (!rawCSS.trim()) {
-    return { bodyHtml, scopedCSS: '' }
+    return { bodyHtml, scopedCSS: '', rawCSS: '' }
   }
 
   const containerClasses = getRootContainerClasses(doc)
   const scopedCSS = processScopedCSS(rawCSS, containerClasses)
 
-  return { bodyHtml, scopedCSS }
+  return { bodyHtml, scopedCSS, rawCSS }
 }
