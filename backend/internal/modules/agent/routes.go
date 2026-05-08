@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -44,10 +45,11 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 			log.Println("agent: AI_API_URL or AI_API_KEY is missing; using mock AI provider")
 			provider = &MockAdapter{}
 		} else {
-			provider = NewOpenAIAdapter(
+			provider = NewOpenAIAdapterWithTimeout(
 				normalizeAIURL(apiURL),
 				apiKey,
 				envOrDefault("AI_MODEL", "default"),
+				envDurationSeconds("AI_HTTP_TIMEOUT_SECONDS", 180),
 			)
 		}
 	}
@@ -78,4 +80,13 @@ func envOrDefault(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func envDurationSeconds(key string, fallbackSeconds int) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			return time.Duration(parsed) * time.Second
+		}
+	}
+	return time.Duration(fallbackSeconds) * time.Second
 }

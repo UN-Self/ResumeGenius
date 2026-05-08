@@ -169,7 +169,13 @@ func TestMockAdapter_StreamChatReAct_ContextCancelled(t *testing.T) {
 func TestOpenAIAdapter_NewOpenAIAdapter_DefaultTimeout(t *testing.T) {
 	adapter := NewOpenAIAdapter("http://localhost", "key", "test-model")
 	assert.NotNil(t, adapter.client)
-	assert.Equal(t, 120*time.Second, adapter.client.Timeout)
+	assert.Equal(t, 180*time.Second, adapter.client.Timeout)
+}
+
+func TestOpenAIAdapter_NewOpenAIAdapterWithTimeout(t *testing.T) {
+	adapter := NewOpenAIAdapterWithTimeout("http://localhost", "key", "test-model", 240*time.Second)
+	assert.NotNil(t, adapter.client)
+	assert.Equal(t, 240*time.Second, adapter.client.Timeout)
 }
 
 func TestOpenAIAdapter_StreamChatReAct_IncludesToolsInRequest(t *testing.T) {
