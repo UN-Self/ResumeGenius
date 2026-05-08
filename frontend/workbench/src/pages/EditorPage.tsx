@@ -25,6 +25,8 @@ import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
 import { extractStyles } from '@/lib/extract-styles'
 import { Div, Span, PresetAttributes } from '@/components/editor/extensions'
+import { usePanelState } from '@/hooks/usePanelState'
+import { useContextMenuState } from '@/hooks/useContextMenuState'
 
 export default function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -37,11 +39,9 @@ export default function EditorPage() {
   const [assets, setAssets] = useState<Asset[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [leftOpen, setLeftOpen] = useState(true)
-  const [rightOpen, setRightOpen] = useState(true)
-  const [contextMenu, setContextMenu] = useState<{ isOpen: boolean; x: number; y: number }>({
-    isOpen: false, x: 0, y: 0,
-  })
+
+  const { leftOpen, rightOpen, setLeftOpen, setRightOpen } = usePanelState()
+  const { contextMenu, closeContextMenu, handleContextMenu } = useContextMenuState()
 
   const editor = useEditor({
     extensions: [
@@ -179,43 +179,6 @@ export default function EditorPage() {
       setRollbacking(false)
     }
   }
-
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    setContextMenu({ isOpen: true, x: e.clientX, y: e.clientY })
-  }, [])
-
-  const closeContextMenu = useCallback(() => {
-    setContextMenu((prev) => ({ ...prev, isOpen: false }))
-  }, [])
-
-  useEffect(() => {
-    const close = () => closeContextMenu()
-    document.addEventListener('scroll', close, true)
-    return () => document.removeEventListener('scroll', close, true)
-  }, [closeContextMenu])
-
-  useEffect(() => {
-    if (!contextMenu.isOpen) return
-
-    const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement
-      if (!target.closest('[role="menu"]')) {
-        closeContextMenu()
-      }
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeContextMenu()
-    }
-
-    document.addEventListener('mousedown', handleClick)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handleClick)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [contextMenu.isOpen, closeContextMenu])
 
   useEffect(() => {
     draftIdRef.current = draftId
@@ -446,12 +409,16 @@ export default function EditorPage() {
               draftId={Number(draftId)}
               onApplyEdits={async () => {
                 if (!editor || !draftId) return
-                const draft = await workbenchApi.getDraft(Number(draftId))
-                restoringContent.current = true
-                const { bodyHtml, scopedCSS: css } = extractStyles(draft.html_content || '')
-                setScopedCSS(css)
-                editor.commands.setContent(bodyHtml)
-                restoringContent.current = false
+                try {
+                  const draft = await workbenchApi.getDraft(Number(draftId))
+                  restoringContent.current = true
+                  const { bodyHtml, scopedCSS: css } = extractStyles(draft.html_content || '')
+                  setScopedCSS(css)
+                  editor.commands.setContent(bodyHtml)
+                  restoringContent.current = false
+                } catch {
+                  toast('应用 AI 修改失败，请重试')
+                }
               }}
               onRestoreHtml={(html) => {
                 if (!editor) return

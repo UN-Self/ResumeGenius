@@ -5,7 +5,17 @@ import {
   stripContainerDimensions,
   getRootContainerClasses,
   promoteContainerBackground,
+  RESUME_DOCUMENT_CLASS,
+  SCOPE_PREFIX,
+  processScopedCSS,
 } from '@/lib/extract-styles'
+
+// ─── Test helpers ──────────────────────────────────────────────────
+
+/** Regex matching ".resume-document {" (used by promoteContainerBackground) */
+const SCOPE_PREFIX_BLOCK_RE = new RegExp(`\\${SCOPE_PREFIX}\\s*\\{[^}]*`)
+/** Regex matching ".resume-document .resume {" (scoped container rule) */
+const SCOPE_PREFIX_CONTAINER_RE = new RegExp(`\\${SCOPE_PREFIX}\\s+\\.resume\\s*\\{([^}]*)\\}`)
 
 // ─── Shared test fixtures ─────────────────────────────────────────────
 
@@ -36,14 +46,14 @@ describe('scopeSelectors', () => {
   it('prefixes simple class selectors', () => {
     const css = '.section { margin-bottom: 10pt; }'
     const result = scopeSelectors(css)
-    expect(result).toContain('.resume-document .section')
+    expect(result).toContain(`${SCOPE_PREFIX} .section`)
     expect(result).toContain('margin-bottom: 10pt')
   })
 
   it('rewrites body selector to scope', () => {
     const css = 'body { color: #333; }'
     const result = scopeSelectors(css)
-    expect(result).toContain('.resume-document')
+    expect(result).toContain(SCOPE_PREFIX)
     expect(result).not.toContain('body')
     // CSSOM normalizes #333 to rgb(51, 51, 51) — match either form
     expect(result).toMatch(/color:\s*(#333|rgb\(51,\s*51,\s*51\))/)
@@ -52,7 +62,7 @@ describe('scopeSelectors', () => {
   it('rewrites html selector to scope', () => {
     const css = 'html { font-size: 16px; }'
     const result = scopeSelectors(css)
-    expect(result).toContain('.resume-document')
+    expect(result).toContain(SCOPE_PREFIX)
     expect(result).not.toContain('html')
     expect(result).toContain('font-size: 16px')
   })
@@ -60,29 +70,29 @@ describe('scopeSelectors', () => {
   it('rewrites * selector to scope *', () => {
     const css = '* { margin: 0; padding: 0; }'
     const result = scopeSelectors(css)
-    expect(result).toContain('.resume-document *')
+    expect(result).toContain(`${SCOPE_PREFIX} *`)
     expect(result).toContain('margin: 0')
   })
 
   it('handles comma-separated selectors', () => {
     const css = 'h1, h2, h3 { font-weight: bold; }'
     const result = scopeSelectors(css)
-    expect(result).toContain('.resume-document h1')
-    expect(result).toContain('.resume-document h2')
-    expect(result).toContain('.resume-document h3')
+    expect(result).toContain(`${SCOPE_PREFIX} h1`)
+    expect(result).toContain(`${SCOPE_PREFIX} h2`)
+    expect(result).toContain(`${SCOPE_PREFIX} h3`)
     expect(result).toContain('font-weight: bold')
   })
 
   it('handles compound selectors with combinators', () => {
     const css = '.section > .title { font-size: 14pt; }'
     const result = scopeSelectors(css)
-    expect(result).toContain('.resume-document .section > .title')
+    expect(result).toContain(`${SCOPE_PREFIX} .section > .title`)
   })
 
   it('handles child combinator', () => {
     const css = '.section .title { color: blue; }'
     const result = scopeSelectors(css)
-    expect(result).toContain('.resume-document .section .title')
+    expect(result).toContain(`${SCOPE_PREFIX} .section .title`)
   })
 
   it('skips @page rules', () => {
@@ -106,27 +116,27 @@ describe('scopeSelectors', () => {
     const css = '@media screen and (max-width: 600px) { .section { font-size: 12pt; } }'
     const result = scopeSelectors(css)
     expect(result).toContain('@media screen and (max-width: 600px)')
-    expect(result).toContain('.resume-document .section')
+    expect(result).toContain(`${SCOPE_PREFIX} .section`)
     expect(result).toContain('font-size: 12pt')
   })
 
   it('handles sibling combinator +', () => {
     const css = '.section + .section { margin-top: 5pt; }'
     const result = scopeSelectors(css)
-    expect(result).toContain('.resume-document .section + .section')
+    expect(result).toContain(`${SCOPE_PREFIX} .section + .section`)
   })
 
   it('handles general sibling combinator ~', () => {
     const css = '.item ~ .item { color: red; }'
     const result = scopeSelectors(css)
-    expect(result).toContain('.resume-document .item ~ .item')
+    expect(result).toContain(`${SCOPE_PREFIX} .item ~ .item`)
   })
 
   it('handles already-scoped selectors without double-prefixing', () => {
-    const css = '.resume-document .section { color: blue; }'
+    const css = `${SCOPE_PREFIX} .section { color: blue; }`
     const result = scopeSelectors(css)
-    expect(result).not.toContain('.resume-document .resume-document')
-    expect(result).toContain('.resume-document .section')
+    expect(result).not.toContain(`${SCOPE_PREFIX} ${SCOPE_PREFIX}`)
+    expect(result).toContain(`${SCOPE_PREFIX} .section`)
   })
 })
 
@@ -220,40 +230,40 @@ describe('getRootContainerClasses', () => {
 
 describe('promoteContainerBackground', () => {
   it('promotes background-color from root container to .resume-document', () => {
-    const css = '.resume-document .resume { background-color: #f0f0f0; color: #333; }'
+    const css = `${SCOPE_PREFIX} .resume { background-color: #f0f0f0; color: #333; }`
     const result = promoteContainerBackground(css, '.resume')
     // Background should be on .resume-document
-    expect(result).toMatch(/\.resume-document\s*\{[^}]*background-color/)
+    expect(SCOPE_PREFIX_BLOCK_RE.test(result)).toBe(true)
     // Root container should still have non-background properties
     expect(result).toContain('color:')
     // Root container should NOT have background-color anymore
-    const resumeRuleMatch = result.match(/\.resume-document\s+\.resume\s*\{([^}]*)\}/)
+    const resumeRuleMatch = result.match(SCOPE_PREFIX_CONTAINER_RE)
     expect(resumeRuleMatch).not.toBeNull()
     expect(resumeRuleMatch![1]).not.toContain('background')
   })
 
   it('promotes background shorthand (expanded by CSSOM)', () => {
-    const css = '.resume-document .resume { background: #f0f0f0; color: #333; }'
+    const css = `${SCOPE_PREFIX} .resume { background: #f0f0f0; color: #333; }`
     const result = promoteContainerBackground(css, '.resume')
     // CSSOM expands shorthand — background-color should be promoted
-    expect(result).toMatch(/\.resume-document\s*\{[^}]*background/)
+    expect(SCOPE_PREFIX_BLOCK_RE.test(result)).toBe(true)
     // Should NOT include default-valued longhands like background-image: none
     // that CSSOM expands from the shorthand
     expect(result).not.toContain('background-image: none')
   })
 
   it('does not affect non-container selectors', () => {
-    const css = '.resume-document .section { background: #eee; } .resume-document .resume { background: #f0f0f0; }'
+    const css = `${SCOPE_PREFIX} .section { background: #eee; } ${SCOPE_PREFIX} .resume { background: #f0f0f0; }`
     const result = promoteContainerBackground(css, '.resume')
     // .section background should remain untouched
-    expect(result).toContain('.resume-document .section')
-    expect(result).toMatch(/\.resume-document\s+\.section[^{]*\{[^}]*background/)
+    expect(result).toContain(`${SCOPE_PREFIX} .section`)
+    expect(result).toMatch(new RegExp(`\\${SCOPE_PREFIX}\\s+\\.section[^{]*\\{[^}]*background`))
   })
 
   it('returns unchanged CSS when no background on container', () => {
-    const css = '.resume-document .resume { color: #333; font-size: 12pt; }'
+    const css = `${SCOPE_PREFIX} .resume { color: #333; font-size: 12pt; }`
     const result = promoteContainerBackground(css, '.resume')
-    expect(result).not.toContain('.resume-document {')
+    expect(result).not.toContain(`${SCOPE_PREFIX} {`)
     expect(result).toContain('color:')
   })
 
@@ -262,27 +272,27 @@ describe('promoteContainerBackground', () => {
   })
 
   it('preserves non-container rules inside @media screen when promoting container background', () => {
-    const css = '@media screen and (max-width: 600px) { .resume-document .resume { background: #f5f5f5; } .resume-document .section { font-size: 12pt; } }'
+    const css = `@media screen and (max-width: 600px) { ${SCOPE_PREFIX} .resume { background: #f5f5f5; } ${SCOPE_PREFIX} .section { font-size: 12pt; } }`
     const result = promoteContainerBackground(css, '.resume')
     // @media block should still exist (non-container .section rule preserves it)
     expect(result).toContain('@media screen and (max-width: 600px)')
     // .section should remain INSIDE the @media block, not leaked to top level
-    expect(result).toMatch(/@media[\s\S]*\.resume-document\s+\.section[\s\S]*font-size:\s*12pt/)
+    expect(result).toMatch(new RegExp(`@media[\\s\\S]*\\${SCOPE_PREFIX}\\s+\\.section[\\s\\S]*font-size:\\s*12pt`))
     // Background should be promoted to .resume-document at top level
-    expect(result).toMatch(/\.resume-document\s*\{[^}]*background/)
+    expect(SCOPE_PREFIX_BLOCK_RE.test(result)).toBe(true)
   })
 
   it('drops empty @media block when all inner rules are fully promoted', () => {
-    const css = '@media screen and (max-width: 600px) { .resume-document .resume { background: #f5f5f5; } }'
+    const css = `@media screen and (max-width: 600px) { ${SCOPE_PREFIX} .resume { background: #f5f5f5; } }`
     const result = promoteContainerBackground(css, '.resume')
     // All container props are background → rule dropped → @media block empty → dropped
     expect(result).not.toContain('@media')
     // But background is still promoted
-    expect(result).toMatch(/\.resume-document\s*\{[^}]*background/)
+    expect(SCOPE_PREFIX_BLOCK_RE.test(result)).toBe(true)
   })
 
   it('preserves !important priority on promoted background', () => {
-    const css = '.resume-document .resume { background: #fff !important; }'
+    const css = `${SCOPE_PREFIX} .resume { background: #fff !important; }`
     const result = promoteContainerBackground(css, '.resume')
     expect(result).toContain('!important')
   })
@@ -305,11 +315,11 @@ describe('extractStyles', () => {
     // @page should be removed
     expect(scopedCSS).not.toContain('@page')
     // * should be scoped
-    expect(scopedCSS).toContain('.resume-document *')
+    expect(scopedCSS).toContain(`${SCOPE_PREFIX} *`)
     // body should be rewritten
     expect(scopedCSS).not.toMatch(/\bbody\b/)
     // .section should be scoped
-    expect(scopedCSS).toContain('.resume-document .section')
+    expect(scopedCSS).toContain(`${SCOPE_PREFIX} .section`)
   })
 
   it('returns empty for empty input', () => {
@@ -354,9 +364,9 @@ describe('extractStyles', () => {
 </body></html>`
     const { scopedCSS, bodyHtml } = extractStyles(html)
     // Both style blocks should be merged and scoped
-    expect(scopedCSS).toContain('.resume-document .section')
+    expect(scopedCSS).toContain(`${SCOPE_PREFIX} .section`)
     expect(scopedCSS).toContain('margin-bottom: 10pt')
-    expect(scopedCSS).toContain('.resume-document .tag')
+    expect(scopedCSS).toContain(`${SCOPE_PREFIX} .tag`)
     expect(scopedCSS).toContain('background')
     expect(bodyHtml).toContain('class="resume"')
   })
@@ -380,8 +390,62 @@ describe('extractStyles', () => {
     expect(scopedCSS).not.toContain('min-height: 297mm')
     expect(scopedCSS).not.toContain('padding: 18mm 20mm')
     // Background should be promoted to .resume-document (full canvas coverage)
-    expect(scopedCSS).toMatch(/\.resume-document\s*\{[^}]*background/)
+    expect(SCOPE_PREFIX_BLOCK_RE.test(scopedCSS)).toBe(true)
     // .section should remain scoped normally
-    expect(scopedCSS).toContain('.resume-document .section')
+    expect(scopedCSS).toContain(`${SCOPE_PREFIX} .section`)
+  })
+})
+
+// ─── SCOPE_PREFIX consistency ───────────────────────────────────────
+
+describe('RESUME_DOCUMENT_CLASS and SCOPE_PREFIX', () => {
+  it('exports RESUME_DOCUMENT_CLASS as the bare class name (no dot)', () => {
+    expect(RESUME_DOCUMENT_CLASS).toBe('resume-document')
+  })
+
+  it('derives SCOPE_PREFIX from RESUME_DOCUMENT_CLASS with dot prefix', () => {
+    expect(SCOPE_PREFIX).toBe(`.${RESUME_DOCUMENT_CLASS}`)
+  })
+
+  it('promoteContainerBackground uses SCOPE_PREFIX for promoted background rule', () => {
+    const css = `${SCOPE_PREFIX} .resume { background: #f0f0f0; }`
+    const result = promoteContainerBackground(css, '.resume')
+    expect(result).toContain(`${SCOPE_PREFIX} {`)
+  })
+})
+
+// ─── processScopedCSS ──────────────────────────────────────────────
+
+describe('processScopedCSS', () => {
+  it('scopes, strips container dimensions, and promotes background in one call', () => {
+    const rawCSS = `
+      body { font-family: sans-serif; }
+      .resume { width: 210mm; padding: 18mm; background: #f5f5f5; }
+      .section { margin-bottom: 10pt; }
+    `
+    const containerClasses = ['resume']
+    const result = processScopedCSS(rawCSS, containerClasses)
+
+    // body should be scoped away
+    expect(result).not.toContain('body')
+    // Container dimensions should be stripped
+    expect(result).not.toContain('width: 210mm')
+    expect(result).not.toContain('padding: 18mm')
+    // Background should be promoted to .resume-document
+    expect(SCOPE_PREFIX_BLOCK_RE.test(result)).toBe(true)
+    // .section should be scoped normally
+    expect(result).toContain(`${SCOPE_PREFIX} .section`)
+  })
+
+  it('returns empty string for empty CSS input', () => {
+    expect(processScopedCSS('', [])).toBe('')
+  })
+
+  it('returns empty string when no container classes provided', () => {
+    const css = '.section { color: red; }'
+    const result = processScopedCSS(css, [])
+    // Should still scope selectors but skip dimension/background steps
+    expect(result).toContain(`${SCOPE_PREFIX} .section`)
+    expect(result).toContain('color: red')
   })
 })

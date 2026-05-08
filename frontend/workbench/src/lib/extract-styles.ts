@@ -7,7 +7,8 @@
  * A4Canvas page sizing.
  */
 
-const SCOPE_PREFIX = '.resume-document'
+export const RESUME_DOCUMENT_CLASS = 'resume-document'
+export const SCOPE_PREFIX = `.${RESUME_DOCUMENT_CLASS}`
 
 /**
  * Defense-in-depth: strip XSS-adjacent CSS patterns before injection.
@@ -400,7 +401,7 @@ export function promoteContainerBackground(css: string, containerSelector: strin
       ? uniqueProps.filter((p) => !DEFAULT_BG_LONGHANDS.has(p))
       : uniqueProps
 
-    const bgRule = `.resume-document {\n  ${cleaned.join('\n  ')}\n}`
+    const bgRule = `${SCOPE_PREFIX} {\n  ${cleaned.join('\n  ')}\n}`
     output.unshift(bgRule)
   }
 
@@ -422,6 +423,35 @@ export function getRootContainerClasses(doc: Document): string[] {
 
   const classList = firstChild.classList
   return classList ? Array.from(classList) : []
+}
+
+// ─── processScopedCSS (encapsulated pipeline) ─────────────────────
+
+/**
+ * Apply the full CSS processing pipeline to raw CSS:
+ * 1. Sanitize dangerous patterns
+ * 2. Scope all selectors to `.resume-document`
+ * 3. Strip dimension properties from root container rules
+ * 4. Promote root container background to `.resume-document`
+ *
+ * The order of steps 3→4 is intentional: stripping dimensions first
+ * ensures the promoted background on `.resume-document` is not overridden
+ * by the more-specific scoped container rule.
+ */
+export function processScopedCSS(rawCSS: string, containerClasses: string[]): string {
+  if (!rawCSS.trim()) return ''
+
+  let css = scopeSelectors(sanitizeCSS(rawCSS))
+
+  for (const cls of containerClasses) {
+    css = stripContainerDimensions(css, `.${cls}`)
+  }
+
+  for (const cls of containerClasses) {
+    css = promoteContainerBackground(css, `.${cls}`)
+  }
+
+  return css
 }
 
 // ─── extractStyles (main entry point) ─────────────────────────────────
@@ -458,19 +488,8 @@ export function extractStyles(html: string): ExtractedStyles {
     return { bodyHtml, scopedCSS: '' }
   }
 
-  // Scope selectors
-  let scopedCSS = scopeSelectors(sanitizeCSS(rawCSS))
-
-  // Strip container dimensions for root container classes
   const containerClasses = getRootContainerClasses(doc)
-  for (const cls of containerClasses) {
-    scopedCSS = stripContainerDimensions(scopedCSS, `.${cls}`)
-  }
-
-  // Promote root container background to .resume-document for full A4 canvas coverage
-  for (const cls of containerClasses) {
-    scopedCSS = promoteContainerBackground(scopedCSS, `.${cls}`)
-  }
+  const scopedCSS = processScopedCSS(rawCSS, containerClasses)
 
   return { bodyHtml, scopedCSS }
 }
