@@ -29,11 +29,12 @@ type ToolCallFunction struct {
 
 // Message represents a single chat message for the AI provider.
 type Message struct {
-	Role       string            `json:"role"`
-	Content    string            `json:"content,omitempty"`
-	ToolCallID string            `json:"tool_call_id,omitempty"`
-	Name       string            `json:"name,omitempty"`
-	ToolCalls  []ToolCallMessage `json:"tool_calls,omitempty"`
+	Role             string            `json:"role"`
+	Content          string            `json:"content,omitempty"`
+	ReasoningContent string            `json:"reasoning_content,omitempty"`
+	ToolCallID       string            `json:"tool_call_id,omitempty"`
+	Name             string            `json:"name,omitempty"`
+	ToolCalls        []ToolCallMessage `json:"tool_calls,omitempty"`
 }
 
 // ToolCallRequest represents a tool call the AI wants to make.
@@ -182,6 +183,9 @@ func (a *OpenAIAdapter) StreamChatReAct(
 		msg := map[string]interface{}{"role": m.Role}
 		if m.Content != "" {
 			msg["content"] = m.Content
+		}
+		if m.ReasoningContent != "" {
+			msg["reasoning_content"] = m.ReasoningContent
 		}
 		if m.ToolCallID != "" {
 			msg["tool_call_id"] = m.ToolCallID

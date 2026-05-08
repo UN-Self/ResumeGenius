@@ -188,6 +188,32 @@
   color: var(--color-primary);
 }
 
+.ai-empty-icon {
+  animation: ai-empty-pulse 2.2s ease-in-out infinite;
+  cursor: default;
+}
+
+.ai-empty-icon:hover {
+  animation: ai-empty-wiggle 520ms ease-in-out;
+}
+
+@keyframes ai-empty-pulse {
+  0%, 100% { transform: translateY(0) scale(1); }
+  18% { transform: translateY(-5px) scale(1.08); }
+  36% { transform: translateY(0) scale(1); }
+  54% { transform: translateY(-3px) scale(1.04); }
+  72% { transform: translateY(0) scale(1); }
+}
+
+@keyframes ai-empty-wiggle {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  15% { transform: rotate(-12deg) scale(1.12); }
+  30% { transform: rotate(10deg) scale(1.06); }
+  50% { transform: rotate(-7deg) scale(1.1); }
+  70% { transform: rotate(5deg) scale(1.04); }
+  85% { transform: rotate(-2deg) scale(1.02); }
+}
+
 .ai-empty-chat p {
   max-width: 28rem;
   margin: 0;

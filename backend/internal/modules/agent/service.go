@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -291,21 +292,19 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 		ctx = WithProjectID(ctx, *session.ProjectID)
 	}
 
-	// 5b. Pre-load project assets into conversation so AI cannot ignore them
+	// 5b. Pre-load project assets into system prompt so AI cannot ignore them
 	augmentedPrompt := systemPromptV2
-	preloadedAssets := make([]Message, 0)
 	if session.ProjectID != nil {
-		summary, assetMsgs := s.preloadAssets(*session.ProjectID)
-		if summary != "" {
-			augmentedPrompt = systemPromptV2 + "\n" + summary
+		if assetInfo := s.preloadAssets(*session.ProjectID); assetInfo != "" {
+			augmentedPrompt = systemPromptV2 + "\n" + assetInfo
 		}
-		preloadedAssets = assetMsgs
 	}
 
 	// 6. Start ReAct loop
-	toolResults := preloadedAssets
+	toolResults := make([]Message, 0)
 	var allThinking strings.Builder
 	stallCount := 0
+	searchOnlyCount := 0
 
 	for totalIter := 0; totalIter < s.maxIterations*2+1; totalIter++ {
 		// a. Build messages array: system + history + pending tool results
@@ -317,6 +316,7 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 
 		var fullText, thinkingAccum strings.Builder
 		var iterationToolCalls []ToolCallRequest
+		var iterToolResults []Message
 		hadText, hadToolCalls := false, false
 
 		// b. Call provider with streaming callbacks
@@ -325,6 +325,7 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 			"content": fmt.Sprintf("第 %d 步：正在请求模型生成下一步操作...\n", totalIter+1),
 		})
 		sendEvent(string(stepData))
+		log.Printf("agent: iteration %d calling model with %d messages and %d tools", totalIter, len(apiMessages), len(s.toolExecutor.Tools()))
 		err := s.provider.StreamChatReAct(
 			ctx,
 			apiMessages,
@@ -382,7 +383,7 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 					})
 					sendEvent(string(failData))
 					// Add error result to pending messages for next iteration
-					toolResults = append(toolResults, Message{
+					iterToolResults = append(iterToolResults, Message{
 						Role:       "tool",
 						Content:    fmt.Sprintf(`{"error":"%s"}`, errMsg),
 						ToolCallID: call.ID,
@@ -424,7 +425,7 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 					})
 					sendEvent(string(okData))
 					// Add result to pending messages for next iteration
-					toolResults = append(toolResults, Message{
+					iterToolResults = append(iterToolResults, Message{
 						Role:       "tool",
 						Content:    result,
 						ToolCallID: call.ID,
@@ -443,6 +444,8 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 			},
 		)
 		if err != nil {
+			log.Printf("agent: iteration %d model call failed: %v", totalIter, err)
+			return err
 			return err
 		}
 
@@ -462,12 +465,42 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 				}
 			}
 			assistantTC := Message{
-				Role:      "assistant",
-				Content:   fullText.String(),
-				ToolCalls: tcMsgs,
+				Role:             "assistant",
+				Content:          fullText.String(),
+				ReasoningContent: thinkingAccum.String(),
+				ToolCalls:        tcMsgs,
 			}
-			toolResults = append([]Message{assistantTC}, toolResults...)
+			toolResults = append([]Message{assistantTC}, iterToolResults...)
 			stallCount = 0
+
+			// Track search-only iterations with progressive, escalating reminders.
+			hasApply := false
+			for _, tc := range iterationToolCalls {
+				if tc.Name == "apply_edits" {
+					hasApply = true
+					break
+				}
+			}
+			if hasApply {
+				searchOnlyCount = 0
+			} else {
+				searchOnlyCount++
+				reminder := ""
+				remaining := (s.maxIterations*2+1) - totalIter
+				switch {
+				case remaining <= 1:
+					reminder = "[系统指令] 这是最后一步。必须立刻调用 apply_edits 输出简历。"
+				case remaining <= 3:
+					reminder = "[系统提醒] 步骤即将耗尽，请停止搜索，立即用 apply_edits 写简历。"
+				case searchOnlyCount == 3:
+					reminder = "[系统提醒] 你已经查询了资料和设计参考，可以考虑开始写简历了。"
+				case searchOnlyCount >= 6:
+					reminder = "[系统提醒] 信息已经足够了，现在就应该调用 apply_edits 生成简历。"
+				}
+				if reminder != "" {
+					toolResults = append(toolResults, Message{Role: "user", Content: reminder})
+				}
+			}
 			continue
 		}
 
@@ -499,15 +532,14 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 	return ErrMaxIterations
 }
 
-// preloadAssets queries the project's non-deleted, non-folder assets and returns:
-// - summary: appended to the system prompt, listing available files
-// - messages: the CONTENT of the first asset injected as a pre-filled tool_result,
-//   so the AI sees real personal data from the start without having to search
-func (s *ChatService) preloadAssets(projectID uint) (summary string, messages []Message) {
+// preloadAssets queries the project's non-deleted, non-folder assets and returns
+// a system-prompt appendix listing available files and containing the actual
+// content of the first contentful asset so the AI cannot ignore it.
+func (s *ChatService) preloadAssets(projectID uint) string {
 	var assets []models.Asset
 	if err := s.db.Where("project_id = ? AND type != ?", projectID, "folder").
 		Order("created_at DESC").Limit(20).Find(&assets).Error; err != nil || len(assets) == 0 {
-		return "\n## 当前项目状态\n用户尚未上传任何文件。如果用户要求写简历但没有提供资料，请在第一次回复中提醒用户上传旧简历、Git 仓库链接或笔记补充说明。", nil
+		return "\n## 当前项目状态\n用户尚未上传任何文件。如果用户要求写简历但没有提供资料，请在第一次回复中提醒用户上传旧简历、Git 仓库链接或笔记补充说明。"
 	}
 
 	typeCount := make(map[string]int)
@@ -527,10 +559,9 @@ func (s *ChatService) preloadAssets(projectID uint) (summary string, messages []
 		sb.WriteString(fmt.Sprintf("- %s：%d 个\n", t, n))
 	}
 	sb.WriteString("文件列表：" + strings.Join(labels, "、") + "\n")
-	sb.WriteString("以下是从用户资料中预载的真实内容，所有简历信息必须以此为来源。找不到的信息请列出缺失项提醒用户补充。禁止凭空编造。")
+	sb.WriteString("所有简历信息必须从这些文件中提取。找不到的信息请列出缺失项提醒用户补充。禁止凭空编造。\n")
 
-	// Inject the first asset with actual content as a ready-made tool result so the
-	// AI gets real data immediately instead of having to call search_assets.
+	// Include the first asset's content directly in the system prompt
 	for _, a := range assets {
 		if a.Content == nil || len(strings.TrimSpace(*a.Content)) == 0 {
 			continue
@@ -539,17 +570,11 @@ func (s *ChatService) preloadAssets(projectID uint) (summary string, messages []
 		if a.Label != nil && *a.Label != "" {
 			label = *a.Label
 		}
-		msg := Message{
-			Role:       "tool",
-			Name:       "search_assets",
-			ToolCallID: "preload_assets",
-			Content: fmt.Sprintf("已从用户上传的「%s」中解析到以下内容：\n\n%s", label, *a.Content),
-		}
-		messages = append(messages, msg)
-		break // only inject the first contentful asset to keep context manageable
+		sb.WriteString(fmt.Sprintf("\n**以下是「%s」的解析内容：**\n```\n%s\n```\n", label, *a.Content))
+		break
 	}
 
-	return sb.String(), messages
+	return sb.String()
 }
 
 // ---------------------------------------------------------------------------
