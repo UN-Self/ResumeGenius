@@ -248,7 +248,7 @@ func TestWrapWithTemplate_ReplacesPlaceholder(t *testing.T) {
 	result := wrapWithTemplate("<h1>Hello</h1><p>World</p>")
 
 	assert.Contains(t, result, "<h1>Hello</h1><p>World</p>")
-	assert.Contains(t, result, `<div class="resume-page">`)
+	assert.Contains(t, result, `<div class="resume-page resume-document">`)
 	assert.Contains(t, result, ".resume-page h1")
 	assert.Contains(t, result, "@page")
 	assert.NotContains(t, result, "{{CONTENT}}")
@@ -257,7 +257,7 @@ func TestWrapWithTemplate_ReplacesPlaceholder(t *testing.T) {
 func TestWrapWithTemplate_EmptyContent(t *testing.T) {
 	result := wrapWithTemplate("")
 
-	assert.Contains(t, result, `<div class="resume-page"></div>`)
+	assert.Contains(t, result, `<div class="resume-page resume-document"></div>`)
 	assert.Contains(t, result, ".resume-page")
 }
 
