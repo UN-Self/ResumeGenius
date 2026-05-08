@@ -394,6 +394,42 @@ describe('extractStyles', () => {
     // .section should remain scoped normally
     expect(scopedCSS).toContain(`${SCOPE_PREFIX} .section`)
   })
+
+  it('returns rawCSS (un-scoped, un-processed) alongside scopedCSS', () => {
+    const { rawCSS, scopedCSS } = extractStyles(SAMPLE_HTML)
+    // rawCSS should contain the original CSS before scoping
+    expect(rawCSS).toContain('.section {')
+    expect(rawCSS).toContain('.tag {')
+    expect(rawCSS).toContain('.resume {')
+    // rawCSS should NOT be scoped (no .resume-document prefix)
+    expect(rawCSS).not.toContain('.resume-document')
+    // rawCSS should still have @page (not stripped)
+    expect(rawCSS).toContain('@page')
+    // rawCSS should still have container dimensions (not stripped)
+    expect(rawCSS).toContain('width: 210mm')
+  })
+
+  it('returns empty rawCSS for HTML without style blocks', () => {
+    const html = '<div class="resume"><p>Hello</p></div>'
+    const { rawCSS } = extractStyles(html)
+    expect(rawCSS).toBe('')
+  })
+
+  it('returns empty rawCSS for empty input', () => {
+    const { rawCSS } = extractStyles('')
+    expect(rawCSS).toBe('')
+  })
+
+  it('rawCSS can round-trip through extractStyles', () => {
+    const { bodyHtml, rawCSS } = extractStyles(SAMPLE_HTML)
+    // Reconstruct a full HTML document from bodyHtml + rawCSS
+    const reconstructed = `<!DOCTYPE html><html><head><style>${rawCSS}</style></head><body>${bodyHtml}</body></html>`
+    const result = extractStyles(reconstructed)
+    // The second extraction should produce the same rawCSS
+    expect(result.rawCSS).toContain('.section {')
+    expect(result.rawCSS).toContain('.tag {')
+    expect(result.bodyHtml).toContain('<div class="resume">')
+  })
 })
 
 // ─── SCOPE_PREFIX consistency ───────────────────────────────────────

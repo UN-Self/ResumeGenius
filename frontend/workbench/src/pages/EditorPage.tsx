@@ -23,7 +23,7 @@ import { SaveSnapshotDialog } from '@/components/version/SaveSnapshotDialog'
 import { RollbackConfirmDialog } from '@/components/version/RollbackConfirmDialog'
 import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
-import { extractStyles } from '@/lib/extract-styles'
+import { extractStyles, reconstructHtml } from '@/lib/extract-styles'
 import { Div, Span, PresetAttributes } from '@/components/editor/extensions'
 import { usePanelState } from '@/hooks/usePanelState'
 import { useContextMenuState } from '@/hooks/useContextMenuState'
@@ -83,6 +83,7 @@ export default function EditorPage() {
         })
       }
     },
+    reconstruct: (html: string) => reconstructHtml(html, rawCSSRef.current),
     saveUrl: draftId ? `/api/v1/drafts/${draftId}` : undefined,
   })
 
@@ -111,15 +112,20 @@ export default function EditorPage() {
   // Save editor content before preview so we can restore it on exit
   const savedContentBeforePreview = useRef<string | null>(null)
   const savedScopedCSSBeforePreview = useRef<string | null>(null)
+  const savedRawCSSBeforePreview = useRef<string>('')
   const didRecenterAfterPreviewRef = useRef(false)
   const restoringContent = useRef(false)
+  const rawCSSRef = useRef('')
 
   // When preview HTML is ready, load it into the editor and make read-only
   useLayoutEffect(() => {
     if (previewMode === 'previewing' && previewHtml && editor) {
-      const { bodyHtml, scopedCSS: css } = extractStyles(previewHtml)
+      const { bodyHtml, scopedCSS: css, rawCSS } = extractStyles(previewHtml)
+      rawCSSRef.current = rawCSS
       setScopedCSS(css)
+      restoringContent.current = true
       editor.commands.setContent(bodyHtml)
+      restoringContent.current = false
       editor.setEditable(false)
       didRecenterAfterPreviewRef.current = false
     }
@@ -130,6 +136,7 @@ export default function EditorPage() {
       savedContentBeforePreview.current = editor.getHTML()
     }
     savedScopedCSSBeforePreview.current = scopedCSS
+    savedRawCSSBeforePreview.current = rawCSSRef.current
     await startPreview(version)
   }, [editor, scopedCSS, startPreview])
 
@@ -147,6 +154,10 @@ export default function EditorPage() {
     if (savedScopedCSSBeforePreview.current !== null) {
       setScopedCSS(savedScopedCSSBeforePreview.current)
       savedScopedCSSBeforePreview.current = null
+    }
+    if (savedRawCSSBeforePreview.current !== undefined) {
+      rawCSSRef.current = savedRawCSSBeforePreview.current
+      savedRawCSSBeforePreview.current = ''
     }
     exitPreview()
   }, [editor, exitPreview])
@@ -168,9 +179,13 @@ export default function EditorPage() {
       await flush()
       const html = await rollbackVersion()
       if (editor) {
-        const { bodyHtml, scopedCSS: css } = extractStyles(html)
+        const { bodyHtml, scopedCSS: css, rawCSS } = extractStyles(html)
+        rawCSSRef.current = rawCSS
         setScopedCSS(css)
+        editor.setEditable(true)
+        restoringContent.current = true
         editor.commands.setContent(bodyHtml)
+        restoringContent.current = false
       }
       setRollbackDialogOpen(false)
     } catch (e) {
@@ -254,7 +269,8 @@ export default function EditorPage() {
   useEffect(() => {
     if (editor && pendingHtml !== null && !hasAppliedRef.current) {
       hasAppliedRef.current = true
-      const { bodyHtml, scopedCSS: css } = extractStyles(pendingHtml)
+      const { bodyHtml, scopedCSS: css, rawCSS } = extractStyles(pendingHtml)
+      rawCSSRef.current = rawCSS
       setScopedCSS(css)
       editor.commands.setContent(bodyHtml)
     }
@@ -412,7 +428,8 @@ export default function EditorPage() {
                 try {
                   const draft = await workbenchApi.getDraft(Number(draftId))
                   restoringContent.current = true
-                  const { bodyHtml, scopedCSS: css } = extractStyles(draft.html_content || '')
+                  const { bodyHtml, scopedCSS: css, rawCSS } = extractStyles(draft.html_content || '')
+                  rawCSSRef.current = rawCSS
                   setScopedCSS(css)
                   editor.commands.setContent(bodyHtml)
                   restoringContent.current = false
@@ -423,7 +440,8 @@ export default function EditorPage() {
               onRestoreHtml={(html) => {
                 if (!editor) return
                 restoringContent.current = true
-                const { bodyHtml, scopedCSS: css } = extractStyles(html)
+                const { bodyHtml, scopedCSS: css, rawCSS } = extractStyles(html)
+                rawCSSRef.current = rawCSS
                 setScopedCSS(css)
                 editor.commands.setContent(bodyHtml)
                 restoringContent.current = false

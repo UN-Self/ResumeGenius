@@ -116,6 +116,59 @@ describe('useAutoSave', () => {
     expect(save).not.toHaveBeenCalled()
   })
 
+  it('flush returns a promise that resolves after save completes', async () => {
+    let saveResolve!: () => void
+    const save = vi.fn().mockImplementation(
+      () => new Promise<void>((r) => { saveResolve = r }),
+    )
+    const { result } = renderHook(() => useAutoSave({ save }))
+
+    act(() => result.current.scheduleSave('<p>changed</p>'))
+
+    // flush() should return a Promise (not void/undefined)
+    const flushPromise = result.current.flush()
+    expect(flushPromise).toBeInstanceOf(Promise)
+    expect(save).toHaveBeenCalledTimes(1)
+
+    // Resolve the pending save
+    await act(async () => {
+      saveResolve()
+      await flushPromise
+    })
+  })
+
+  it('applies reconstruct function before saving', async () => {
+    const save = vi.fn().mockResolvedValue(undefined)
+    const reconstruct = vi.fn((html: string) => `<full>${html}</full>`)
+    const { result } = renderHook(() => useAutoSave({ save, reconstruct }))
+
+    act(() => result.current.scheduleSave('<p>body</p>'))
+
+    await act(async () => {
+      vi.advanceTimersByTime(2000)
+      await Promise.resolve()
+    })
+
+    expect(reconstruct).toHaveBeenCalledWith('<p>body</p>')
+    expect(save).toHaveBeenCalledWith('<full><p>body</p></full>')
+  })
+
+  it('applies reconstruct in flush', async () => {
+    const save = vi.fn().mockResolvedValue(undefined)
+    const reconstruct = vi.fn((html: string) => `<full>${html}</full>`)
+    const { result } = renderHook(() => useAutoSave({ save, reconstruct }))
+
+    act(() => result.current.scheduleSave('<p>body</p>'))
+
+    await act(async () => {
+      result.current.flush()
+      await Promise.resolve()
+    })
+
+    expect(reconstruct).toHaveBeenCalledWith('<p>body</p>')
+    expect(save).toHaveBeenCalledWith('<full><p>body</p></full>')
+  })
+
   it('setLastSavedAt updates after successful save', async () => {
     const save = vi.fn().mockResolvedValue(undefined)
     const { result } = renderHook(() => useAutoSave({ save }))
