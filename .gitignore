@@ -11,6 +11,8 @@
 .DS_Store
 Thumbs.db
 data
+!backend/internal/modules/designskill/skill/ui-ux-pro-max/data/
+!backend/internal/modules/designskill/skill/ui-ux-pro-max/data/**
 
 # ===========================
 # Editor / IDE
