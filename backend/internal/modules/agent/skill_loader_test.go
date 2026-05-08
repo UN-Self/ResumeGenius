@@ -39,6 +39,16 @@ func TestSkillLoader_SearchByCategory(t *testing.T) {
 	require.NotEmpty(t, results, "should find skills in test category")
 }
 
+func TestSkillLoader_SearchResumeDesignSkill(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+
+	results := loader.Search("简历设计", "design", 0)
+	require.NotEmpty(t, results, "should find resume design guardrail skill")
+	assert.Equal(t, "resume-design-a4", results[0].Name)
+	assert.Contains(t, results[0].Content, "A4 单页简历设计规范")
+}
+
 func TestSkillLoader_SearchNoMatch(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
