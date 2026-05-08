@@ -834,7 +834,7 @@
 
 /* ProseMirror Editor Content Typography */
 .ProseMirror {
-  font-family: "Inter", "Noto Sans SC", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: "Inter", "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif;
   font-size: 14px;
   line-height: 1.5;
   color: var(--resume-document-text, #333333);
