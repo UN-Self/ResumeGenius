@@ -68,11 +68,18 @@ type OpenAIAdapter struct {
 }
 
 func NewOpenAIAdapter(apiURL, apiKey, model string) *OpenAIAdapter {
+	return NewOpenAIAdapterWithTimeout(apiURL, apiKey, model, 180*time.Second)
+}
+
+func NewOpenAIAdapterWithTimeout(apiURL, apiKey, model string, timeout time.Duration) *OpenAIAdapter {
+	if timeout <= 0 {
+		timeout = 180 * time.Second
+	}
 	return &OpenAIAdapter{
 		apiURL: apiURL,
 		apiKey: apiKey,
 		model:  model,
-		client: &http.Client{Timeout: 120 * time.Second},
+		client: &http.Client{Timeout: timeout},
 	}
 }
 
