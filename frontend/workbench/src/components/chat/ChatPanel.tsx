@@ -422,7 +422,7 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
       <div className="ai-chat-scroll">
         {messages.length === 0 && !streaming && (
           <div className="ai-empty-chat">
-            <Sparkles className="h-5 w-5" />
+            <Sparkles className="ai-empty-icon h-5 w-5" />
             <p>告诉我你想优化的方向，我会把修改直接同步到画布。</p>
           </div>
         )}
