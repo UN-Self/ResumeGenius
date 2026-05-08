@@ -352,6 +352,80 @@ func (s *AssetService) UpdateAsset(userID string, assetID uint, content, label *
 	return &asset, nil
 }
 
+// MoveAsset moves an asset to a different folder (or to root when targetFolderID is nil).
+func (s *AssetService) MoveAsset(userID string, assetID uint, targetFolderID *uint) (*models.Asset, error) {
+	var asset models.Asset
+	if err := s.db.First(&asset, assetID).Error; err != nil {
+		return nil, ErrAssetNotFound
+	}
+
+	if err := s.validateProject(userID, asset.ProjectID); err != nil {
+		return nil, err
+	}
+
+	// Prevent moving a folder into itself
+	if asset.Type == "folder" && targetFolderID != nil && *targetFolderID == assetID {
+		return nil, fmt.Errorf("cannot move a folder into itself")
+	}
+
+	if targetFolderID != nil {
+		if err := s.validateFolder(userID, asset.ProjectID, *targetFolderID); err != nil {
+			return nil, err
+		}
+
+		if asset.Type == "folder" {
+			if err := s.preventCircularMove(asset.ProjectID, assetID, *targetFolderID); err != nil {
+				return nil, err
+			}
+		}
+
+		// Check depth when moving a folder into another folder
+		if asset.Type == "folder" {
+			targetDepth, err := s.folderDepth(asset.ProjectID, *targetFolderID)
+			if err != nil {
+				return nil, err
+			}
+			if targetDepth+1 >= maxFolderDepth {
+				return nil, ErrFolderDepthExceeded
+			}
+		}
+	}
+
+	asset.Metadata = withAssetFolderMetadata(asset.Metadata, targetFolderID)
+	if err := s.db.Save(&asset).Error; err != nil {
+		return nil, fmt.Errorf("move asset: %w", err)
+	}
+
+	return &asset, nil
+}
+
+// preventCircularMove ensures moving a folder into one of its descendants is rejected.
+func (s *AssetService) preventCircularMove(projectID, folderID, targetID uint) error {
+	currentID := targetID
+	seen := make(map[uint]struct{})
+
+	for currentID != 0 {
+		if currentID == folderID {
+			return fmt.Errorf("cannot move a folder into its own subfolder")
+		}
+		if _, ok := seen[currentID]; ok {
+			return nil
+		}
+		seen[currentID] = struct{}{}
+
+		var folder models.Asset
+		if err := s.db.First(&folder, currentID).Error; err != nil {
+			return nil
+		}
+		parentID, ok := assetFolderID(folder)
+		if !ok {
+			return nil
+		}
+		currentID = parentID
+	}
+	return nil
+}
+
 func (s *AssetService) ListByProject(userID string, projectID uint) ([]models.Asset, error) {
 	if err := s.validateProject(userID, projectID); err != nil {
 		return nil, err

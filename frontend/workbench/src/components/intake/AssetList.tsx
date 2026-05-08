@@ -17,6 +17,7 @@ interface AssetListProps {
   reparseLoadingAssetId?: number | null
   onSelectFolder?: (folderId: number | null) => void
   selectedFolderId?: number | null
+  onMoveAsset?: (assetId: number, targetFolderId: number | null) => Promise<void>
 }
 
 interface AssetActionButtonProps {
@@ -199,13 +200,87 @@ export default function AssetList({
   reparseLoadingAssetId,
   onSelectFolder,
   selectedFolderId,
+  onMoveAsset,
 }: AssetListProps) {
   const [renamingAssetId, setRenamingAssetId] = useState<number | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [renameSavingAssetId, setRenameSavingAssetId] = useState<number | null>(null)
   const [collapsedFolderIds, setCollapsedFolderIds] = useState<Set<number>>(() => new Set())
   const [rootCollapsed, setRootCollapsed] = useState(false)
+  const [draggedAssetId, setDraggedAssetId] = useState<number | null>(null)
+  const [dragOverFolderId, setDragOverFolderId] = useState<number | null>(null)
   const renameInputRef = useRef<HTMLInputElement>(null)
+
+  const handleDragStart = (assetId: number, event: React.DragEvent) => {
+    if (!onMoveAsset) return
+    event.dataTransfer.setData('application/asset-id', String(assetId))
+    event.dataTransfer.effectAllowed = 'move'
+    setDraggedAssetId(assetId)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedAssetId(null)
+    setDragOverFolderId(null)
+  }
+
+  const handleFolderDragEnter = (folderId: number, event: React.DragEvent) => {
+    if (!onMoveAsset || draggedAssetId === null || draggedAssetId === folderId) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+    setDragOverFolderId(folderId)
+  }
+
+  const handleFolderDragOver = (folderId: number, event: React.DragEvent) => {
+    if (!onMoveAsset || draggedAssetId === null || draggedAssetId === folderId) return
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleFolderDragLeave = (folderId: number, event: React.DragEvent) => {
+    // Only clear when truly leaving the folder, not when entering a child element
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+    setDragOverFolderId((prev) => (prev === folderId ? null : prev))
+  }
+
+  const handleFolderDrop = async (targetFolderId: number, event: React.DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (!onMoveAsset || draggedAssetId === null || draggedAssetId === targetFolderId) return
+    const assetId = draggedAssetId
+    setDraggedAssetId(null)
+    setDragOverFolderId(null)
+    await onMoveAsset(assetId, targetFolderId)
+  }
+
+  const handleRootDragEnter = (event: React.DragEvent) => {
+    if (!onMoveAsset || draggedAssetId === null) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setDragOverFolderId(-1)
+  }
+
+  const handleRootDragOver = (event: React.DragEvent) => {
+    if (!onMoveAsset || draggedAssetId === null) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleRootDragLeave = (event: React.DragEvent) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+    setDragOverFolderId((prev) => (prev === -1 ? null : prev))
+  }
+
+  const handleRootDrop = async (event: React.DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (!onMoveAsset || draggedAssetId === null) return
+    const assetId = draggedAssetId
+    setDraggedAssetId(null)
+    setDragOverFolderId(null)
+    await onMoveAsset(assetId, null)
+  }
 
   useEffect(() => {
     if (renamingAssetId === null) return
@@ -287,7 +362,11 @@ export default function AssetList({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-2xl border border-border bg-card/70 p-2">
+      <div className={["rounded-2xl border border-border bg-card/70 p-2", dragOverFolderId === -1 ? "ring-2 ring-primary/30 border-primary" : ""].join(" ")}
+        onDragEnter={handleRootDragEnter}
+        onDragOver={handleRootDragOver}
+        onDragLeave={(event) => handleRootDragLeave(event)}
+        onDrop={(event) => handleRootDrop(event)}>
         <button
           type="button"
           onClick={() => {
@@ -342,7 +421,11 @@ export default function AssetList({
     const renameSaving = renameSavingAssetId === folder.id
 
     return (
-      <div key={folder.id} className="rounded-xl border border-border/80 bg-card/70 p-2">
+      <div key={folder.id} className={["rounded-xl border border-border/80 bg-card/70 p-2", dragOverFolderId === folder.id ? "ring-2 ring-primary/30 border-primary" : ""].join(" ")}
+        onDragEnter={(event) => handleFolderDragEnter(folder.id, event)}
+        onDragOver={(event) => handleFolderDragOver(folder.id, event)}
+        onDragLeave={(event) => handleFolderDragLeave(folder.id, event)}
+        onDrop={(event) => handleFolderDrop(folder.id, event)}>
         <div
           className={[
             'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-surface-hover',
@@ -413,7 +496,10 @@ export default function AssetList({
             key={asset.id}
             role={onOpenAsset ? 'button' : undefined}
             tabIndex={onOpenAsset ? 0 : undefined}
-            onClick={() => onOpenAsset?.(asset)}
+		draggable={onMoveAsset !== undefined}
+		onClick={() => onOpenAsset?.(asset)}
+		onDragStart={(event) => handleDragStart(asset.id, event)}
+		onDragEnd={handleDragEnd}
             onKeyDown={(event) => {
               if (!onOpenAsset) return
               if (event.key !== 'Enter' && event.key !== ' ') return
@@ -424,6 +510,7 @@ export default function AssetList({
               'rounded-xl border bg-card/85 px-2 py-1.5 shadow-sm transition-colors',
               onOpenAsset ? 'cursor-pointer hover:border-primary-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/35' : 'hover:border-primary-200',
               selectedAssetId === asset.id ? 'border-primary/60 bg-primary/10' : 'border-border',
+			  draggedAssetId === asset.id ? 'opacity-50 scale-[0.97]' : '',
             ].join(' ')}
           >
             <div className="flex items-center gap-2">

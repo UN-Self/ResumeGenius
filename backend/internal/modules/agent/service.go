@@ -291,17 +291,19 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 		ctx = WithProjectID(ctx, *session.ProjectID)
 	}
 
-	// 5b. Augment system prompt with available asset info
+	// 5b. Pre-load project assets into conversation so AI cannot ignore them
 	augmentedPrompt := systemPromptV2
+	preloadedAssets := make([]Message, 0)
 	if session.ProjectID != nil {
-		assetSummary := s.buildAssetSummary(*session.ProjectID)
-		if assetSummary != "" {
-			augmentedPrompt = systemPromptV2 + "\n" + assetSummary
+		summary, assetMsgs := s.preloadAssets(*session.ProjectID)
+		if summary != "" {
+			augmentedPrompt = systemPromptV2 + "\n" + summary
 		}
+		preloadedAssets = assetMsgs
 	}
 
 	// 6. Start ReAct loop
-	toolResults := make([]Message, 0)
+	toolResults := preloadedAssets
 	var allThinking strings.Builder
 	stallCount := 0
 
@@ -497,38 +499,57 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 	return ErrMaxIterations
 }
 
-// buildAssetSummary returns a short system-prompt appendix listing the project's
-// uploaded assets so the AI knows to use search_assets before inventing content.
-// Returns a warning message when no assets exist.
-func (s *ChatService) buildAssetSummary(projectID uint) string {
+// preloadAssets queries the project's non-deleted, non-folder assets and returns:
+// - summary: appended to the system prompt, listing available files
+// - messages: the CONTENT of the first asset injected as a pre-filled tool_result,
+//   so the AI sees real personal data from the start without having to search
+func (s *ChatService) preloadAssets(projectID uint) (summary string, messages []Message) {
 	var assets []models.Asset
-	if err := s.db.Where("project_id = ?", projectID).Limit(50).Find(&assets).Error; err != nil {
-		return ""
-	}
-
-	if len(assets) == 0 {
-		return "\n## 当前项目状态\n用户尚未上传任何文件。如果用户要求写简历但没有提供资料，请在第一次回复中提醒用户上传旧简历、Git 仓库链接或笔记补充说明。"
+	if err := s.db.Where("project_id = ? AND type != ?", projectID, "folder").
+		Order("created_at DESC").Limit(20).Find(&assets).Error; err != nil || len(assets) == 0 {
+		return "\n## 当前项目状态\n用户尚未上传任何文件。如果用户要求写简历但没有提供资料，请在第一次回复中提醒用户上传旧简历、Git 仓库链接或笔记补充说明。", nil
 	}
 
 	typeCount := make(map[string]int)
 	var labels []string
 	for _, a := range assets {
 		typeCount[a.Type]++
+		l := "(未命名)"
 		if a.Label != nil && *a.Label != "" {
-			labels = append(labels, *a.Label)
-		} else {
-			labels = append(labels, "(未命名)")
+			l = *a.Label
 		}
+		labels = append(labels, l)
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("\n## 当前项目已有资料（%d 个文件）\n", len(assets)))
+	sb.WriteString(fmt.Sprintf("\n## 用户已上传 %d 个文件\n", len(assets)))
 	for t, n := range typeCount {
 		sb.WriteString(fmt.Sprintf("- %s：%d 个\n", t, n))
 	}
 	sb.WriteString("文件列表：" + strings.Join(labels, "、") + "\n")
-	sb.WriteString("以上是你唯一可以使用的信息来源。所有简历内容必须从这些文件中提取。找不到某项信息时，在回复中列出缺失项，提醒用户上传补充材料。禁止凭空编造任何个人身份信息和职业经历。")
-	return sb.String()
+	sb.WriteString("以下是从用户资料中预载的真实内容，所有简历信息必须以此为来源。找不到的信息请列出缺失项提醒用户补充。禁止凭空编造。")
+
+	// Inject the first asset with actual content as a ready-made tool result so the
+	// AI gets real data immediately instead of having to call search_assets.
+	for _, a := range assets {
+		if a.Content == nil || len(strings.TrimSpace(*a.Content)) == 0 {
+			continue
+		}
+		label := a.Type
+		if a.Label != nil && *a.Label != "" {
+			label = *a.Label
+		}
+		msg := Message{
+			Role:       "tool",
+			Name:       "search_assets",
+			ToolCallID: "preload_assets",
+			Content: fmt.Sprintf("已从用户上传的「%s」中解析到以下内容：\n\n%s", label, *a.Content),
+		}
+		messages = append(messages, msg)
+		break // only inject the first contentful asset to keep context manageable
+	}
+
+	return sb.String(), messages
 }
 
 // ---------------------------------------------------------------------------

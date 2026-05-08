@@ -26,6 +26,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, uploadDir string) {
 	rg.GET("/assets/:asset_id/file", h.GetAssetFile)
 	rg.DELETE("/assets/:asset_id", h.DeleteAsset)
 	rg.PATCH("/assets/:asset_id", h.UpdateAsset)
+	rg.PATCH("/assets/:asset_id/move", h.MoveAsset)
 
 	// Notes
 	rg.POST("/assets/notes", h.CreateNote)

@@ -67,6 +67,10 @@ type updateAssetReq struct {
 	Label   *string `json:"label"`
 }
 
+type moveAssetReq struct {
+	TargetFolderID *uint `json:"target_folder_id"`
+}
+
 // --- Handlers ---
 
 // CreateProject handles POST /projects
@@ -365,6 +369,36 @@ func (h *Handler) UpdateAsset(c *gin.Context) {
 			response.Error(c, CodeProjectNotFound, "project not found")
 		default:
 			response.Error(c, CodeInternalError, "failed to update asset")
+		}
+		return
+	}
+
+	response.Success(c, asset)
+}
+
+// MoveAsset handles PATCH /assets/:asset_id/move
+func (h *Handler) MoveAsset(c *gin.Context) {
+	assetID, err := strconv.ParseUint(c.Param("asset_id"), 10, 64)
+	if err != nil {
+		response.Error(c, CodeParamInvalid, "invalid asset_id")
+		return
+	}
+
+	var req moveAssetReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, CodeParamInvalid, "invalid request body")
+		return
+	}
+
+	asset, err := h.assetSvc.MoveAsset(userID(c), uint(assetID), req.TargetFolderID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrAssetNotFound):
+			response.Error(c, CodeAssetNotFound, "asset not found")
+		case errors.Is(err, ErrProjectNotFound):
+			response.Error(c, CodeProjectNotFound, "project not found")
+		default:
+			response.Error(c, CodeInternalError, err.Error())
 		}
 		return
 	}
