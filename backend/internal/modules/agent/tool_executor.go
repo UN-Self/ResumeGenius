@@ -66,6 +66,53 @@ func NewAgentToolExecutor(db *gorm.DB, skillLoader *SkillLoader) *AgentToolExecu
 	return &AgentToolExecutor{db: db, skillLoader: skillLoader}
 }
 
+var resumeDesignConstraints = []string{
+	"只设计常规招聘简历，不设计网页、落地页、仪表盘、海报或作品集。",
+	"默认控制在一页 A4，优先压缩内容、字号、行距和间距，不通过夸张视觉扩张版面。",
+	"使用白色或浅色纸面、深色正文、最多一个克制强调色，保持高对比和可打印。",
+	"禁止 hero、bento/card grid、glassmorphism、aurora、3D、霓虹、复杂渐变、动画、发光、厚重阴影和大面积彩色背景。",
+	"正文保持 13-15px 左右，姓名标题不超过 24px，分区标题 14-16px，技能列表必须可换行。",
+}
+
+const resumeDesignFallbackQuery = "professional business document resume A4 one page minimal swiss flat print readable"
+const resumeDesignQuerySuffix = "professional business document resume A4 one page minimal swiss flat print readable conservative"
+
+var resumeDesignBlockedResultTerms = []string{
+	"aurora",
+	"bento",
+	"brutal",
+	"card grid",
+	"clay",
+	"cyber",
+	"dashboard",
+	"glass",
+	"hero",
+	"hyperrealism",
+	"immersive",
+	"landing",
+	"liquid",
+	"motion",
+	"neon",
+	"portfolio",
+	"retro",
+	"skeuomorphism",
+	"showcase",
+	"social proof",
+	"storytelling",
+	"three",
+	"vibrant",
+	"video",
+	"3d",
+}
+
+type resumeDesignSkillResponse struct {
+	designskill.SkillSearchResult
+	ResumeConstraints []string `json:"resume_constraints"`
+	QueryUsed         string   `json:"query_used"`
+	DomainUsed        string   `json:"domain_used,omitempty"`
+	Note              string   `json:"note,omitempty"`
+}
+
 // Tools returns the AI-callable tool definitions.
 func (e *AgentToolExecutor) Tools() []ToolDef {
 	return []ToolDef{
@@ -121,17 +168,17 @@ func (e *AgentToolExecutor) Tools() []ToolDef {
 		},
 		{
 			Name:        "search_skills",
-			Description: "搜索简历优化技能库（面经）。根据用户目标岗位的关键词（如'测试工程师'、'QA'）或分类查找匹配的面经和简历修改建议。不传参数返回全部技能摘要。",
+			Description: "搜索简历优化技能库（岗位面经、简历建议、A4 设计规范）。根据目标岗位或任务关键词查找建议；视觉/排版任务优先用 keyword='简历设计 A4 单页' category='design'。",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"keyword": map[string]interface{}{
 						"type":        "string",
-						"description": "搜索关键词，按岗位名或技能名匹配，如'测试工程师'、'QA'、'自动化测试'",
+						"description": "搜索关键词，按岗位名、技能名或任务匹配，如'测试工程师'、'QA'、'自动化测试'、'简历设计 A4 单页'",
 					},
 					"category": map[string]interface{}{
 						"type":        "string",
-						"description": "技能分类名，如'test'、'tech'、'management'",
+						"description": "技能分类名，如'test'、'tech'、'management'、'design'",
 					},
 					"limit": map[string]interface{}{
 						"type":        "integer",
@@ -143,13 +190,13 @@ func (e *AgentToolExecutor) Tools() []ToolDef {
 		},
 		{
 			Name:        "search_design_skill",
-			Description: "查询 ui-ux-pro-max 设计知识库，获取风格、配色、字体、图表、UX、技术栈建议，用于优化简历视觉表达。",
+			Description: "查询受简历约束的 ui-ux-pro-max 设计参考。仅用于常规 A4 简历的保守字体、配色、极简/瑞士风格辅助；不得用于 landing page、hero、bento、aurora、glass、3D、dashboard 等网页化设计。",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-					"query":  map[string]interface{}{"type": "string", "description": "设计需求，例如 modern engineer resume layout 或 简历 技能矩阵 配色"},
-					"domain": map[string]interface{}{"type": "string", "description": "可选：style | prompt | color | chart | landing | product | ux | typography"},
-					"stack":  map[string]interface{}{"type": "string", "description": "可选：react | nextjs | vue | html-tailwind | svelte | swiftui | react-native | flutter"},
+					"query":  map[string]interface{}{"type": "string", "description": "简历设计需求，例如 professional A4 resume layout、简历 排版 字体、简历 克制配色"},
+					"domain": map[string]interface{}{"type": "string", "description": "可选且建议仅用：style | color | ux | typography。prompt/landing/product/chart 会被收敛到简历安全范围。"},
+					"stack":  map[string]interface{}{"type": "string", "description": "兼容旧参数；简历设计中通常会忽略技术栈建议，避免生成网页 UI。"},
 					"limit":  map[string]interface{}{"type": "integer", "description": "返回数量上限，默认 3"},
 				},
 				"required": []string{"query"},
@@ -191,15 +238,101 @@ func (e *AgentToolExecutor) searchDesignSkill(ctx context.Context, params map[st
 		}
 	}
 
+	query, domain, stack, note := normalizeResumeDesignSearch(query, domain, stack)
 	result, err := designskill.SearchSkill(query, domain, stack, limit)
 	if err != nil {
 		return "", err
 	}
-	b, err := json.Marshal(result)
+	result = filterResumeDesignResult(result)
+	if result.Count == 0 && (domain != "style" || query != resumeDesignFallbackQuery) {
+		fallback, fallbackErr := designskill.SearchSkill(resumeDesignFallbackQuery, "style", "", limit)
+		if fallbackErr == nil {
+			result = filterResumeDesignResult(fallback)
+			if note != "" {
+				note += " "
+			}
+			note += "已回退到保守 A4 简历风格查询。"
+		}
+	}
+
+	resp := resumeDesignSkillResponse{
+		SkillSearchResult: result,
+		ResumeConstraints: append([]string(nil), resumeDesignConstraints...),
+		QueryUsed:         query,
+		DomainUsed:        result.Domain,
+		Note:              strings.TrimSpace(note),
+	}
+	b, err := json.Marshal(resp)
 	if err != nil {
 		return "", fmt.Errorf("marshal result: %w", err)
 	}
 	return string(b), nil
+}
+
+func normalizeResumeDesignSearch(query, domain, stack string) (string, string, string, string) {
+	query = strings.TrimSpace(query)
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	stack = strings.ToLower(strings.TrimSpace(stack))
+
+	var notes []string
+	if query == "" {
+		query = resumeDesignFallbackQuery
+		notes = append(notes, "空查询已替换为保守 A4 简历设计查询。")
+	} else if !strings.Contains(strings.ToLower(query), "resume") && !strings.Contains(query, "简历") {
+		query += " resume"
+	}
+
+	switch domain {
+	case "", "style", "color", "ux", "typography":
+	case "prompt", "landing", "product", "chart":
+		domain = "style"
+		notes = append(notes, "网页/产品/图表类 domain 已收敛为 style，避免生成非简历 UI。")
+	default:
+		domain = "style"
+		notes = append(notes, "未知 domain 已收敛为 style。")
+	}
+
+	if stack != "" {
+		stack = ""
+		notes = append(notes, "技术栈建议已忽略，避免把简历改成前端应用界面。")
+	}
+
+	if !strings.Contains(strings.ToLower(query), "a4") {
+		query += " " + resumeDesignQuerySuffix
+	}
+	return strings.TrimSpace(query), domain, stack, strings.Join(notes, " ")
+}
+
+func filterResumeDesignResult(result designskill.SkillSearchResult) designskill.SkillSearchResult {
+	if len(result.Results) == 0 {
+		return result
+	}
+
+	filtered := make([]map[string]string, 0, len(result.Results))
+	for _, row := range result.Results {
+		if isResumeDesignResultAllowed(row) {
+			filtered = append(filtered, row)
+		}
+	}
+	result.Results = filtered
+	result.Count = len(filtered)
+	return result
+}
+
+func isResumeDesignResultAllowed(row map[string]string) bool {
+	labels := []string{
+		row["Style Category"],
+		row["Pattern Name"],
+		row["Product Type"],
+		row["Best Chart Type"],
+	}
+	joined := strings.ToLower(strings.Join(labels, " "))
+	for _, term := range resumeDesignBlockedResultTerms {
+		if strings.Contains(joined, term) {
+			return false
+		}
+	}
+	return true
 }
 
 // ---------------------------------------------------------------------------
@@ -273,6 +406,9 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 		newStr, ok := opMap["new_string"].(string)
 		if !ok {
 			return "", fmt.Errorf("ops[%d].new_string must be a string", i)
+		}
+		if err := validateResumeEditFragment(newStr); err != nil {
+			return "", fmt.Errorf("ops[%d].new_string violates resume design constraints: %w", i, err)
 		}
 		desc, _ := opMap["description"].(string)
 		ops = append(ops, editOp{OldString: oldStr, NewString: newStr, Description: desc})
@@ -465,6 +601,45 @@ func (e *AgentToolExecutor) searchSkills(ctx context.Context, params map[string]
 		return "", fmt.Errorf("marshal search results: %w", err)
 	}
 	return string(b), nil
+}
+
+// ---------------------------------------------------------------------------
+// resume edit guardrails
+// ---------------------------------------------------------------------------
+
+var resumeEditRejectPatterns = []struct {
+	Pattern string
+	Reason  string
+}{
+	{"linear-gradient(", "简历禁止复杂渐变背景"},
+	{"radial-gradient(", "简历禁止复杂渐变背景"},
+	{"conic-gradient(", "简历禁止复杂渐变背景"},
+	{"backdrop-filter:", "简历禁止玻璃拟态模糊效果"},
+	{"-webkit-backdrop-filter:", "简历禁止玻璃拟态模糊效果"},
+	{"filter:blur(", "简历禁止模糊滤镜"},
+	{"@keyframes", "简历禁止动画"},
+	{"animation:", "简历禁止动画"},
+	{"text-shadow:", "简历禁止发光或阴影文字"},
+	{"box-shadow:", "简历禁止厚重卡片阴影"},
+	{"position:fixed", "简历禁止固定定位布局"},
+	{"position:absolute", "简历禁止绝对定位布局"},
+	{"height:100vh", "简历禁止网页视口高度布局"},
+	{"min-height:100vh", "简历禁止网页视口高度布局"},
+}
+
+func validateResumeEditFragment(fragment string) error {
+	compact := strings.ToLower(fragment)
+	compact = strings.ReplaceAll(compact, " ", "")
+	compact = strings.ReplaceAll(compact, "\n", "")
+	compact = strings.ReplaceAll(compact, "\t", "")
+	compact = strings.ReplaceAll(compact, "\r", "")
+
+	for _, item := range resumeEditRejectPatterns {
+		if strings.Contains(compact, item.Pattern) {
+			return errors.New(item.Reason)
+		}
+	}
+	return nil
 }
 
 // ---------------------------------------------------------------------------
