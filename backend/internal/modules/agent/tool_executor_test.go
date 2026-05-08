@@ -16,10 +16,10 @@ import (
 // Tool definition tests
 // ---------------------------------------------------------------------------
 
-func TestToolExecutor_Tools_FourDefinitions(t *testing.T) {
+func TestToolExecutor_Tools_Definitions(t *testing.T) {
 	executor := NewAgentToolExecutor(nil, nil)
 	tools := executor.Tools()
-	require.Len(t, tools, 4)
+	require.Len(t, tools, 5)
 
 	for _, tool := range tools {
 		assert.NotEmpty(t, tool.Name, "tool name must not be empty")
@@ -49,6 +49,7 @@ func TestToolExecutor_Tools_NamesAreCorrect(t *testing.T) {
 		"apply_edits",
 		"search_assets",
 		"search_skills",
+		"search_design_skill",
 	}
 	assert.Equal(t, expected, names)
 }
@@ -108,6 +109,18 @@ func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
 		assert.Contains(t, props, "limit")
 		req := tool.Parameters["required"].([]string)
 		assert.Empty(t, req)
+	}
+
+	// search_design_skill: query is required
+	{
+		tool := toolByName["search_design_skill"]
+		props := tool.Parameters["properties"].(map[string]interface{})
+		assert.Contains(t, props, "query")
+		assert.Contains(t, props, "domain")
+		assert.Contains(t, props, "stack")
+		assert.Contains(t, props, "limit")
+		req := tool.Parameters["required"].([]string)
+		assert.Equal(t, []string{"query"}, req)
 	}
 }
 
@@ -380,6 +393,28 @@ func TestSearchSkills_NotFound(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Contains(t, result, `"skills":[]`)
+}
+
+// ---------------------------------------------------------------------------
+// design skill tool
+// ---------------------------------------------------------------------------
+
+func TestSearchDesignSkill(t *testing.T) {
+	executor := NewAgentToolExecutor(nil, nil)
+
+	result, err := executor.Execute(context.Background(), "search_design_skill", map[string]interface{}{
+		"query":  "professional resume dashboard",
+		"domain": "style",
+		"limit":  2,
+	})
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &data))
+	assert.Equal(t, "style", data["domain"])
+	results, ok := data["results"].([]interface{})
+	require.True(t, ok)
+	require.NotEmpty(t, results)
 }
 
 // ---------------------------------------------------------------------------
