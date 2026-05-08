@@ -75,7 +75,7 @@ describe('ChatPanel', () => {
     })
 
     const assistantBubble = container.querySelector('[data-message-role="assistant"]')
-    expect(assistantBubble).toHaveClass('bg-[var(--color-card)]')
+    expect(assistantBubble).toHaveClass('ai-message-bubble')
     expect(assistantBubble).not.toHaveClass('bg-white')
   })
 
@@ -90,8 +90,8 @@ describe('ChatPanel', () => {
 
     // Undo/redo buttons should appear in chat after edits are applied
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /undo/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /redo/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /撤销/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /重做/ })).toBeInTheDocument()
     })
   })
 
@@ -111,7 +111,7 @@ describe('ChatPanel', () => {
     await userEvent.type(input, '优化简历')
     await userEvent.click(screen.getByRole('button', { name: /发送/i }))
 
-    const undoBtn = await screen.findByRole('button', { name: /undo/i })
+    const undoBtn = await screen.findByRole('button', { name: /撤销/ })
     await userEvent.click(undoBtn)
 
     await waitFor(() => {
@@ -130,7 +130,7 @@ describe('ChatPanel', () => {
     )
 
     renderChatPanel()
-    expect(screen.getByText(/输入你的需求/)).toBeInTheDocument()
+    expect(screen.getByText(/告诉我你想优化的方向/)).toBeInTheDocument()
   })
 
   it('disables send button when input is empty', () => {
@@ -168,6 +168,112 @@ describe('ChatPanel', () => {
     })
   })
 
+  it('shows a friendly message for provider rate limit errors', async () => {
+    const encoder = new TextEncoder()
+    server.use(
+      http.post('/api/v1/ai/sessions/1/chat', () => {
+        const rawError = 'API returned status 429: {"error":{"code":"1302","message":"您的账户已达到速率限制，请控制请求频率"}}'
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', message: rawError })}\n\n`))
+            controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'))
+            controller.close()
+          },
+        })
+        return new Response(stream, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      }),
+    )
+
+    renderChatPanel()
+    const input = screen.getByPlaceholderText('输入你的需求...')
+    await waitFor(() => {
+      expect(input).toBeEnabled()
+    })
+
+    await userEvent.type(input, '重试')
+    await userEvent.click(screen.getByRole('button', { name: /发送/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/模型服务触发限流/)).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/API returned status 429/)).not.toBeInTheDocument()
+  })
+
+  it('shows a friendly message for provider timeout errors', async () => {
+    const encoder = new TextEncoder()
+    server.use(
+      http.post('/api/v1/ai/sessions/1/chat', () => {
+        const rawError = 'model call timeout: Post "https://open.bigmodel.cn/api/paas/v4/chat/completions": context deadline exceeded (Client.Timeout exceeded while awaiting headers)'
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', message: rawError })}\n\n`))
+            controller.enqueue(encoder.encode('data: {"type":"done"}\n\n'))
+            controller.close()
+          },
+        })
+        return new Response(stream, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      }),
+    )
+
+    renderChatPanel()
+    const input = screen.getByPlaceholderText('输入你的需求...')
+    await waitFor(() => {
+      expect(input).toBeEnabled()
+    })
+
+    await userEvent.type(input, '重新设计')
+    await userEvent.click(screen.getByRole('button', { name: /发送/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/模型服务响应超时/)).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/context deadline exceeded/)).not.toBeInTheDocument()
+  })
+
+  it('stops streaming from the flying send button', async () => {
+    const encoder = new TextEncoder()
+    server.use(
+      http.post('/api/v1/ai/sessions/1/chat', ({ request }) => {
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode('data: {"type":"thinking","content":"正在构思..."}\n\n'))
+            request.signal.addEventListener('abort', () => {
+              try {
+                controller.close()
+              } catch {
+                // The stream may already be closed by the test environment.
+              }
+            })
+          },
+        })
+        return new Response(stream, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+      }),
+    )
+
+    renderChatPanel()
+    const input = screen.getByPlaceholderText('输入你的需求...')
+    await waitFor(() => {
+      expect(input).toBeEnabled()
+    })
+
+    await userEvent.type(input, '重新设计简历')
+    await userEvent.click(screen.getByRole('button', { name: /发送/i }))
+
+    const stopButton = await screen.findByRole('button', { name: /停止对话/i })
+    expect(screen.queryByRole('button', { name: /停止本轮/i })).not.toBeInTheDocument()
+    await userEvent.click(stopButton)
+
+    await waitFor(() => {
+      expect(screen.getByText('已停止本轮请求。')).toBeInTheDocument()
+    })
+  })
+
   it('displays tool call log after streaming completes', async () => {
     renderChatPanel()
     const input = screen.getByPlaceholderText('输入你的需求...')
@@ -185,7 +291,7 @@ describe('ChatPanel', () => {
     })
 
     // Verify the OK status is shown
-    expect(screen.getByText('OK')).toBeInTheDocument()
+    expect(screen.getByText('完成')).toBeInTheDocument()
   })
 
   it('shows thinking section when thinking events are received', async () => {
@@ -201,7 +307,7 @@ describe('ChatPanel', () => {
 
     // Wait for thinking section to appear
     await waitFor(() => {
-      expect(screen.getByText('AI 推理过程')).toBeInTheDocument()
+      expect(screen.getByText('推理过程')).toBeInTheDocument()
     })
   })
 
@@ -240,7 +346,7 @@ describe('ChatPanel', () => {
     // Messages should be cleared and empty state shown
     await waitFor(() => {
       expect(screen.queryByText('old message')).not.toBeInTheDocument()
-      expect(screen.getByText(/输入你的需求/)).toBeInTheDocument()
+      expect(screen.getByText(/告诉我你想优化的方向/)).toBeInTheDocument()
     })
   })
 
@@ -308,12 +414,12 @@ describe('ChatPanel', () => {
 
     // The active tool indicator should appear while tool is running
     await waitFor(() => {
-      expect(screen.getByText('正在执行工具...')).toBeInTheDocument()
+      expect(screen.getByText('处理中')).toBeInTheDocument()
     })
 
     // After done event fires, streaming should stop
     await waitFor(() => {
-      expect(screen.queryByText('正在执行工具...')).not.toBeInTheDocument()
+      expect(screen.getByText('完成')).toBeInTheDocument()
     }, { timeout: 3000 })
   })
 })

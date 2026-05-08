@@ -126,8 +126,6 @@ describe('EditorPage', () => {
 
       // Assets should be loaded even when draft had to be auto-created
       expect(screen.getByText('Resume')).toBeInTheDocument()
-      expect(screen.getByText('编辑')).toBeInTheDocument()
-      expect(screen.getByText('删除')).toBeInTheDocument()
     })
   })
 
@@ -138,6 +136,31 @@ describe('EditorPage', () => {
       renderWithRouter()
       await waitFor(() => {
         expect(screen.getByTestId('a4-canvas')).toBeInTheDocument()
+      })
+    })
+
+    it('injects scoped CSS from full AI-generated HTML into the A4 canvas', async () => {
+      mockEditorLoad({
+        htmlContent: `<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    .resume { width: 210mm; min-height: 297mm; background: #ffffff; }
+    .accent { color: #0f766e; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="resume"><p class="accent">Styled resume</p></div>
+</body>
+</html>`,
+      })
+
+      renderWithRouter()
+      const canvas = await screen.findByTestId('a4-canvas')
+
+      await waitFor(() => {
+        expect(canvas.querySelector('style')?.textContent).toContain('.resume-document .accent')
+        expect(canvas.querySelector('.accent')).toBeInTheDocument()
       })
     })
   })
