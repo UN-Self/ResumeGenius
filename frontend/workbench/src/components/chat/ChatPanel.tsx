@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   CheckCircle2,
+  Clock,
   LoaderCircle,
   Plus,
   Redo2,
@@ -101,16 +102,25 @@ function ThinkingBubble({
         : '正在处理资料'
     : '正在构思简历方案'
 
+  const minutes = Math.floor(elapsedSeconds / 60)
+  const seconds = elapsedSeconds % 60
+  const timeDisplay = minutes > 0
+    ? `${minutes}m ${seconds}s`
+    : `${seconds}s`
+
   return (
     <div className="ai-thinking-card" role="status" aria-live="polite">
       <div className="ai-thinking-main">
         <span className="ai-thinking-mark">
           <Sparkles className="h-3.5 w-3.5" />
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="ai-thinking-title">{label}</div>
           <div className="ai-thinking-subtitle">AI 正在把内容、结构和视觉细节对齐</div>
-          <div className="ai-thinking-subtitle">已等待 {elapsedSeconds}s</div>
+        </div>
+        <div className="ai-thinking-timer">
+          <Clock className="h-3 w-3" />
+          <span>{timeDisplay}</span>
         </div>
       </div>
       {elapsedSeconds >= 20 && (
