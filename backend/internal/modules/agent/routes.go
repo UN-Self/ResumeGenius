@@ -12,12 +12,17 @@ import (
 
 func normalizeAIURL(raw string) string {
 	raw = strings.TrimSpace(raw)
-	// 如果已包含完整 /chat/completions 路径，直接使用（兼容智谱等非标准版本号）
-	if strings.Contains(raw, "/chat/completions") {
+	if raw == "" {
 		return raw
 	}
-	// 否则追加默认路径（兼容 OpenAI 标准 API）
-	return strings.TrimRight(raw, "/") + "/v1/chat/completions"
+	raw = strings.TrimRight(raw, "/")
+	if strings.HasSuffix(raw, "/chat/completions") {
+		return raw
+	}
+	if strings.HasSuffix(raw, "/v1") || strings.HasSuffix(raw, "/api/paas/v4") {
+		return raw + "/chat/completions"
+	}
+	return raw + "/v1/chat/completions"
 }
 
 func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
@@ -33,11 +38,18 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 	if os.Getenv("USE_MOCK") == "true" {
 		provider = &MockAdapter{}
 	} else {
-		provider = NewOpenAIAdapter(
-			normalizeAIURL(os.Getenv("AI_API_URL")),
-			os.Getenv("AI_API_KEY"),
-			envOrDefault("AI_MODEL", "default"),
-		)
+		apiURL := strings.TrimSpace(os.Getenv("AI_API_URL"))
+		apiKey := strings.TrimSpace(os.Getenv("AI_API_KEY"))
+		if apiURL == "" || apiKey == "" {
+			log.Println("agent: AI_API_URL or AI_API_KEY is missing; using mock AI provider")
+			provider = &MockAdapter{}
+		} else {
+			provider = NewOpenAIAdapter(
+				normalizeAIURL(apiURL),
+				apiKey,
+				envOrDefault("AI_MODEL", "default"),
+			)
+		}
 	}
 
 	toolExecutor := NewAgentToolExecutor(db, skillLoader)

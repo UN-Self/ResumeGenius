@@ -28,9 +28,7 @@ func TestMockAdapter_StreamChat(t *testing.T) {
 	assert.NotEmpty(t, chunks)
 
 	full := strings.Join(chunks, "")
-	assert.Contains(t, full, "Mock优化简历")
-	assert.Contains(t, full, "RESUME_HTML_START")
-	assert.Contains(t, full, "RESUME_HTML_END")
+	assert.Contains(t, full, "Mock AI is ready")
 }
 
 func TestMockAdapter_StreamChat_ContextCancelled(t *testing.T) {
@@ -55,10 +53,24 @@ func TestOpenAIAdapter_MessageFormat(t *testing.T) {
 	assert.Equal(t, "test-model", adapter.model)
 }
 
+func TestNormalizeAIURL(t *testing.T) {
+	cases := map[string]string{
+		"https://api.openai.com":                                "https://api.openai.com/v1/chat/completions",
+		"https://api.openai.com/v1":                             "https://api.openai.com/v1/chat/completions",
+		"https://api.openai.com/v1/chat/completions":            "https://api.openai.com/v1/chat/completions",
+		"https://open.bigmodel.cn/api/paas/v4":                  "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+		"https://open.bigmodel.cn/api/paas/v4/":                 "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+		"https://open.bigmodel.cn/api/paas/v4/chat/completions": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+	}
+	for input, expected := range cases {
+		assert.Equal(t, expected, normalizeAIURL(input))
+	}
+}
+
 func TestMockAdapter_StreamChatReAct(t *testing.T) {
 	adapter := &MockAdapter{}
 
-	// Call 1: reasoning + tool calls
+	// Call 1: reasoning + read/design tool calls
 	var reasoningChunks1 []string
 	var toolCalls1 []ToolCallRequest
 	var textChunks1 []string
@@ -82,27 +94,30 @@ func TestMockAdapter_StreamChatReAct(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	require.Len(t, reasoningChunks1, 2)
-	assert.Contains(t, reasoningChunks1[0], "查看当前简历内容")
-	assert.Contains(t, reasoningChunks1[1], "简历内容已获取")
+	require.Len(t, reasoningChunks1, 1)
+	assert.Contains(t, reasoningChunks1[0], "current draft")
 	require.Len(t, toolCalls1, 2)
 	assert.Equal(t, "get_draft", toolCalls1[0].Name)
-	assert.Equal(t, "apply_edits", toolCalls1[1].Name)
+	assert.Equal(t, "search_design_skill", toolCalls1[1].Name)
 	assert.Empty(t, textChunks1, "first call should not have text")
 
-	// Call 2: final text
+	// Call 2: apply a safe edit using the get_draft tool result
 	var reasoningChunks2 []string
+	var toolCalls2 []ToolCallRequest
 	var textChunks2 []string
 
 	err = adapter.StreamChatReAct(
 		context.Background(),
-		nil,
+		[]Message{{Role: "tool", Name: "get_draft", Content: "<html><body>resume</body></html>"}},
 		nil,
 		func(chunk string) error {
 			reasoningChunks2 = append(reasoningChunks2, chunk)
 			return nil
 		},
-		func(call ToolCallRequest) error { return nil },
+		func(call ToolCallRequest) error {
+			toolCalls2 = append(toolCalls2, call)
+			return nil
+		},
 		func(chunk string) error {
 			textChunks2 = append(textChunks2, chunk)
 			return nil
@@ -110,9 +125,27 @@ func TestMockAdapter_StreamChatReAct(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	assert.Empty(t, reasoningChunks2)
-	require.Len(t, textChunks2, 1)
-	assert.Equal(t, "我已经完成了简历的修改。", textChunks2[0])
+	require.Len(t, reasoningChunks2, 1)
+	require.Len(t, toolCalls2, 1)
+	assert.Equal(t, "apply_edits", toolCalls2[0].Name)
+	assert.Empty(t, textChunks2)
+
+	// Call 3: final text
+	var textChunks3 []string
+	err = adapter.StreamChatReAct(
+		context.Background(),
+		nil,
+		nil,
+		func(chunk string) error { return nil },
+		func(call ToolCallRequest) error { return nil },
+		func(chunk string) error {
+			textChunks3 = append(textChunks3, chunk)
+			return nil
+		},
+	)
+	require.NoError(t, err)
+	require.Len(t, textChunks3, 1)
+	assert.Contains(t, textChunks3[0], "Mock AI response completed")
 }
 
 func TestMockAdapter_StreamChatReAct_ContextCancelled(t *testing.T) {

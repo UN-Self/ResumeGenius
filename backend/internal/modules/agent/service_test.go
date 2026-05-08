@@ -258,8 +258,8 @@ func (m *TextAndToolCallMock) StreamChatReAct(
 		// First call: text + tool call (the bug scenario)
 		_ = onText("让我搜索一下你的资料。")
 		return onToolCall(ToolCallRequest{
-			ID:   "call_search_1",
-			Name: "search_assets",
+			ID:     "call_search_1",
+			Name:   "search_assets",
 			Params: map[string]interface{}{"limit": 10},
 		})
 	}
@@ -355,7 +355,7 @@ func TestChatService_StreamChatReAct_FullSequence(t *testing.T) {
 	assert.True(t, hasDone, "should have done event")
 	assert.True(t, hasEdit, "should have edit event for apply_edits")
 	assert.Equal(t, 2, thinkingCount, "MockAdapter produces 2 reasoning chunks")
-	assert.Equal(t, 2, toolCallCount, "MockAdapter produces 2 tool calls")
+	assert.Equal(t, 3, toolCallCount, "MockAdapter produces 3 tool calls")
 	assert.Equal(t, 1, textCount, "MockAdapter produces 1 text chunk")
 }
 
@@ -402,9 +402,9 @@ func TestChatService_StreamChatReAct_SavesAssistantWithThinking(t *testing.T) {
 
 	assistantMsg := messages[1]
 	assert.Equal(t, "assistant", assistantMsg.Role)
-	assert.Contains(t, assistantMsg.Content, "完成了简历的修改")
+	assert.Contains(t, assistantMsg.Content, "Mock AI response completed")
 	require.NotNil(t, assistantMsg.Thinking, "assistant message should have thinking content")
-	assert.Contains(t, *assistantMsg.Thinking, "查看当前简历内容")
+	assert.Contains(t, *assistantMsg.Thinking, "current draft")
 }
 
 func TestChatService_StreamChatReAct_SavesToolCalls(t *testing.T) {
@@ -425,13 +425,16 @@ func TestChatService_StreamChatReAct_SavesToolCalls(t *testing.T) {
 	var toolCalls []models.AIToolCall
 	err = db.Where("session_id = ?", session.ID).Order("id ASC").Find(&toolCalls).Error
 	require.NoError(t, err)
-	require.Len(t, toolCalls, 2, "MockAdapter produces 2 tool calls")
+	require.Len(t, toolCalls, 3, "MockAdapter produces 3 tool calls")
 
 	assert.Equal(t, "get_draft", toolCalls[0].ToolName)
 	assert.Equal(t, "completed", toolCalls[0].Status)
 
-	assert.Equal(t, "apply_edits", toolCalls[1].ToolName)
+	assert.Equal(t, "search_design_skill", toolCalls[1].ToolName)
 	assert.Equal(t, "completed", toolCalls[1].Status)
+
+	assert.Equal(t, "apply_edits", toolCalls[2].ToolName)
+	assert.Equal(t, "completed", toolCalls[2].Status)
 }
 
 func TestChatService_StreamChatReAct_SessionNotFound(t *testing.T) {

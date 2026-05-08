@@ -380,7 +380,7 @@ func (a *OpenAIAdapter) StreamChatReAct(
 type MockAdapter struct{ callCount int }
 
 func (a *MockAdapter) StreamChat(ctx context.Context, messages []Message, sendChunk func(string) error) error {
-	chunks := []string{"好的，我来帮你处理。"}
+	chunks := []string{"Mock AI is ready."}
 	for _, c := range chunks {
 		if err := sendChunk(c); err != nil {
 			return err
@@ -400,8 +400,7 @@ func (a *MockAdapter) StreamChatReAct(
 ) error {
 	a.callCount++
 	if a.callCount == 1 {
-		// First call: reasoning + tool calls (no text)
-		_ = onReasoning("让我先查看当前简历内容。")
+		_ = onReasoning("Reading the current draft and design guidance.")
 		_ = onToolCall(ToolCallRequest{
 			ID:   "call_mock_1",
 			Name: "get_draft",
@@ -409,24 +408,63 @@ func (a *MockAdapter) StreamChatReAct(
 				"selector": "",
 			},
 		})
-		_ = onReasoning("简历内容已获取，我来应用修改。")
 		_ = onToolCall(ToolCallRequest{
 			ID:   "call_mock_2",
-			Name: "apply_edits",
+			Name: "search_design_skill",
 			Params: map[string]interface{}{
-				"ops": []interface{}{
-					map[string]interface{}{
-						"old_string":  "<h1>Mock</h1>",
-						"new_string":  "<h1>Updated</h1>",
-						"description": "update heading",
-					},
-				},
+				"query":  "professional resume layout",
+				"domain": "style",
+				"limit":  1,
 			},
 		})
 		return nil
 	}
-	// Subsequent calls: final text
-	return onText("我已经完成了简历的修改。")
+	if a.callCount == 2 {
+		oldString, newString := mockBodyMarkerEdit(messages)
+		if oldString != "" {
+			_ = onReasoning("Applying a safe mock edit.")
+			return onToolCall(ToolCallRequest{
+				ID:   "call_mock_3",
+				Name: "apply_edits",
+				Params: map[string]interface{}{
+					"ops": []interface{}{
+						map[string]interface{}{
+							"old_string":  oldString,
+							"new_string":  newString,
+							"description": "mark draft as processed by mock AI",
+						},
+					},
+				},
+			})
+		}
+	}
+	return onText("Mock AI response completed. Configure AI_API_URL and AI_API_KEY to use a real model.")
+}
 
-	return nil
+func mockBodyMarkerEdit(messages []Message) (string, string) {
+	draftHTML := ""
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == "tool" && messages[i].Name == "get_draft" {
+			draftHTML = messages[i].Content
+			break
+		}
+	}
+	if draftHTML == "" {
+		return "", ""
+	}
+	lower := strings.ToLower(draftHTML)
+	start := strings.Index(lower, "<body")
+	if start < 0 {
+		return "", ""
+	}
+	end := strings.Index(draftHTML[start:], ">")
+	if end < 0 {
+		return "", ""
+	}
+	oldString := draftHTML[start : start+end+1]
+	if strings.Contains(oldString, "data-ai-mock=") {
+		return "", ""
+	}
+	newString := strings.TrimSuffix(oldString, ">") + ` data-ai-mock="polished">`
+	return oldString, newString
 }

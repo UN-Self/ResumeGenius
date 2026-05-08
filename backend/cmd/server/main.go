@@ -100,8 +100,9 @@ func setupRouter(db *gorm.DB) (*gin.Engine, func()) {
 }
 
 func main() {
-	// Load .env file (ignore error if not found — env vars may be set externally)
-	_ = godotenv.Load()
+	// Load env files from either repo root or backend cwd.
+	_ = godotenv.Load(".env")
+	_ = godotenv.Load("../.env")
 
 	db := database.Connect()
 	database.Migrate(db)
