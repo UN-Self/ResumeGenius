@@ -14,7 +14,7 @@ import (
 const (
 	CodeParamInvalid      = 1001 // request parameter invalid
 	CodeInternalError     = 1999 // internal server error
-	CodeUnsupportedFormat = 1001 // unsupported file format
+	CodeUnsupportedFormat = 1005 // unsupported file format
 	CodeFileTooLarge      = 1002 // file size exceeds limit
 	CodeInvalidGitURL     = 1003 // invalid git URL
 	CodeProjectNotFound   = 1004 // project not found
@@ -398,7 +398,7 @@ func (h *Handler) MoveAsset(c *gin.Context) {
 		case errors.Is(err, ErrProjectNotFound):
 			response.Error(c, CodeProjectNotFound, "project not found")
 		default:
-			response.Error(c, CodeInternalError, err.Error())
+			response.Error(c, CodeInternalError, "failed to move asset")
 		}
 		return
 	}

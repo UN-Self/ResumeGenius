@@ -496,10 +496,10 @@ export default function AssetList({
             key={asset.id}
             role={onOpenAsset ? 'button' : undefined}
             tabIndex={onOpenAsset ? 0 : undefined}
-		draggable={onMoveAsset !== undefined}
-		onClick={() => onOpenAsset?.(asset)}
-		onDragStart={(event) => handleDragStart(asset.id, event)}
-		onDragEnd={handleDragEnd}
+            draggable={onMoveAsset !== undefined}
+            onClick={() => onOpenAsset?.(asset)}
+            onDragStart={(event) => handleDragStart(asset.id, event)}
+            onDragEnd={handleDragEnd}
             onKeyDown={(event) => {
               if (!onOpenAsset) return
               if (event.key !== 'Enter' && event.key !== ' ') return
