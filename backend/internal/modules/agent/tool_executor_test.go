@@ -175,6 +175,25 @@ func TestExecute_SkillAsTool(t *testing.T) {
 	assert.NotEmpty(t, data["usage"])
 }
 
+func TestSkillTool_ResumeDesign_DescriptionContainsCSSGuidelines(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+
+	ctx := WithSessionID(context.Background(), 300)
+	result, err := executor.Execute(ctx, "resume-design", nil)
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &data))
+	desc, ok := data["description"].(string)
+	require.True(t, ok)
+
+	assert.Contains(t, desc, "linear-gradient", "description should mention banned gradient")
+	assert.Contains(t, desc, "backdrop-filter", "description should mention banned backdrop-filter")
+	assert.Contains(t, desc, "Noto Sans CJK SC", "description should mention Chinese font requirement")
+}
+
 func TestExecute_SkillAsTool_NotFound(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)

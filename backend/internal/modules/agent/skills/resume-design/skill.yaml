@@ -1,5 +1,28 @@
 name: resume-design
-description: 提供 A4 单页简历设计规范和保守风格参考，帮助用户调整视觉、排版、配色
+description: |
+  提供 A4 单页简历设计规范和保守风格参考，帮助用户调整视觉、排版、配色。
+  调用后请用 get_skill_reference 获取完整 A4 设计规范（reference_name: a4-guidelines）。
+
+  ## CSS 设计规范摘要
+
+  推荐样式：
+  - 背景：白色或接近白色纸面（background: #ffffff 或 #f7fafc）
+  - 正文：深灰或黑色，高对比（color: #1a202c 或 #333）
+  - 强调色：最多一个克制颜色（如 #1a365d 深蓝），只用于姓名、分区标题、细线
+  - 布局：单栏或常规双栏，顶部信息紧凑，分区标题清晰
+  - 字号：正文 13-15px，姓名 ≤24px，分区标题 14-16px
+  - 字体：必须包含中文支持，如 'Noto Sans CJK SC', 'Microsoft YaHei', 'PingFang SC', sans-serif
+  - 间距：行距紧凑但可读，段间距少量，避免大块留白
+
+  禁止样式（会导致打印问题或视觉不专业）：
+  - 渐变背景：linear-gradient、radial-gradient、conic-gradient
+  - 模糊效果：backdrop-filter、filter:blur
+  - 动画：animation、@keyframes、transition
+  - 阴影：text-shadow、复杂 box-shadow
+  - 定位：position:fixed、position:absolute
+  - 视口单位：100vh、100vw
+  - 装饰风格：glassmorphism、aurora、3D、霓虹、发光
+  - 大面积彩色背景、超大标题、营销式布局
 trigger: 用户要求调整简历样式或需要设计参考时
 
 usage: |
