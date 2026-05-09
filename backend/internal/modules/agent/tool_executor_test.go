@@ -362,6 +362,8 @@ func TestApplyEdits_OldStringNotFound(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "old_string not found")
+	assert.Contains(t, err.Error(), "NonExistent")
+	assert.Contains(t, err.Error(), "<html><body><h1>Title")
 
 	// Verify DB state unchanged
 	var unchanged models.Draft
