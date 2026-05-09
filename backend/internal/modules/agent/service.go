@@ -446,7 +446,6 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 		if err != nil {
 			log.Printf("agent: iteration %d model call failed: %v", totalIter, err)
 			return err
-			return err
 		}
 
 		// c. If tool calls were made, build assistant tool_calls message and continue loop

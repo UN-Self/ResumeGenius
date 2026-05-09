@@ -23,8 +23,6 @@ import (
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
 )
 
-var _ *gorm.DB // ensure gorm import is used
-
 func jwtSecret() (string, error) {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
