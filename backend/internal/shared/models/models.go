@@ -31,11 +31,15 @@ func (j *JSONB) Scan(value interface{}) error {
 }
 
 type User struct {
-	ID           string    `gorm:"type:char(36);primaryKey" json:"id"`
-	Username     string    `gorm:"size:64;not null;uniqueIndex" json:"username"`
-	PasswordHash string    `gorm:"size:255;not null" json:"-"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID               string     `gorm:"type:char(36);primaryKey" json:"id"`
+	Username         string     `gorm:"size:64;not null;uniqueIndex" json:"username"`
+	Email            *string    `gorm:"size:255" json:"email,omitempty"`
+	EmailVerified    bool       `gorm:"not null;default:false" json:"email_verified"`
+	VerificationCode string     `gorm:"size:6" json:"-"`
+	CodeExpiry       *time.Time `gorm:"index" json:"-"`
+	PasswordHash     string     `gorm:"size:255;not null" json:"-"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
 type Project struct {
