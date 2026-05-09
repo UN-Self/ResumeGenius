@@ -11,13 +11,15 @@ import {
   WandSparkles,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
-import { agentApi, redoDraft, undoDraft, type AISession, type ToolCallEntry } from '@/lib/api-client'
+import { agentApi, redoDraft, undoDraft, type AIMessageItem, type AISession, type ToolCallEntry } from '@/lib/api-client'
 import '@/styles/editor.css'
 import { ToolCallLog } from './ToolCallLog'
 
 interface Message {
   role: 'user' | 'assistant'
   text: string
+  thinking?: string
+  toolCalls?: ToolCallEntry[]
 }
 
 interface Props {
@@ -83,7 +85,99 @@ function getFriendlyErrorMessage(message: string) {
   if (message.includes('max tool-calling iterations exceeded')) {
     return '这轮 AI 一直在查资料但没有生成可应用修改，我已停止本轮。请再发一句明确目标，我会直接把修改写入画布。'
   }
+
+  const isDesignConstraintFailure =
+    normalized.includes('violates resume design constraints') ||
+    message.includes('简历禁止')
+
+  if (isDesignConstraintFailure) {
+    if (message.includes('绝对定位') || normalized.includes('position:absolute')) {
+      return '这次生成失败是因为 AI 把简历做成了绝对定位布局，后端已拦截。请再试一次，我会按普通 A4 文档流布局生成，避免 absolute/fixed 定位。'
+    }
+    if (message.includes('固定定位') || normalized.includes('position:fixed')) {
+      return '这次生成失败是因为 AI 使用了固定定位布局，后端已拦截。请再试一次，我会改用普通 A4 文档流布局。'
+    }
+    if (message.includes('渐变') || normalized.includes('gradient')) {
+      return '这次生成失败是因为样式过于网页化，使用了复杂渐变。请再试一次，我会改用白底、深色正文和克制强调色。'
+    }
+    if (message.includes('动画') || normalized.includes('animation') || normalized.includes('keyframes')) {
+      return '这次生成失败是因为简历里包含动画样式，后端已拦截。请再试一次，我会生成静态可打印的 A4 简历。'
+    }
+    return '这次生成失败是因为简历样式触发了设计约束。请再试一次，我会改用更保守的 A4 简历版式。'
+  }
   return message
+}
+
+function completeRunningToolCalls(calls: ToolCallEntry[]) {
+  return calls.map((call) => (
+    call.status === 'running' ? { ...call, status: 'completed' as const } : call
+  ))
+}
+
+function attachRunToLatestAssistant(
+  messages: Message[],
+  thinking: string,
+  calls: ToolCallEntry[],
+) {
+  if (!thinking.trim() && calls.length === 0) return messages
+
+  const next = [...messages]
+  for (let i = next.length - 1; i >= 0; i--) {
+    if (next[i].role === 'assistant') {
+      next[i] = {
+        ...next[i],
+        thinking: thinking.trim() ? thinking : next[i].thinking,
+        toolCalls: calls.length > 0 ? calls : next[i].toolCalls,
+      }
+      return next
+    }
+  }
+  return messages
+}
+
+function buildMessagesFromHistory(items: AIMessageItem[], toolCalls: ToolCallEntry[] = []) {
+  const calls = [...toolCalls].sort((a, b) => (
+    Date.parse(a.created_at ?? '') - Date.parse(b.created_at ?? '')
+  ))
+  let cursor = 0
+  let lastUserTime = Number.NEGATIVE_INFINITY
+
+  return items.map((item) => {
+    const messageTime = Date.parse(item.created_at)
+    const message: Message = { role: item.role, text: item.content }
+
+    if (item.role === 'user') {
+      lastUserTime = Number.isFinite(messageTime) ? messageTime : lastUserTime
+      return message
+    }
+
+    if (item.thinking) {
+      message.thinking = item.thinking
+    }
+
+    const groupedCalls: ToolCallEntry[] = []
+    while (cursor < calls.length) {
+      const callTime = Date.parse(calls[cursor].created_at ?? '')
+      if (!Number.isFinite(callTime)) {
+        cursor++
+        continue
+      }
+      if (callTime <= lastUserTime) {
+        cursor++
+        continue
+      }
+      if (Number.isFinite(messageTime) && callTime <= messageTime) {
+        groupedCalls.push(calls[cursor])
+        cursor++
+        continue
+      }
+      break
+    }
+    if (groupedCalls.length > 0) {
+      message.toolCalls = groupedCalls
+    }
+    return message
+  })
 }
 
 function ThinkingBubble({
@@ -153,6 +247,8 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
   const abortControllerRef = useRef<AbortController | null>(null)
   const cancelRequestedRef = useRef(false)
   const crashTimerRef = useRef<number | null>(null)
+  const currentThinkingRef = useRef('')
+  const currentToolCallsRef = useRef<ToolCallEntry[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -163,6 +259,8 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
     setToolCalls([])
     setError(null)
     setEditsApplied(false)
+    currentThinkingRef.current = ''
+    currentToolCallsRef.current = []
     /* eslint-enable react-hooks/set-state-in-effect */
 
     const init = async () => {
@@ -176,11 +274,9 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
           setSession(s)
           const history = await agentApi.getHistory(s.id)
           if (!cancelled) {
-            const loadedMessages: Message[] = []
-            for (const m of history.items) {
-              loadedMessages.push({ role: m.role, text: m.content })
-            }
-            setMessages(loadedMessages)
+            setMessages(buildMessagesFromHistory(history.items, history.tool_calls))
+            setThinking('')
+            setToolCalls([])
           }
         } else {
           s = await agentApi.createSession(draftId)
@@ -242,6 +338,8 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
     setInput('')
     setThinking('已发送请求，等待模型服务响应...\n')
     setToolCalls([])
+    currentThinkingRef.current = '已发送请求，等待模型服务响应...\n'
+    currentToolCallsRef.current = []
     setEditsApplied(false)
     setError(null)
     setPlaneCrashing(false)
@@ -285,21 +383,26 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
             const event = JSON.parse(trimmed.slice(6)) as StreamEvent
             switch (event.type) {
               case 'thinking':
+                currentThinkingRef.current += event.content ?? ''
                 setThinking((prev) => prev + (event.content ?? ''))
                 break
               case 'tool_call':
                 if (event.name) {
-                  setToolCalls((prev) => [
-                    ...prev,
-                    { name: event.name!, status: 'running', params: event.params },
-                  ])
+                  const nextCalls = [
+                    ...currentToolCallsRef.current,
+                    { name: event.name!, status: 'running' as const, params: event.params },
+                  ]
+                  currentToolCallsRef.current = nextCalls
+                  setToolCalls(nextCalls)
                 }
                 break
               case 'tool_result':
                 setToolCalls((prev) => {
                   const patch: Partial<ToolCallEntry> = { status: event.status ?? 'completed' }
                   if (event.result !== undefined) patch.result = event.result
-                  return updateLatestToolCall(prev, event.name, patch)
+                  const nextCalls = updateLatestToolCall(prev, event.name, patch)
+                  currentToolCallsRef.current = nextCalls
+                  return nextCalls
                 })
                 break
               case 'edit':
@@ -308,12 +411,23 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
                   status: 'completed',
                   result: event.result,
                 }))
+                currentToolCallsRef.current = updateLatestToolCall(
+                  currentToolCallsRef.current,
+                  event.name ?? 'apply_edits',
+                  { status: 'completed', result: event.result },
+                )
                 break
               case 'done':
                 gotDone = true
-                setToolCalls((prev) => prev.map((call) => (
-                  call.status === 'running' ? { ...call, status: 'completed' } : call
-                )))
+                currentToolCallsRef.current = completeRunningToolCalls(currentToolCallsRef.current)
+                setToolCalls(currentToolCallsRef.current)
+                setMessages((prev) => attachRunToLatestAssistant(
+                  prev,
+                  currentThinkingRef.current,
+                  currentToolCallsRef.current,
+                ))
+                setThinking('')
+                setToolCalls([])
                 if (receivedEdit && onApplyEdits) {
                   try {
                     await onApplyEdits()
@@ -388,6 +502,8 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
     setToolCalls([])
     setEditsApplied(false)
     setError(null)
+    currentThinkingRef.current = ''
+    currentToolCallsRef.current = []
     try {
       const s = await agentApi.createSession(draftId)
       setSession(s)
@@ -396,7 +512,6 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
     }
   }, [draftId])
 
-  const waitingForAssistant = streaming && messages[messages.length - 1]?.role !== 'assistant'
   const canSend = Boolean(input.trim() && session && !streaming)
 
   return (
@@ -428,35 +543,50 @@ export function ChatPanel({ draftId, onApplyEdits, onRestoreHtml }: Props) {
         )}
 
         {messages.map((msg, i) => (
-          <div key={i} className={`ai-message-row ${msg.role === 'user' ? 'is-user' : 'is-assistant'}`}>
-            <div data-message-role={msg.role} className="ai-message-bubble">
-              {msg.role === 'user' ? (
-                msg.text
-              ) : (
-                <div className="ai-markdown">
-                  <ReactMarkdown>{msg.text}</ReactMarkdown>
-                </div>
-              )}
+          <div key={i} className="ai-turn">
+            <div className={`ai-message-row ${msg.role === 'user' ? 'is-user' : 'is-assistant'}`}>
+              <div data-message-role={msg.role} className="ai-message-bubble">
+                {msg.role === 'user' ? (
+                  msg.text
+                ) : (
+                  <div className="ai-markdown">
+                    <ReactMarkdown>{msg.text}</ReactMarkdown>
+                  </div>
+                )}
+              </div>
             </div>
+
+            {msg.role === 'assistant' && msg.thinking && (
+              <details className="ai-reasoning-panel">
+                <summary>推理过程</summary>
+                <pre>{msg.thinking}</pre>
+              </details>
+            )}
+
+            {msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0 && (
+              <ToolCallLog calls={msg.toolCalls} />
+            )}
           </div>
         ))}
 
-        {waitingForAssistant && (
-          <ThinkingBubble
-            toolCalls={toolCalls}
-            elapsedSeconds={elapsedSeconds}
-          />
-        )}
+        {streaming && (
+          <>
+            <ThinkingBubble
+              toolCalls={toolCalls}
+              elapsedSeconds={elapsedSeconds}
+            />
 
-        {thinking && (
-          <details className="ai-reasoning-panel" open={streaming || undefined}>
-            <summary>推理过程</summary>
-            <pre>{thinking}</pre>
-          </details>
-        )}
+            {thinking && (
+              <details className="ai-reasoning-panel" open>
+                <summary>推理过程</summary>
+                <pre>{thinking}</pre>
+              </details>
+            )}
 
-        {toolCalls.length > 0 && (
-          <ToolCallLog calls={toolCalls} compact={streaming} />
+            {toolCalls.length > 0 && (
+              <ToolCallLog calls={toolCalls} compact />
+            )}
+          </>
         )}
 
         {!streaming && editsApplied && (
