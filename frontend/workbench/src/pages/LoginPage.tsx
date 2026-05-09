@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { FileText, LockKeyhole, Sparkles, UserRound } from 'lucide-react'
+import { FileText, LockKeyhole, Sparkles, Upload, UserRound, WandSparkles } from 'lucide-react'
 import { ApiError, authApi, type User } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,15 +55,28 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
               上传资料、生成初稿、边聊边改，最后在白纸画布里得到一份可编辑、可导出的专业简历。
             </p>
             <div className="mt-10 grid max-w-xl grid-cols-3 gap-3">
-              {['资料接入', 'AI 生成', '可视化编辑'].map((item, index) => (
-                <div key={item} className="glass-panel rounded-2xl p-4 stagger-in" style={{ '--delay': `${index * 80 + 120}ms` } as CSSProperties}>
-                  <FileText className="mb-3 h-5 w-5 text-primary" />
-                  <p className="text-sm font-semibold text-foreground">{item}</p>
-                  <div className="mt-3 h-1.5 rounded-full bg-surface-hover">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${52 + index * 18}%` }} />
+              {[
+                { label: '资料接入', icon: Upload },
+                { label: 'AI 生成', icon: WandSparkles },
+                { label: '可视化编辑', icon: FileText },
+              ].map((item, index) => {
+                const Icon = item.icon
+                return (
+                  <div
+                    key={item.label}
+                    className="feature-card glass-panel rounded-2xl p-4 stagger-in cursor-default select-none"
+                    style={{ '--delay': `${index * 80 + 120}ms` } as CSSProperties}
+                  >
+                    <div className="feature-card-icon mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary transition-all duration-300">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">{item.label}</p>
+                    <div className="mt-3 h-1.5 rounded-full bg-surface-hover">
+                      <div className="feature-card-bar h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${52 + index * 18}%` }} />
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </section>
 
