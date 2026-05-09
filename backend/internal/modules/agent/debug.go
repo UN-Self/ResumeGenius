@@ -16,6 +16,14 @@ func debugLog(component string, format string, args ...any) {
 	}
 }
 
+// debugLogFull logs a full message without truncation, prefixed with [FULL].
+// Use only on failure paths where truncated context is insufficient.
+func debugLogFull(component string, label string, content string) {
+	if debugEnabled() {
+		log.Printf("[agent:%s] [FULL] %s:\n%s", component, label, content)
+	}
+}
+
 // truncateDebug truncates s to maxLen runes, appending "..." if truncated.
 func truncateDebug(s string, maxLen int) string {
 	if maxLen <= 0 {
