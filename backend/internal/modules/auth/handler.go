@@ -74,7 +74,7 @@ func toUserResp(u *models.User, devMode bool) userResp {
 // ── Handlers ────────────────────────────────────────────────────────
 
 // Login authenticates a user and issues a JWT cookie.
-// Does NOT auto-register — returns 401 if user not found or password wrong.
+// Supports both username and email login (detected via @).
 func (h *Handler) Login(c *gin.Context) {
 	var req loginReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -89,8 +89,6 @@ func (h *Handler) Login(c *gin.Context) {
 			response.Error(c, 40000, "用户名需 3-64 个字符")
 		case ErrInvalidPassword:
 			response.Error(c, 40000, "密码需 6-128 个字符")
-		case ErrEmailNotVerified:
-			response.Error(c, 40100, "邮箱未验证，请先验证邮箱")
 		case ErrInvalidCredentials:
 			response.Error(c, 40100, "用户名或密码错误")
 		default:
@@ -157,7 +155,8 @@ func (h *Handler) SendCode(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.SendVerificationCode(req.Email); err != nil {
+	code, err := h.service.SendVerificationCode(req.Email)
+	if err != nil {
 		switch err {
 		case ErrEmailNotFound:
 			response.Error(c, 40000, "邮箱未注册，请先注册")
@@ -169,7 +168,11 @@ func (h *Handler) SendCode(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, nil)
+	if h.service.email.IsDevMode() {
+		response.Success(c, gin.H{"dev_code": code})
+	} else {
+		response.Success(c, nil)
+	}
 }
 
 // VerifyEmail verifies the email with the code.

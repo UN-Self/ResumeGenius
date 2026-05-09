@@ -92,7 +92,7 @@ export const authApi = {
       body: JSON.stringify({ username, password, email }),
     }),
   sendCode: (email: string) =>
-    request<null>('/auth/send-code', {
+    request<{ dev_code?: string } | null>('/auth/send-code', {
       method: 'POST',
       body: JSON.stringify({ email }),
     }),

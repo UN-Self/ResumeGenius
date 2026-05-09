@@ -70,9 +70,14 @@ export default function RegisterPage() {
     try {
       setLoading(true)
       setError('')
-      await authApi.sendCode(email.trim())
-      setCodeSent(false)
-      setTimeout(() => setCodeSent(true), 200)
+      const res = await authApi.sendCode(email.trim())
+      if ((res as any).dev_code) {
+        setDevCode((res as any).dev_code)
+        setCodeSent(false)
+        setTimeout(() => setCodeSent(true), 200)
+      } else {
+        setCodeSent(true)
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '发送失败')
     } finally {

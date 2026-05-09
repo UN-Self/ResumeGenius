@@ -40,9 +40,9 @@ func NewService(db *gorm.DB, email *EmailService) *Service {
 // It does NOT auto-register — returns ErrInvalidCredentials if user not found.
 // Returns ErrEmailNotVerified if the user exists but email is not yet verified
 // (only for accounts with a non-empty email — legacy accounts are exempt).
-func (s *Service) Login(username, password string) (*models.User, error) {
-	username = strings.TrimSpace(username)
-	if len(username) < 3 || len(username) > 64 {
+func (s *Service) Login(account, password string) (*models.User, error) {
+	account = strings.TrimSpace(account)
+	if len(account) < 3 {
 		return nil, ErrInvalidUsername
 	}
 	if len(password) < 6 || len(password) > 128 {
@@ -50,7 +50,16 @@ func (s *Service) Login(username, password string) (*models.User, error) {
 	}
 
 	var user models.User
-	err := s.db.Where("username = ?", username).First(&user).Error
+	var err error
+	if isEmailLogin(account) {
+		account = strings.ToLower(account)
+		err = s.db.Where("email = ?", account).First(&user).Error
+	} else {
+		if len(account) > 64 {
+			return nil, ErrInvalidUsername
+		}
+		err = s.db.Where("username = ?", account).First(&user).Error
+	}
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("query user: %w", err)
@@ -58,15 +67,14 @@ func (s *Service) Login(username, password string) (*models.User, error) {
 		return nil, ErrInvalidCredentials
 	}
 
-	// Legacy accounts (nil email) skip email verification check.
-	if user.Email != nil && *user.Email != "" && !user.EmailVerified {
-		return nil, ErrEmailNotVerified
-	}
-
 	if compareErr := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); compareErr != nil {
 		return nil, ErrInvalidCredentials
 	}
 	return &user, nil
+}
+
+func isEmailLogin(s string) bool {
+	return strings.Contains(s, "@")
 }
 
 // Register creates a new user with EmailVerified=false and sends a verification code.
@@ -86,20 +94,14 @@ func (s *Service) Register(username, password, email string) (*models.User, erro
 		return nil, ErrInvalidEmail
 	}
 
-	// Look for an existing account by username or email.
-	var existing models.User
-	foundByUser := s.db.Where("username = ?", username).First(&existing)
-	foundByEmail := s.db.Where("email = ?", email).First(&existing)
-
-	if foundByUser.Error == nil || foundByEmail.Error == nil {
-		// Found an existing record — only allow re-register if unverified.
-		if existing.EmailVerified {
-			if existing.Username == username {
-				return nil, ErrUsernameTaken
-			}
+	// Email is the unique identity. Check it first.
+	var byEmail models.User
+	if err := s.db.Where("email = ?", email).First(&byEmail).Error; err == nil {
+		// Email already exists.
+		if byEmail.EmailVerified {
 			return nil, ErrEmailTaken
 		}
-		// Unverified: overwrite password and resend code.
+		// Unverified: overwrite this account.
 		hash, hashErr := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if hashErr != nil {
 			return nil, fmt.Errorf("hash password: %w", hashErr)
@@ -109,20 +111,27 @@ func (s *Service) Register(username, password, email string) (*models.User, erro
 			return nil, codeErr
 		}
 		expiry := time.Now().Add(15 * time.Minute)
-		existing.Username = username
-		existing.Email = &email
-		existing.PasswordHash = string(hash)
-		existing.VerificationCode = code
-		existing.CodeExpiry = &expiry
-		existing.EmailVerified = false
-		if saveErr := s.db.Save(&existing).Error; saveErr != nil {
+		byEmail.Username = username
+		byEmail.PasswordHash = string(hash)
+		byEmail.VerificationCode = code
+		byEmail.CodeExpiry = &expiry
+		byEmail.EmailVerified = false
+		if saveErr := s.db.Save(&byEmail).Error; saveErr != nil {
 			return nil, fmt.Errorf("update user: %w", saveErr)
 		}
 		if sendErr := s.email.SendVerificationCode(email, code); sendErr != nil {
 			return nil, fmt.Errorf("send verification code: %w", sendErr)
 		}
-		return &existing, nil
+		return &byEmail, nil
 	}
+
+	// Email is new. Check username uniqueness (must be globally unique).
+	var byUser models.User
+	if err := s.db.Where("username = ?", username).First(&byUser).Error; err == nil {
+		return nil, ErrUsernameTaken
+	}
+
+	// Both email and username are new — create fresh account.
 
 	// No existing account — create new.
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -153,37 +162,37 @@ func (s *Service) Register(username, password, email string) (*models.User, erro
 }
 
 // SendVerificationCode generates a new code and sends it to the given email.
-// The user must exist and not already be verified.
-func (s *Service) SendVerificationCode(email string) error {
+// Returns the generated code so the caller can expose it in dev mode.
+func (s *Service) SendVerificationCode(email string) (string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 
 	var user models.User
 	if err := s.db.Where("email = ?", email).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return ErrEmailNotFound
+			return "", ErrEmailNotFound
 		}
-		return fmt.Errorf("query user: %w", err)
+		return "", fmt.Errorf("query user: %w", err)
 	}
 	if user.EmailVerified {
-		return ErrEmailAlreadyVerified
+		return "", ErrEmailAlreadyVerified
 	}
 
 	code, err := GenerateCode()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	expiry := time.Now().Add(15 * time.Minute)
 	user.VerificationCode = code
 	user.CodeExpiry = &expiry
 	if updateErr := s.db.Save(&user).Error; updateErr != nil {
-		return fmt.Errorf("update code: %w", updateErr)
+		return "", fmt.Errorf("update code: %w", updateErr)
 	}
 
 	if sendErr := s.email.SendVerificationCode(email, code); sendErr != nil {
-		return fmt.Errorf("send verification code: %w", sendErr)
+		return code, fmt.Errorf("send verification code: %w", sendErr)
 	}
-	return nil
+	return code, nil
 }
 
 // VerifyEmail validates the verification code and marks the email as verified.

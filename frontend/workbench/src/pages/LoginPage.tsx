@@ -101,7 +101,7 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
                 <Input
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="用户名"
+                  placeholder="用户名或邮箱"
                   className="pl-9"
                 />
               </label>
