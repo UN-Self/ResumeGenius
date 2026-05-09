@@ -251,6 +251,8 @@ func TestWrapWithTemplate_ReplacesPlaceholder(t *testing.T) {
 	assert.Contains(t, result, `<div class="resume-page resume-document">`)
 	assert.Contains(t, result, ".resume-page h1")
 	assert.Contains(t, result, "@page")
+	assert.Contains(t, result, "box-sizing: border-box")
+	assert.Contains(t, result, "white-space: pre-wrap")
 	assert.NotContains(t, result, "{{CONTENT}}")
 }
 
@@ -259,6 +261,26 @@ func TestWrapWithTemplate_EmptyContent(t *testing.T) {
 
 	assert.Contains(t, result, `<div class="resume-page resume-document"></div>`)
 	assert.Contains(t, result, ".resume-page")
+}
+
+func TestWrapWithTemplate_ExtractsFullDocumentBodyAndStyles(t *testing.T) {
+	input := `<!DOCTYPE html><html><head><style>.resume-document .name{font-size:22px}</style></head><body><section class="name">陈子俊</section></body></html>`
+
+	result := wrapWithTemplate(input)
+
+	assert.Contains(t, result, `<style>.resume-document .name{font-size:22px}</style>`)
+	assert.Contains(t, result, `<section class="name">陈子俊</section>`)
+	assert.NotContains(t, result, "<body><section")
+	assert.NotContains(t, result, "<html><head>")
+	assert.NotContains(t, result, `<div class="resume-page resume-document"><!DOCTYPE html>`)
+}
+
+func TestExtractRenderableHTML_RemovesStyleFromBody(t *testing.T) {
+	body, styles := extractRenderableHTML(`<style>.x{color:red}</style><div class="x">hello</div>`)
+
+	assert.Contains(t, styles, ".x{color:red}")
+	assert.Contains(t, body, `<div class="x">hello</div>`)
+	assert.NotContains(t, body, "<style>")
 }
 
 // ---------------------------------------------------------------------------
