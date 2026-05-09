@@ -15,8 +15,9 @@ const TOOL_META: Record<string, { label: string; icon: ComponentType<{ className
   get_draft: { label: '读取简历', icon: FileText },
   apply_edits: { label: '应用修改', icon: PencilLine },
   search_assets: { label: '搜索资料', icon: Search },
-  search_skills: { label: '搜索技能库', icon: Search },
-  search_design_skill: { label: '设计参考', icon: Palette },
+  'resume-design': { label: '加载设计技能', icon: Palette },
+  'resume-interview': { label: '加载面试技能', icon: Search },
+  get_skill_reference: { label: '获取参考内容', icon: FileText },
 }
 
 interface Props {

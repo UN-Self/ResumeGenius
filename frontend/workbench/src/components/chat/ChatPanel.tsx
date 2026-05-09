@@ -97,9 +97,13 @@ function ThinkingBubble({
   const label = runningTool
     ? runningTool.name === 'apply_edits'
       ? '正在同步到画布'
-      : runningTool.name === 'search_design_skill'
-        ? '正在查找设计参考'
-        : '正在处理资料'
+      : runningTool.name === 'resume-design'
+        ? '正在加载设计规范'
+        : runningTool.name === 'resume-interview'
+          ? '正在加载面试指南'
+          : runningTool.name === 'get_skill_reference'
+            ? '正在获取参考内容'
+            : '正在处理资料'
     : '正在构思简历方案'
 
   const minutes = Math.floor(elapsedSeconds / 60)
