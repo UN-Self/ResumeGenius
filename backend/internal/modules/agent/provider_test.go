@@ -96,9 +96,10 @@ func TestMockAdapter_StreamChatReAct(t *testing.T) {
 
 	require.Len(t, reasoningChunks1, 1)
 	assert.Contains(t, reasoningChunks1[0], "current draft")
-	require.Len(t, toolCalls1, 2)
+	require.Len(t, toolCalls1, 3)
 	assert.Equal(t, "get_draft", toolCalls1[0].Name)
-	assert.Equal(t, "search_design_skill", toolCalls1[1].Name)
+	assert.Equal(t, "resume-design", toolCalls1[1].Name)
+	assert.Equal(t, "get_skill_reference", toolCalls1[2].Name)
 	assert.Empty(t, textChunks1, "first call should not have text")
 
 	// Call 2: apply a safe edit using the get_draft tool result

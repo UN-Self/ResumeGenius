@@ -106,20 +106,25 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []Message, send
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
+	debugLog("provider", "正在调用模型 %s（StreamChat），消息数 %d", a.model, len(messages))
+	start := time.Now()
 
 	resp, err := a.client.Do(req)
 	if err != nil {
 		var netErr net.Error
 		if ok := errors.Is(err, context.DeadlineExceeded); ok {
+			debugLog("provider", "模型调用超时，耗时 %v: %v", time.Since(start), err)
 			return fmt.Errorf("%w: %w", ErrModelTimeout, err)
 		}
 		if errors.As(err, &netErr) && netErr.Timeout() {
+			debugLog("provider", "模型调用超时，耗时 %v: %v", time.Since(start), err)
 			return fmt.Errorf("%w: %w", ErrModelTimeout, err)
 		}
 		return fmt.Errorf("model call failed: %w", err)
 	}
 	defer resp.Body.Close()
 
+	debugLog("provider", "模型响应，状态码 %d，耗时 %v", resp.StatusCode, time.Since(start))
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
@@ -166,7 +171,11 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []Message, send
 		}
 	}
 
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		debugLog("provider", "SSE 流读取异常: %v", err)
+		return err
+	}
+	return nil
 }
 
 // StreamChatReAct streams a chat completion with function calling support.
@@ -233,20 +242,25 @@ func (a *OpenAIAdapter) StreamChatReAct(
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+a.apiKey)
+	debugLog("provider", "正在调用模型 %s（ReAct），消息数 %d，工具数 %d", a.model, len(messages), len(tools))
+	start := time.Now()
 
 	resp, err := a.client.Do(req)
 	if err != nil {
 		var netErr net.Error
 		if ok := errors.Is(err, context.DeadlineExceeded); ok {
+			debugLog("provider", "模型调用超时，耗时 %v: %v", time.Since(start), err)
 			return fmt.Errorf("%w: %w", ErrModelTimeout, err)
 		}
 		if errors.As(err, &netErr) && netErr.Timeout() {
+			debugLog("provider", "模型调用超时，耗时 %v: %v", time.Since(start), err)
 			return fmt.Errorf("%w: %w", ErrModelTimeout, err)
 		}
 		return fmt.Errorf("model call failed: %w", err)
 	}
 	defer resp.Body.Close()
 
+	debugLog("provider", "模型响应，状态码 %d，耗时 %v", resp.StatusCode, time.Since(start))
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
@@ -340,10 +354,16 @@ func (a *OpenAIAdapter) StreamChatReAct(
 
 		// when finish_reason is "tool_calls", dispatch all accumulated tool calls
 		if choice.FinishReason != nil && *choice.FinishReason == "tool_calls" {
+			toolNames := make([]string, 0, len(toolCallAccums))
+			for _, acc := range toolCallAccums {
+				toolNames = append(toolNames, acc.name)
+			}
+			debugLog("provider", "模型请求调用 %d 个工具: %v", len(toolCallAccums), toolNames)
 			for _, acc := range toolCallAccums {
 				var params map[string]interface{}
 				if err := json.Unmarshal([]byte(acc.arguments), &params); err != nil {
 					params = map[string]interface{}{}
+					debugLog("provider", "工具 %s 参数解析失败: %v", acc.name, err)
 				}
 				call := ToolCallRequest{
 					ID:     acc.id,
@@ -359,6 +379,7 @@ func (a *OpenAIAdapter) StreamChatReAct(
 	}
 
 	if err := scanner.Err(); err != nil {
+		debugLog("provider", "SSE 流读取异常: %v", err)
 		return err
 	}
 
@@ -370,6 +391,7 @@ func (a *OpenAIAdapter) StreamChatReAct(
 		var params map[string]interface{}
 		if err := json.Unmarshal([]byte(acc.arguments), &params); err != nil {
 			params = map[string]interface{}{}
+			debugLog("provider", "工具 %s 参数解析失败: %v", acc.name, err)
 		}
 		call := ToolCallRequest{
 			ID:     acc.id,
@@ -420,12 +442,16 @@ func (a *MockAdapter) StreamChatReAct(
 			},
 		})
 		_ = onToolCall(ToolCallRequest{
-			ID:   "call_mock_2",
-			Name: "search_design_skill",
+			ID:     "call_mock_2",
+			Name:   "resume-design",
+			Params: map[string]interface{}{},
+		})
+		_ = onToolCall(ToolCallRequest{
+			ID:   "call_mock_3",
+			Name: "get_skill_reference",
 			Params: map[string]interface{}{
-				"query":  "professional resume layout",
-				"domain": "style",
-				"limit":  1,
+				"skill_name":     "resume-design",
+				"reference_name": "a4-guidelines",
 			},
 		})
 		return nil

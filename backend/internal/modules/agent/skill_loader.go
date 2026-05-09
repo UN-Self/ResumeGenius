@@ -9,41 +9,59 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-//go:embed skills/*.md skills/*/*.yaml
+//go:embed skills/*.md skills/*/*.yaml skills/*/*/*.yaml
 var skillsFS embed.FS
 
-// SkillFile represents a single skill definition loaded from a YAML file.
-type SkillFile struct {
-	Name        string           `yaml:"name"`
-	Description string           `yaml:"description"`
-	Metadata    SkillMetadata    `yaml:"metadata"`
-	References  []SkillReference `yaml:"references"`
-	Content     string           `yaml:"content"`
+// SkillDescriptor represents a Layer 2 skill description document (skill.yaml).
+type SkillDescriptor struct {
+	Name        string              `yaml:"name"        json:"name"`
+	Description string              `yaml:"description" json:"description"`
+	Trigger     string              `yaml:"trigger"     json:"trigger,omitempty"`
+	Usage       string              `yaml:"usage"       json:"usage"`
+	Tools       []ToolDefinition    `yaml:"tools"       json:"tools"`
+	References  []ReferenceMetadata `yaml:"references"  json:"references"`
 }
 
-// SkillMetadata holds structured metadata for skill search.
-type SkillMetadata struct {
-	Category   string   `yaml:"category"`
-	Keywords   []string `yaml:"keywords"`
-	Seniority  []string `yaml:"seniority"`
-	Industries []string `yaml:"industries"`
+// ToolDefinition describes a tool available within a skill.
+type ToolDefinition struct {
+	Name        string  `yaml:"name"        json:"name"`
+	Description string  `yaml:"description" json:"description"`
+	Params      []Param `yaml:"params"      json:"params"`
+	Usage       string  `yaml:"usage"       json:"usage"`
 }
 
-// SkillReference holds a reference source for the skill content.
-type SkillReference struct {
-	Title  string `yaml:"title"`
-	Source string `yaml:"source"`
+// Param describes a tool parameter.
+type Param struct {
+	Name        string `yaml:"name"        json:"name"`
+	Type        string `yaml:"type"        json:"type"`
+	Description string `yaml:"description" json:"description"`
 }
 
-// SkillLoader loads and provides search over skill files.
+// ReferenceMetadata describes a reference's metadata within a skill descriptor.
+type ReferenceMetadata struct {
+	Name        string `yaml:"name"        json:"name"`
+	Description string `yaml:"description" json:"description"`
+}
+
+// ReferenceContent represents a Layer 3 reference content file.
+type ReferenceContent struct {
+	Name    string `yaml:"name"    json:"name"`
+	Content string `yaml:"content" json:"content"`
+}
+
+// SkillLoader loads and provides access to skill descriptors and references.
 type SkillLoader struct {
-	skills []SkillFile
+	skills     map[string]*SkillDescriptor
+	references map[string]map[string]*ReferenceContent // skillName -> refName -> content
 }
 
-// NewSkillLoader creates a SkillLoader by walking the embedded skills directory
-// and parsing all .yaml files.
+// NewSkillLoader creates a SkillLoader by walking the embedded skills directory.
 func NewSkillLoader() (*SkillLoader, error) {
-	loader := &SkillLoader{}
+	loader := &SkillLoader{
+		skills:     make(map[string]*SkillDescriptor),
+		references: make(map[string]map[string]*ReferenceContent),
+	}
+
 	err := fs.WalkDir(skillsFS, "skills", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -51,75 +69,99 @@ func NewSkillLoader() (*SkillLoader, error) {
 		if d.IsDir() || !strings.HasSuffix(path, ".yaml") {
 			return nil
 		}
+
 		data, err := skillsFS.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("read skill file %s: %w", path, err)
 		}
-		var skill SkillFile
-		if err := yaml.Unmarshal(data, &skill); err != nil {
-			return fmt.Errorf("parse skill file %s: %w", path, err)
+
+		// Distinguish skill descriptors from reference content by filename.
+		if strings.HasSuffix(path, "/skill.yaml") {
+			var desc SkillDescriptor
+			if err := yaml.Unmarshal(data, &desc); err != nil {
+				return fmt.Errorf("parse skill descriptor %s: %w", path, err)
+			}
+			loader.skills[desc.Name] = &desc
+		} else if strings.Contains(path, "/references/") {
+			var ref ReferenceContent
+			if err := yaml.Unmarshal(data, &ref); err != nil {
+				return fmt.Errorf("parse reference %s: %w", path, err)
+			}
+			// Extract skill name from path: skills/<skillName>/references/<file>.yaml
+			parts := strings.Split(path, "/")
+			if len(parts) >= 2 {
+				skillName := parts[1]
+				if loader.references[skillName] == nil {
+					loader.references[skillName] = make(map[string]*ReferenceContent)
+				}
+				loader.references[skillName][ref.Name] = &ref
+			}
 		}
-		loader.skills = append(loader.skills, skill)
+
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("load skills: %w", err)
 	}
+
+	// Log loaded skills summary
+	names := make([]string, 0, len(loader.skills))
+	for name := range loader.skills {
+		names = append(names, name)
+	}
+	debugLog("skills", "技能加载完成，共 %d 个技能: %v", len(loader.skills), names)
+
+	for name, refs := range loader.references {
+		debugLog("skills", "技能 %s 加载了 %d 个参考文档", name, len(refs))
+	}
+
 	return loader, nil
 }
 
-// Skills returns the full list of loaded skills.
-func (l *SkillLoader) Skills() []SkillFile {
-	return l.skills
-}
-
-// Search returns matching SkillFile objects based on keyword and/or category.
-// When both keyword and category are empty, all skills are returned in full.
-//
-//   - keyword: case-insensitive contains match against Name, Description, and Keywords
-//   - category: case-insensitive exact match against Metadata.Category
-//   - limit: max results returned (0 = no limit)
-func (l *SkillLoader) Search(keyword, category string, limit int) []SkillFile {
-	if len(l.skills) == 0 {
-		return nil
-	}
-
-	var matched []SkillFile
+// Skills returns all loaded skill descriptors.
+func (l *SkillLoader) Skills() []*SkillDescriptor {
+	result := make([]*SkillDescriptor, 0, len(l.skills))
 	for _, s := range l.skills {
-		if keyword != "" {
-			if !matchKeyword(s, keyword) {
-				continue
-			}
-		}
-		if category != "" {
-			if !strings.EqualFold(s.Metadata.Category, category) {
-				continue
-			}
-		}
-		matched = append(matched, s)
+		result = append(result, s)
 	}
-
-	if limit > 0 && len(matched) > limit {
-		matched = matched[:limit]
-	}
-
-	return matched
+	return result
 }
 
-// matchKeyword checks if the keyword matches any of the skill's keywords, name, or description.
-// Matching is case-insensitive and uses contains semantics.
-func matchKeyword(s SkillFile, keyword string) bool {
-	kw := strings.ToLower(keyword)
-	for _, k := range s.Metadata.Keywords {
-		if strings.Contains(strings.ToLower(k), kw) {
-			return true
+// HasSkill reports whether a skill with the given name exists.
+func (l *SkillLoader) HasSkill(name string) bool {
+	_, ok := l.skills[name]
+	return ok
+}
+
+// LoadSkill returns the descriptor for the named skill.
+func (l *SkillLoader) LoadSkill(name string) (*SkillDescriptor, error) {
+	desc, ok := l.skills[name]
+	if !ok {
+		return nil, fmt.Errorf("skill not found: %s", name)
+	}
+	return desc, nil
+}
+
+// GetReference returns the content of a specific reference within a skill.
+func (l *SkillLoader) GetReference(skillName, refName string) (*ReferenceContent, error) {
+	refs, ok := l.references[skillName]
+	if !ok {
+		// Check if the skill exists at all.
+		if _, skillExists := l.skills[skillName]; !skillExists {
+			return nil, fmt.Errorf("skill not found: %s", skillName)
 		}
+		return nil, fmt.Errorf("reference '%s' not found in skill '%s'", refName, skillName)
 	}
-	if strings.Contains(strings.ToLower(s.Name), kw) {
-		return true
+
+	ref, ok := refs[refName]
+	if !ok {
+		// List available references for helpful error message.
+		available := make([]string, 0, len(refs))
+		for name := range refs {
+			available = append(available, name)
+		}
+		return nil, fmt.Errorf("reference '%s' not found in skill '%s'. Available references: %v", refName, skillName, available)
 	}
-	if strings.Contains(strings.ToLower(s.Description), kw) {
-		return true
-	}
-	return false
+
+	return ref, nil
 }

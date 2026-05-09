@@ -18,8 +18,8 @@ import (
 
 func TestToolExecutor_Tools_Definitions(t *testing.T) {
 	executor := NewAgentToolExecutor(nil, nil)
-	tools := executor.Tools()
-	require.Len(t, tools, 5)
+	tools := executor.Tools(context.Background())
+	require.Len(t, tools, 3, "without skillLoader should have 3 base tools")
 
 	for _, tool := range tools {
 		assert.NotEmpty(t, tool.Name, "tool name must not be empty")
@@ -33,30 +33,40 @@ func TestToolExecutor_Tools_Definitions(t *testing.T) {
 		require.True(t, ok, "tool %s must have properties", tool.Name)
 		require.NotEmpty(t, props, "tool %s must have at least one property", tool.Name)
 	}
+
+	// With skillLoader
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executorWithSkills := NewAgentToolExecutor(nil, loader)
+	toolsWithSkills := executorWithSkills.Tools(context.Background())
+	require.Len(t, toolsWithSkills, 5, "with skillLoader should have 3 base + 2 skill tools")
 }
 
 func TestToolExecutor_Tools_NamesAreCorrect(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, nil)
-	tools := executor.Tools()
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+	tools := executor.Tools(context.Background())
 
 	names := make([]string, len(tools))
 	for i, tool := range tools {
 		names[i] = tool.Name
 	}
 
-	expected := []string{
-		"get_draft",
-		"apply_edits",
-		"search_assets",
-		"search_skills",
-		"search_design_skill",
-	}
-	assert.Equal(t, expected, names)
+	assert.Contains(t, names, "get_draft")
+	assert.Contains(t, names, "apply_edits")
+	assert.Contains(t, names, "search_assets")
+	assert.Contains(t, names, "resume-design")
+	assert.Contains(t, names, "resume-interview")
+	assert.NotContains(t, names, "load_skill", "load_skill should be removed")
+	assert.NotContains(t, names, "get_skill_reference", "get_skill_reference should only appear after skill loaded")
 }
 
 func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, nil)
-	tools := executor.Tools()
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+	tools := executor.Tools(context.Background())
 	toolByName := make(map[string]ToolDef)
 	for _, tool := range tools {
 		toolByName[tool.Name] = tool
@@ -100,28 +110,109 @@ func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
 		assert.Empty(t, req)
 	}
 
-	// search_skills: all optional, required = []
+	// resume-design: skill tool, no parameters
 	{
-		tool := toolByName["search_skills"]
+		tool := toolByName["resume-design"]
+		assert.NotEmpty(t, tool.Description)
 		props := tool.Parameters["properties"].(map[string]interface{})
-		assert.Contains(t, props, "keyword")
-		assert.Contains(t, props, "category")
-		assert.Contains(t, props, "limit")
-		req := tool.Parameters["required"].([]string)
-		assert.Empty(t, req)
+		assert.Empty(t, props)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Skill tools in Tools()
+// ---------------------------------------------------------------------------
+
+func TestTools_ContainsSkillTools(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+
+	tools := executor.Tools(context.Background())
+	names := make([]string, len(tools))
+	for i, tool := range tools {
+		names[i] = tool.Name
 	}
 
-	// search_design_skill: query is required
-	{
-		tool := toolByName["search_design_skill"]
-		props := tool.Parameters["properties"].(map[string]interface{})
-		assert.Contains(t, props, "query")
-		assert.Contains(t, props, "domain")
-		assert.Contains(t, props, "stack")
-		assert.Contains(t, props, "limit")
-		req := tool.Parameters["required"].([]string)
-		assert.Equal(t, []string{"query"}, req)
+	assert.Contains(t, names, "resume-design")
+	assert.Contains(t, names, "resume-interview")
+}
+
+func TestTools_SkillToolHasNoParameters(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+
+	tools := executor.Tools(context.Background())
+	toolByName := make(map[string]ToolDef)
+	for _, tool := range tools {
+		toolByName[tool.Name] = tool
 	}
+
+	designTool := toolByName["resume-design"]
+	assert.NotEmpty(t, designTool.Description)
+	props := designTool.Parameters["properties"].(map[string]interface{})
+	assert.Empty(t, props, "skill tool should have no parameters")
+}
+
+// ---------------------------------------------------------------------------
+// Skill tool execution
+// ---------------------------------------------------------------------------
+
+func TestExecute_SkillAsTool(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+
+	ctx := WithSessionID(context.Background(), 200)
+	result, err := executor.Execute(ctx, "resume-design", nil)
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &data))
+	assert.Equal(t, "resume-design", data["name"])
+	assert.NotEmpty(t, data["description"])
+	assert.NotEmpty(t, data["usage"])
+}
+
+func TestExecute_SkillAsTool_NotFound(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+
+	_, err = executor.Execute(context.Background(), "nonexistent-skill", nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown tool")
+}
+
+func TestExecute_SkillAsTool_MarksLoaded(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+
+	sessionID := uint(201)
+	ctx := WithSessionID(context.Background(), sessionID)
+
+	// Before calling skill tool, get_skill_reference should not be in tools
+	toolsBefore := executor.Tools(ctx)
+	for _, tool := range toolsBefore {
+		assert.NotEqual(t, "get_skill_reference", tool.Name)
+	}
+
+	// Call skill tool
+	_, err = executor.Execute(ctx, "resume-design", nil)
+	require.NoError(t, err)
+
+	// After calling skill tool, get_skill_reference should appear
+	toolsAfter := executor.Tools(ctx)
+	found := false
+	for _, tool := range toolsAfter {
+		if tool.Name == "get_skill_reference" {
+			found = true
+			break
+		}
+	}
+	assert.True(t, found, "get_skill_reference should appear after loading a skill")
 }
 
 // ---------------------------------------------------------------------------
@@ -236,7 +327,6 @@ func TestApplyEdits_Success(t *testing.T) {
 	assert.Equal(t, "Old Title", edits[1].OldString)
 	assert.Equal(t, "New Title", edits[1].NewString)
 	assert.Equal(t, "update heading", edits[1].Description)
-	// HtmlSnapshot should be after this edit
 	assert.Contains(t, edits[1].HtmlSnapshot, "New Title")
 	assert.Contains(t, edits[1].HtmlSnapshot, "Old paragraph")
 
@@ -411,58 +501,129 @@ func TestSearchAssets_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// search_skills
+// get_skill_reference
 // ---------------------------------------------------------------------------
 
-func TestSearchSkills_NotFound(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, nil)
-	result, err := executor.Execute(context.Background(), "search_skills", map[string]interface{}{
-		"keyword": "nonexistent",
-	})
+func TestGetReference_Valid(t *testing.T) {
+	loader, err := NewSkillLoader()
 	require.NoError(t, err)
-	assert.Contains(t, result, `"skills":[]`)
-}
+	executor := NewAgentToolExecutor(nil, loader)
 
-// ---------------------------------------------------------------------------
-// design skill tool
-// ---------------------------------------------------------------------------
+	ctx := WithSessionID(context.Background(), 2)
+	// First load the skill via skill tool (not load_skill)
+	_, err = executor.Execute(ctx, "resume-interview", nil)
+	require.NoError(t, err)
 
-func TestSearchDesignSkill(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, nil)
-
-	result, err := executor.Execute(context.Background(), "search_design_skill", map[string]interface{}{
-		"query":  "professional resume dashboard",
-		"domain": "style",
-		"limit":  2,
+	// Then get the reference
+	result, err := executor.Execute(ctx, "get_skill_reference", map[string]interface{}{
+		"skill_name":     "resume-interview",
+		"reference_name": "test-engineer",
 	})
 	require.NoError(t, err)
 
 	var data map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(result), &data))
-	assert.Equal(t, "style", data["domain"])
-	results, ok := data["results"].([]interface{})
-	require.True(t, ok)
-	require.NotEmpty(t, results)
-	constraints, ok := data["resume_constraints"].([]interface{})
-	require.True(t, ok)
-	require.NotEmpty(t, constraints)
+	assert.Equal(t, "test-engineer", data["name"])
+	assert.NotEmpty(t, data["content"])
 }
 
-func TestSearchDesignSkill_ConstrainsPromptDomain(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, nil)
+func TestGetReference_SkillNotLoaded(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
 
-	result, err := executor.Execute(context.Background(), "search_design_skill", map[string]interface{}{
-		"query":  "professional resume layout",
-		"domain": "prompt",
-		"limit":  3,
+	ctx := WithSessionID(context.Background(), 3)
+	// Try to get reference without loading skill first
+	result, err := executor.Execute(ctx, "get_skill_reference", map[string]interface{}{
+		"skill_name":     "resume-interview",
+		"reference_name": "test-engineer",
 	})
 	require.NoError(t, err)
-	assert.NotContains(t, result, "Bento Grids")
+	assert.Contains(t, result, "not loaded")
+	assert.Contains(t, result, "call 'resume-interview' tool first")
+}
 
-	var data map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(result), &data))
-	assert.Equal(t, "style", data["domain"])
-	assert.Contains(t, data["note"], "收敛")
+func TestGetReference_ReferenceNotFound(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+
+	ctx := WithSessionID(context.Background(), 4)
+	// Load the skill via skill tool
+	_, err = executor.Execute(ctx, "resume-interview", nil)
+	require.NoError(t, err)
+
+	// Try to get a nonexistent reference
+	result, err := executor.Execute(ctx, "get_skill_reference", map[string]interface{}{
+		"skill_name":     "resume-interview",
+		"reference_name": "nonexistent-ref",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "not found")
+	assert.Contains(t, result, "test-engineer") // should list available
+}
+
+func TestGetReference_MissingParams(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+
+	// Missing skill_name
+	result, err := executor.Execute(context.Background(), "get_skill_reference", map[string]interface{}{
+		"reference_name": "test-engineer",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "skill_name is required")
+
+	// Missing reference_name
+	result, err = executor.Execute(context.Background(), "get_skill_reference", map[string]interface{}{
+		"skill_name": "resume-interview",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "reference_name is required")
+}
+
+func TestGetReference_NilLoader(t *testing.T) {
+	executor := NewAgentToolExecutor(nil, nil)
+
+	result, err := executor.Execute(context.Background(), "get_skill_reference", map[string]interface{}{
+		"skill_name":     "resume-interview",
+		"reference_name": "test-engineer",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "技能库未加载")
+}
+
+// ---------------------------------------------------------------------------
+// Complete flow integration test
+// ---------------------------------------------------------------------------
+
+func TestToolExecutor_CompleteFlow(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+
+	ctx := WithSessionID(context.Background(), 100)
+
+	// Step 1: Call skill tool (not load_skill)
+	loadResult, err := executor.Execute(ctx, "resume-interview", nil)
+	require.NoError(t, err)
+
+	var loadDesc map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(loadResult), &loadDesc))
+	assert.Equal(t, "resume-interview", loadDesc["name"])
+
+	// Step 2: Get reference
+	refResult, err := executor.Execute(ctx, "get_skill_reference", map[string]interface{}{
+		"skill_name":     "resume-interview",
+		"reference_name": "test-engineer",
+	})
+	require.NoError(t, err)
+
+	var refData map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(refResult), &refData))
+	assert.Equal(t, "test-engineer", refData["name"])
+	assert.NotEmpty(t, refData["content"])
 }
 
 // ---------------------------------------------------------------------------
