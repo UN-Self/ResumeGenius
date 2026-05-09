@@ -77,12 +77,13 @@ func setupRouter(db *gorm.DB) (*gin.Engine, func()) {
 	}
 	ttl := jwtTTL()
 	secure := cookieSecure()
+	cookieDomain := os.Getenv("COOKIE_DOMAIN")
 
 	emailService := auth.NewEmailService()
 
 	authed := v1.Group("")
 	authed.Use(middleware.AuthRequired(secret))
-	auth.RegisterRoutes(v1, authed, db, secret, ttl, secure, emailService)
+	auth.RegisterRoutes(v1, authed, db, secret, ttl, secure, cookieDomain, emailService)
 	intake.RegisterRoutes(authed, db, uploadDir)
 	parsing.RegisterRoutes(authed, db, store)
 

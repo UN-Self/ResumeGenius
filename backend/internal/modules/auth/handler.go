@@ -20,13 +20,14 @@ type Handler struct {
 	secret       string
 	ttl          time.Duration
 	cookieSecure bool
+	cookieDomain string
 }
 
-func NewHandler(service *Service, secret string, ttl time.Duration, cookieSecure bool) *Handler {
+func NewHandler(service *Service, secret string, ttl time.Duration, cookieSecure bool, cookieDomain string) *Handler {
 	if ttl <= 0 {
 		ttl = defaultTokenTTL
 	}
-	return &Handler{service: service, secret: secret, ttl: ttl, cookieSecure: cookieSecure}
+	return &Handler{service: service, secret: secret, ttl: ttl, cookieSecure: cookieSecure, cookieDomain: cookieDomain}
 }
 
 // ── Request/Response types ──────────────────────────────────────────
@@ -109,7 +110,7 @@ func (h *Handler) Login(c *gin.Context) {
 		token,
 		int(h.ttl.Seconds()),
 		"/",
-		"",
+		h.cookieDomain,
 		h.cookieSecure,
 		true,
 	)
@@ -258,6 +259,7 @@ func (h *Handler) Logout(c *gin.Context) {
 		Name:     middleware.AccessTokenCookieName,
 		Value:    "",
 		Path:     "/",
+		Domain:   h.cookieDomain,
 		MaxAge:   -1,
 		Secure:   h.cookieSecure,
 		HttpOnly: true,

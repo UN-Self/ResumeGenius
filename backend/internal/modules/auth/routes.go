@@ -7,9 +7,9 @@ import (
 	"gorm.io/gorm"
 )
 
-func RegisterRoutes(publicRG, protectedRG *gin.RouterGroup, db *gorm.DB, jwtSecret string, tokenTTL time.Duration, cookieSecure bool, emailService *EmailService) {
+func RegisterRoutes(publicRG, protectedRG *gin.RouterGroup, db *gorm.DB, jwtSecret string, tokenTTL time.Duration, cookieSecure bool, cookieDomain string, emailService *EmailService) {
 	svc := NewService(db, emailService)
-	h := NewHandler(svc, jwtSecret, tokenTTL, cookieSecure)
+	h := NewHandler(svc, jwtSecret, tokenTTL, cookieSecure, cookieDomain)
 
 	publicRG.POST("/auth/login", h.Login)
 	publicRG.POST("/auth/logout", h.Logout)
