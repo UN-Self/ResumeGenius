@@ -426,8 +426,10 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 		// 3. Validate all ops first (dry run)
 		for i, op := range ops {
 			if !strings.Contains(html, op.OldString) {
+				oldPreview := truncateDebug(op.OldString, 100)
+				htmlPreview := truncateDebug(html, 200)
 				debugLog("tools", "操作 %d 验证失败: old_string 未找到: %s", i, truncateHTML(op.OldString))
-				return fmt.Errorf("old_string not found: %q", op.OldString)
+				return fmt.Errorf("old_string not found in current draft. old_string前100字符: %q | 当前HTML前200字符: %q", oldPreview, htmlPreview)
 			}
 		}
 
