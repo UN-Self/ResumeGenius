@@ -386,10 +386,6 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 		if !ok {
 			return "", fmt.Errorf("ops[%d].new_string must be a string", i)
 		}
-		if err := validateResumeEditFragment(newStr); err != nil {
-			debugLog("tools", "操作 %d 验证失败: %v", i, err)
-			return "", fmt.Errorf("ops[%d].new_string violates resume design constraints: %w", i, err)
-		}
 		desc, _ := opMap["description"].(string)
 		ops = append(ops, editOp{OldString: oldStr, NewString: newStr, Description: desc})
 	}
@@ -564,45 +560,6 @@ func (e *AgentToolExecutor) searchAssets(ctx context.Context, params map[string]
 		return "", fmt.Errorf("marshal result: %w", err)
 	}
 	return string(b), nil
-}
-
-// ---------------------------------------------------------------------------
-// resume edit guardrails
-// ---------------------------------------------------------------------------
-
-var resumeEditRejectPatterns = []struct {
-	Pattern string
-	Reason  string
-}{
-	{"linear-gradient(", "简历禁止复杂渐变背景"},
-	{"radial-gradient(", "简历禁止复杂渐变背景"},
-	{"conic-gradient(", "简历禁止复杂渐变背景"},
-	{"backdrop-filter:", "简历禁止玻璃拟态模糊效果"},
-	{"-webkit-backdrop-filter:", "简历禁止玻璃拟态模糊效果"},
-	{"filter:blur(", "简历禁止模糊滤镜"},
-	{"@keyframes", "简历禁止动画"},
-	{"animation:", "简历禁止动画"},
-	{"text-shadow:", "简历禁止发光或阴影文字"},
-	{"box-shadow:", "简历禁止厚重卡片阴影"},
-	{"position:fixed", "简历禁止固定定位布局"},
-	{"position:absolute", "简历禁止绝对定位布局"},
-	{"height:100vh", "简历禁止网页视口高度布局"},
-	{"min-height:100vh", "简历禁止网页视口高度布局"},
-}
-
-func validateResumeEditFragment(fragment string) error {
-	compact := strings.ToLower(fragment)
-	compact = strings.ReplaceAll(compact, " ", "")
-	compact = strings.ReplaceAll(compact, "\n", "")
-	compact = strings.ReplaceAll(compact, "\t", "")
-	compact = strings.ReplaceAll(compact, "\r", "")
-
-	for _, item := range resumeEditRejectPatterns {
-		if strings.Contains(compact, item.Pattern) {
-			return errors.New(item.Reason)
-		}
-	}
-	return nil
 }
 
 // ---------------------------------------------------------------------------
