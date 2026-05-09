@@ -505,7 +505,8 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 				}
 				if reminder != "" {
 					toolResults = append(toolResults, Message{Role: "user", Content: reminder})
-				debugLog("service", "搜索过多提醒触发，连续 %d 轮未执行 apply_edits", searchOnlyCount)
+					debugLog("service", "搜索过多提醒触发，连续 %d 轮未执行 apply_edits", searchOnlyCount)
+					debugLogFull("service", "提醒消息内容", reminder)
 				}
 			}
 			continue
@@ -514,6 +515,7 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 		// d. No tool calls — if had text, save and finish
 		if hadText {
 			allThinking.WriteString(thinkingAccum.String())
+			debugLog("service", "模型文本输出，长度 %d 字符，内容: %s", fullText.Len(), truncateDebug(fullText.String(), 500))
 			thinkingStr := allThinking.String()
 			var thinkingPtr *string
 			if thinkingStr != "" {
@@ -539,6 +541,7 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 		}
 	}
 
+	debugLog("service", "迭代汇总: 总轮次 %d，总耗时 %v", s.maxIterations*2+1, time.Since(loopStart))
 	return ErrMaxIterations
 }
 

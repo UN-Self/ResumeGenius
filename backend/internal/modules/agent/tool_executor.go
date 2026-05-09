@@ -429,6 +429,7 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 				oldPreview := truncateDebug(op.OldString, 100)
 				htmlPreview := truncateDebug(html, 200)
 				debugLog("tools", "操作 %d 验证失败: old_string 未找到: %s", i, truncateHTML(op.OldString))
+				debugLogFull("tools", fmt.Sprintf("apply_edits 操作 %d 失败 - 完整 new_string", i), op.NewString)
 				return fmt.Errorf("old_string not found in current draft. old_string前100字符: %q | 当前HTML前200字符: %q", oldPreview, htmlPreview)
 			}
 		}
@@ -480,6 +481,8 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 
 	if err != nil {
 		debugLog("tools", "apply_edits 失败，耗时 %v: %v", time.Since(start), err)
+		opsJSON, _ := json.Marshal(ops)
+		debugLogFull("tools", "apply_edits 失败 - 完整 ops", string(opsJSON))
 	} else {
 		debugLog("tools", "apply_edits 完成，耗时 %v", time.Since(start))
 	}
