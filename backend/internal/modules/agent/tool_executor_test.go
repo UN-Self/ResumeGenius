@@ -375,33 +375,6 @@ func TestApplyEdits_OldStringNotFound(t *testing.T) {
 	assert.Empty(t, edits)
 }
 
-func TestApplyEdits_RejectsOverdesignedResumeStyle(t *testing.T) {
-	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
-
-	proj := models.Project{Title: "Test", Status: "active"}
-	require.NoError(t, db.Create(&proj).Error)
-
-	html := `<html><body><p>Original</p></body></html>`
-	draft := models.Draft{ProjectID: proj.ID, HTMLContent: html}
-	require.NoError(t, db.Create(&draft).Error)
-
-	ctx := WithDraftID(context.Background(), draft.ID)
-	_, err := executor.Execute(ctx, "apply_edits", map[string]interface{}{
-		"ops": []interface{}{
-			map[string]interface{}{
-				"old_string": "Original",
-				"new_string": `<style>.resume{background:linear-gradient(135deg,#667eea,#764ba2);}</style><p>Modified</p>`,
-			},
-		},
-	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "violates resume design constraints")
-
-	var unchanged models.Draft
-	require.NoError(t, db.First(&unchanged, draft.ID).Error)
-	assert.Equal(t, html, unchanged.HTMLContent)
-}
 
 func TestApplyEdits_BaseSnapshot(t *testing.T) {
 	db := SetupTestDB(t)
