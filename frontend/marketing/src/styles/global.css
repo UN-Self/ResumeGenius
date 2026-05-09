@@ -511,6 +511,77 @@
     0 0 0 1px color-mix(in srgb, var(--color-border-glow), transparent 30%);
 }
 
+/* ── Workbench-compatible aliases ── */
+.app-shell {
+  /* alias for .site-shell — both work identically */
+}
+
+.brand-kicker {
+  /* alias for .hero-kicker — both work identically */
+}
+
+.resume-card-hover {
+  transition:
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    background-color 220ms ease;
+}
+.resume-card-hover:hover {
+  transform: translateY(-4px);
+  border-color: var(--color-border-glow);
+  box-shadow:
+    0 20px 48px rgba(2, 8, 23, 0.16),
+    0 0 0 1px color-mix(in srgb, var(--color-border-glow), transparent 30%);
+}
+
+/* stagger-in animation (matches workbench) */
+@keyframes stagger-in {
+  from { opacity: 0; transform: translateY(8px); filter: blur(2px); }
+  to   { opacity: 1; transform: translateY(0);  filter: blur(0); }
+}
+.stagger-in {
+  animation: stagger-in 0.5s ease both;
+}
+
+/* Feature cards (login/register page) */
+.feature-card {
+  transition:
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 280ms ease,
+    box-shadow 280ms ease,
+    background-color 280ms ease;
+}
+.feature-card:hover {
+  transform: translateY(-6px);
+  border-color: var(--color-border-glow);
+  box-shadow:
+    0 18px 42px rgba(2, 8, 23, 0.14),
+    0 0 0 1px color-mix(in srgb, var(--color-border-glow), transparent 40%);
+}
+.feature-card:hover .feature-card-icon {
+  transform: scale(1.12);
+}
+.feature-card:hover .feature-card-bar {
+  width: 100% !important;
+}
+
+/* Missing design tokens from workbench */
+:root {
+  --color-popover: var(--color-card);
+  --color-popover-foreground: var(--color-card-foreground);
+  --color-canvas-bg: color-mix(in srgb, var(--color-background), var(--color-primary) 5%);
+  --color-resume-paper: #ffffff;
+  --color-page-bg: var(--color-background);
+  --color-divider: var(--color-border);
+  --color-text-main: var(--color-foreground);
+  --color-text-secondary: var(--color-muted-foreground);
+}
+
+[data-theme="dark"] {
+  --color-resume-paper: #1a1d28;
+}
+
 .hero-console {
   background: var(--preview-shell) !important;
 }
