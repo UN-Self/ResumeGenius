@@ -19,6 +19,7 @@ var (
 	ErrModelTimeout    = errors.New("model call timeout")
 	ErrModelFormat     = errors.New("model returned invalid format")
 	ErrMaxIterations   = errors.New("max tool-calling iterations exceeded")
+	ErrEditFailed      = errors.New("failed to apply resume edits")
 )
 
 // ---------------------------------------------------------------------------
@@ -123,14 +124,14 @@ const systemPromptV2 = `你是简历编辑专家。你可以像编辑代码一�
 4. 只有当 search_assets 反复搜索后确实找不到某项关键信息（如没有旧简历可参考、缺少联系方式等），才在最终回复中明确告知用户缺少什么，建议上传文件或手动补充
 5. 当用户明确目标岗位时，用 search_skills 搜索岗位关键词，参考面经和简历建议
 6. 当用户要求调整视觉、排版、配色、模板、样式，用 search_skills 搜索 keyword="简历设计 A4 单页" category="design"
-7. 只有在仍需字体、配色或极简风格参考时，才调用 search_design_skill；不得把它当网页/产品 UI 灵感库
+7. 新建完整简历时，优先使用本提示中的 A4 约束直接生成，不要为了“灵感”反复搜索；只有在仍需字体、配色或极简风格参考时，才调用 search_design_skill；不得把它当网页/产品 UI 灵感库
 8. 用 apply_edits 提交精确修改
 9. 修改后可用 get_draft 验证结果
 10. 完成后用自然语言总结修改内容
 
 ## 编辑原则
 - apply_edits 是搜索替换，不是追加：old_string 必须匹配要被替换的已有内容，new_string 是替换后的内容
-- 绝对禁止把整份简历作为 new_string 写入而不匹配任何 old_string，这会导致内容重复
+- 如果当前草稿为空或用户明确要求整体重做，可用 apply_edits 的 mode="replace_all" 提交完整简历 HTML；其他情况不要把整份简历塞进局部替换
 - 每次只修改需要变化的部分，不要重写整个简历
 - old_string 必须精确匹配，不匹配则修改会失败
 - 失败时读取当前 HTML 找到正确内容后重试
@@ -145,6 +146,8 @@ const systemPromptV2 = `你是简历编辑专家。你可以像编辑代码一�
 - 字体必须支持中文渲染；禁止使用仅含拉丁字符的字体（如 Inter、Roboto 单独指定）；中文内容必须落在含有 "Noto Sans CJK SC"、"Microsoft YaHei"、"PingFang SC" 或系统 sans-serif 回退的字体栈中
 - 技能列表必须可换行、可读，禁止做成长串不换行的技能胶囊或大块色卡
 - 禁止使用 landing page、hero、dashboard、bento/card grid、glassmorphism、aurora、3D、霓虹、复杂渐变、大面积紫蓝/粉色背景、纹理背景、动画、发光、厚重阴影、过度圆角和装饰图形
+- CSS 必须使用普通文档流；禁止 position:absolute、position:fixed、height:100vh、min-height:100vh。头像、姓名、联系方式、左右栏都用 block/flex/table-like 文档流布局，不要靠绝对定位摆放
+- 调用 apply_edits 前必须自检 new_string：没有 absolute/fixed 定位、没有 keyframes/animation、没有 gradient/backdrop-filter/text-shadow/box-shadow；若存在，先改成保守 A4 简历样式再提交
 - 如果用户说"太花"、"太炫"、"过头"、"不像简历"，优先移除视觉特效，恢复常规专业简历样式
 
 ## 回复规范
@@ -245,7 +248,7 @@ func (s *ChatService) compactMessages(ctx context.Context, messages []models.AIM
 // StreamChatReAct implements the core ReAct reasoning loop.
 // It streams thinking events, tool calls, tool results, edit events, and the
 // final text response via the sendEvent callback. The loop runs for at most
-// s.maxIterations stall rounds (iterations with no tool calls or text).
+// s.maxIterations model turns, including tool-calling turns.
 func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEvent func(string)) error {
 	// 1. Load session, verify existence
 	var session models.AISession
@@ -305,8 +308,9 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 	var allThinking strings.Builder
 	stallCount := 0
 	searchOnlyCount := 0
+	consecutiveApplyFailures := 0
 
-	for totalIter := 0; totalIter < s.maxIterations*2+1; totalIter++ {
+	for totalIter := 0; totalIter < s.maxIterations; totalIter++ {
 		// a. Build messages array: system + history + pending tool results
 		apiMessages := []Message{{Role: "system", Content: augmentedPrompt}}
 		for _, m := range history {
@@ -383,13 +387,23 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 					})
 					sendEvent(string(failData))
 					// Add error result to pending messages for next iteration
+					errorContent, _ := json.Marshal(toolErrorForModel(call.Name, errMsg))
 					iterToolResults = append(iterToolResults, Message{
 						Role:       "tool",
-						Content:    fmt.Sprintf(`{"error":"%s"}`, errMsg),
+						Content:    string(errorContent),
 						ToolCallID: call.ID,
 						Name:       call.Name,
 					})
+					if call.Name == "apply_edits" {
+						consecutiveApplyFailures++
+						if consecutiveApplyFailures >= 2 {
+							return fmt.Errorf("%w: %s", ErrEditFailed, errMsg)
+						}
+					}
 				} else {
+					if call.Name == "apply_edits" {
+						consecutiveApplyFailures = 0
+					}
 					// Emit edit SSE event for apply_edits
 					if call.Name == "apply_edits" {
 						editData, _ := json.Marshal(map[string]interface{}{
@@ -445,6 +459,8 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 		)
 		if err != nil {
 			log.Printf("agent: iteration %d model call failed: %v", totalIter, err)
+			allThinking.WriteString(thinkingAccum.String())
+			s.saveAssistantFailure(sessionID, err, allThinking.String())
 			return err
 		}
 
@@ -485,7 +501,7 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 			} else {
 				searchOnlyCount++
 				reminder := ""
-				remaining := (s.maxIterations*2+1) - totalIter
+				remaining := s.maxIterations - totalIter - 1
 				switch {
 				case remaining <= 1:
 					reminder = "[系统指令] 这是最后一步。必须立刻调用 apply_edits 输出简历。"
@@ -524,11 +540,33 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 		// e. No output at all — count as stall
 		stallCount++
 		if stallCount >= s.maxIterations {
+			s.saveAssistantFailure(sessionID, ErrMaxIterations, allThinking.String())
 			return ErrMaxIterations
 		}
 	}
 
+	s.saveAssistantFailure(sessionID, ErrMaxIterations, allThinking.String())
 	return ErrMaxIterations
+}
+
+func (s *ChatService) saveAssistantFailure(sessionID uint, err error, thinking string) {
+	content := "本轮未能完成简历修改：" + err.Error()
+	if errors.Is(err, ErrEditFailed) {
+		content = "本轮未能应用简历修改。我已经收到工具返回的失败原因，下一轮会改用更保守的 A4 文档流版式重试。失败原因：" + err.Error()
+	} else if errors.Is(err, ErrMaxIterations) {
+		content = "本轮工具调用次数已耗尽，未能完成简历修改。下一轮会减少搜索并直接生成可应用的简历。"
+	}
+
+	var thinkingPtr *string
+	if strings.TrimSpace(thinking) != "" {
+		thinkingPtr = &thinking
+	}
+	_ = s.db.Create(&models.AIMessage{
+		SessionID: sessionID,
+		Role:      "assistant",
+		Content:   content,
+		Thinking:  thinkingPtr,
+	}).Error
 }
 
 // preloadAssets queries the project's non-deleted, non-folder assets and returns
@@ -620,6 +658,38 @@ func toolErrorForClient(message string) string {
 	return marshalClientToolResult(map[string]interface{}{
 		"error": truncateRunes(message, clientToolResultPreviewRunes),
 	})
+}
+
+func toolErrorForModel(toolName, message string) map[string]string {
+	payload := map[string]string{"error": message}
+	if toolName != "apply_edits" {
+		return payload
+	}
+
+	payload["next_action"] = "Revise the proposed HTML/CSS and call apply_edits again once. Do not search more unless the missing information is factual content."
+	payload["fix_strategy"] = "Use a conservative A4 resume layout with normal document flow. Remove prohibited web-style CSS before retrying."
+
+	switch {
+	case strings.Contains(message, "绝对定位") || strings.Contains(message, "position:absolute"):
+		payload["design_failure"] = "The resume used absolute positioning."
+		payload["repair_hint"] = "Remove position:absolute. Use block/flex/table-like document flow for header, avatar, columns, and sections."
+	case strings.Contains(message, "固定定位") || strings.Contains(message, "position:fixed"):
+		payload["design_failure"] = "The resume used fixed positioning."
+		payload["repair_hint"] = "Remove position:fixed. A printable resume must not pin elements to the viewport."
+	case strings.Contains(message, "渐变") || strings.Contains(message, "gradient"):
+		payload["design_failure"] = "The resume used complex gradients."
+		payload["repair_hint"] = "Use white or very light paper background and one restrained accent color."
+	case strings.Contains(message, "动画") || strings.Contains(message, "animation") || strings.Contains(message, "keyframes"):
+		payload["design_failure"] = "The resume used animation."
+		payload["repair_hint"] = "Remove animation and keyframes. The output must be a static printable document."
+	case strings.Contains(message, "阴影") || strings.Contains(message, "shadow"):
+		payload["design_failure"] = "The resume used prohibited shadow effects."
+		payload["repair_hint"] = "Use font weight, spacing, thin borders, and dividers for hierarchy instead of shadows."
+	default:
+		payload["repair_hint"] = "Remove the prohibited CSS mentioned in error, keep a simple professional resume layout, then retry apply_edits."
+	}
+
+	return payload
 }
 
 func marshalClientToolResult(payload map[string]interface{}) string {
