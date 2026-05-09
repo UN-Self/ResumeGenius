@@ -204,8 +204,8 @@ func TestCompactMessages_TooFewMessages(t *testing.T) {
 // MockToolExecutor returns canned results for tool executions in tests.
 type MockToolExecutor struct{}
 
-func (e *MockToolExecutor) Tools() []ToolDef {
-	return NewAgentToolExecutor(nil, nil).Tools()
+func (e *MockToolExecutor) Tools(_ context.Context) []ToolDef {
+	return NewAgentToolExecutor(nil, nil).Tools(context.Background())
 }
 
 func (e *MockToolExecutor) Execute(_ context.Context, toolName string, _ map[string]interface{}) (string, error) {
@@ -425,16 +425,19 @@ func TestChatService_StreamChatReAct_SavesToolCalls(t *testing.T) {
 	var toolCalls []models.AIToolCall
 	err = db.Where("session_id = ?", session.ID).Order("id ASC").Find(&toolCalls).Error
 	require.NoError(t, err)
-	require.Len(t, toolCalls, 3, "MockAdapter produces 3 tool calls")
+	require.Len(t, toolCalls, 4, "MockAdapter produces 4 tool calls")
 
 	assert.Equal(t, "get_draft", toolCalls[0].ToolName)
 	assert.Equal(t, "completed", toolCalls[0].Status)
 
-	assert.Equal(t, "search_design_skill", toolCalls[1].ToolName)
+	assert.Equal(t, "resume-design", toolCalls[1].ToolName)
 	assert.Equal(t, "completed", toolCalls[1].Status)
 
-	assert.Equal(t, "apply_edits", toolCalls[2].ToolName)
+	assert.Equal(t, "get_skill_reference", toolCalls[2].ToolName)
 	assert.Equal(t, "completed", toolCalls[2].Status)
+
+	assert.Equal(t, "apply_edits", toolCalls[3].ToolName)
+	assert.Equal(t, "completed", toolCalls[3].Status)
 }
 
 func TestChatService_StreamChatReAct_SessionNotFound(t *testing.T) {

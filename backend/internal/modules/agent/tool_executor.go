@@ -7,11 +7,12 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"gorm.io/gorm"
 
-	"github.com/UN-Self/ResumeGenius/backend/internal/modules/designskill"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 )
 
@@ -22,8 +23,9 @@ import (
 type contextKey int
 
 const (
-	draftIDKey contextKey = iota
+	draftIDKey   contextKey = iota
 	projectIDKey
+	sessionIDKey
 )
 
 // WithDraftID returns a context carrying the given draft ID.
@@ -34,6 +36,11 @@ func WithDraftID(ctx context.Context, id uint) context.Context {
 // WithProjectID returns a context carrying the given project ID.
 func WithProjectID(ctx context.Context, id uint) context.Context {
 	return context.WithValue(ctx, projectIDKey, id)
+}
+
+// WithSessionID returns a context carrying the given session ID.
+func WithSessionID(ctx context.Context, id uint) context.Context {
+	return context.WithValue(ctx, sessionIDKey, id)
 }
 
 // ---------------------------------------------------------------------------
@@ -50,15 +57,16 @@ type ToolDef struct {
 // ToolExecutor defines the interface for executing AI tool calls.
 type ToolExecutor interface {
 	// Tools returns the list of tool definitions.
-	Tools() []ToolDef
+	Tools(ctx context.Context) []ToolDef
 	// Execute runs a tool by name with the given parameters and returns the result as a JSON string.
 	Execute(ctx context.Context, toolName string, params map[string]interface{}) (string, error)
 }
 
 // AgentToolExecutor implements ToolExecutor using database queries.
 type AgentToolExecutor struct {
-	db          *gorm.DB
-	skillLoader *SkillLoader
+	db           *gorm.DB
+	skillLoader  *SkillLoader
+	loadedSkills sync.Map // sessionID -> map[string]bool (loaded skill names)
 }
 
 // NewAgentToolExecutor creates a new AgentToolExecutor.
@@ -66,56 +74,10 @@ func NewAgentToolExecutor(db *gorm.DB, skillLoader *SkillLoader) *AgentToolExecu
 	return &AgentToolExecutor{db: db, skillLoader: skillLoader}
 }
 
-var resumeDesignConstraints = []string{
-	"只设计常规招聘简历，不设计网页、落地页、仪表盘、海报或作品集。",
-	"默认控制在一页 A4，优先压缩内容、字号、行距和间距，不通过夸张视觉扩张版面。",
-	"使用白色或浅色纸面、深色正文、最多一个克制强调色，保持高对比和可打印。",
-	"禁止 hero、bento/card grid、glassmorphism、aurora、3D、霓虹、复杂渐变、动画、发光、厚重阴影和大面积彩色背景。",
-	"正文保持 13-15px 左右，姓名标题不超过 24px，分区标题 14-16px，技能列表必须可换行。",
-}
-
-const resumeDesignFallbackQuery = "professional business document resume A4 one page minimal swiss flat print readable"
-const resumeDesignQuerySuffix = "professional business document resume A4 one page minimal swiss flat print readable conservative"
-
-var resumeDesignBlockedResultTerms = []string{
-	"aurora",
-	"bento",
-	"brutal",
-	"card grid",
-	"clay",
-	"cyber",
-	"dashboard",
-	"glass",
-	"hero",
-	"hyperrealism",
-	"immersive",
-	"landing",
-	"liquid",
-	"motion",
-	"neon",
-	"portfolio",
-	"retro",
-	"skeuomorphism",
-	"showcase",
-	"social proof",
-	"storytelling",
-	"three",
-	"vibrant",
-	"video",
-	"3d",
-}
-
-type resumeDesignSkillResponse struct {
-	designskill.SkillSearchResult
-	ResumeConstraints []string `json:"resume_constraints"`
-	QueryUsed         string   `json:"query_used"`
-	DomainUsed        string   `json:"domain_used,omitempty"`
-	Note              string   `json:"note,omitempty"`
-}
-
 // Tools returns the AI-callable tool definitions.
-func (e *AgentToolExecutor) Tools() []ToolDef {
-	return []ToolDef{
+func (e *AgentToolExecutor) Tools(ctx context.Context) []ToolDef {
+	// 1. Base tools (fixed)
+	tools := []ToolDef{
 		{
 			Name:        "get_draft",
 			Description: "读取当前简历 HTML。不带参数返回完整 HTML，带 selector 参数只返回匹配的片段（CSS 选择器）。",
@@ -166,173 +128,188 @@ func (e *AgentToolExecutor) Tools() []ToolDef {
 				"required": []string{},
 			},
 		},
-		{
-			Name:        "search_skills",
-			Description: "搜索简历优化技能库（岗位面经、简历建议、A4 设计规范）。根据目标岗位或任务关键词查找建议；视觉/排版任务优先用 keyword='简历设计 A4 单页' category='design'。",
-			Parameters: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"keyword": map[string]interface{}{
-						"type":        "string",
-						"description": "搜索关键词，按岗位名、技能名或任务匹配，如'测试工程师'、'QA'、'自动化测试'、'简历设计 A4 单页'",
-					},
-					"category": map[string]interface{}{
-						"type":        "string",
-						"description": "技能分类名，如'test'、'tech'、'management'、'design'",
-					},
-					"limit": map[string]interface{}{
-						"type":        "integer",
-						"description": "返回数量上限，默认 3",
-					},
-				},
-				"required": []string{},
-			},
-		},
-		{
-			Name:        "search_design_skill",
-			Description: "查询受简历约束的 ui-ux-pro-max 设计参考。仅用于常规 A4 简历的保守字体、配色、极简/瑞士风格辅助；不得用于 landing page、hero、bento、aurora、glass、3D、dashboard 等网页化设计。",
-			Parameters: map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"query":  map[string]interface{}{"type": "string", "description": "简历设计需求，例如 professional A4 resume layout、简历 排版 字体、简历 克制配色"},
-					"domain": map[string]interface{}{"type": "string", "description": "可选且建议仅用：style | color | ux | typography。prompt/landing/product/chart 会被收敛到简历安全范围。"},
-					"stack":  map[string]interface{}{"type": "string", "description": "兼容旧参数；简历设计中通常会忽略技术栈建议，避免生成网页 UI。"},
-					"limit":  map[string]interface{}{"type": "integer", "description": "返回数量上限，默认 3"},
-				},
-				"required": []string{"query"},
-			},
-		},
 	}
+
+	// 2. Skill tools (auto-generated from SkillLoader, no parameters)
+	if e.skillLoader != nil {
+		for _, skill := range e.skillLoader.Skills() {
+			tools = append(tools, ToolDef{
+				Name:        skill.Name,
+				Description: skill.Description,
+				Parameters: map[string]interface{}{
+					"type":       "object",
+					"properties": map[string]interface{}{},
+				},
+			})
+		}
+	}
+
+	// 3. Sub-tools (dynamically injected based on loaded skills)
+	sessionID, _ := ctx.Value(sessionIDKey).(uint)
+	if e.hasLoadedSkills(sessionID) {
+		tools = append(tools, ToolDef{
+			Name:        "get_skill_reference",
+			Description: "获取技能库中指定岗位的面经内容或设计规范。必须先调用对应技能工具。",
+			Parameters: map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"skill_name": map[string]interface{}{
+						"type":        "string",
+						"description": "技能名称，如 'resume-interview'、'resume-design'",
+					},
+					"reference_name": map[string]interface{}{
+						"type":        "string",
+						"description": "reference 名称，如 'test-engineer'、'a4-guidelines'",
+					},
+				},
+				"required": []string{"skill_name", "reference_name"},
+			},
+		})
+	}
+
+	return tools
 }
 
 // Execute dispatches to the correct tool implementation based on toolName.
 func (e *AgentToolExecutor) Execute(ctx context.Context, toolName string, params map[string]interface{}) (string, error) {
+	start := time.Now()
+
+	paramsJSON, _ := json.Marshal(params)
+	debugLog("tools", "调用工具 %s，参数摘要: %s", toolName, truncateParams(string(paramsJSON)))
+
+	var result string
+	var err error
+
 	switch toolName {
 	case "get_draft":
-		return e.getDraft(ctx, params)
+		result, err = e.getDraft(ctx, params)
 	case "apply_edits":
-		return e.applyEdits(ctx, params)
+		result, err = e.applyEdits(ctx, params)
 	case "search_assets":
-		return e.searchAssets(ctx, params)
-	case "search_skills":
-		return e.searchSkills(ctx, params)
-	case "search_design_skill":
-		return e.searchDesignSkill(ctx, params)
+		result, err = e.searchAssets(ctx, params)
+	case "get_skill_reference":
+		result, err = e.getSkillReference(ctx, params)
 	default:
-		return "", fmt.Errorf("unknown tool: %s", toolName)
+		// Check if it's a skill tool
+		if e.skillLoader != nil && e.skillLoader.HasSkill(toolName) {
+			result, err = e.executeSkillTool(ctx, toolName)
+		} else {
+			return "", fmt.Errorf("unknown tool: %s", toolName)
+		}
 	}
+
+	if err != nil {
+		debugLog("tools", "工具 %s 执行失败，耗时 %v: %v", toolName, time.Since(start), err)
+	} else {
+		debugLog("tools", "工具 %s 执行成功，耗时 %v", toolName, time.Since(start))
+	}
+	return result, err
 }
 
 // ---------------------------------------------------------------------------
-// design skill tool
+// skill tool execution
 // ---------------------------------------------------------------------------
 
-func (e *AgentToolExecutor) searchDesignSkill(ctx context.Context, params map[string]interface{}) (string, error) {
-	query, _ := params["query"].(string)
-	domain, _ := params["domain"].(string)
-	stack, _ := params["stack"].(string)
-	limit := 3
-	if _, ok := params["limit"]; ok {
-		if n, err := getIntParam(params, "limit"); err == nil && n > 0 {
-			limit = n
-		}
+func (e *AgentToolExecutor) executeSkillTool(ctx context.Context, skillName string) (string, error) {
+	if e.skillLoader == nil {
+		return `{"error":"技能库未加载"}`, nil
 	}
 
-	query, domain, stack, note := normalizeResumeDesignSearch(query, domain, stack)
-	result, err := designskill.SearchSkill(query, domain, stack, limit)
+	debugLog("tools", "加载技能 %s", skillName)
+
+	desc, err := e.skillLoader.LoadSkill(skillName)
 	if err != nil {
-		return "", err
-	}
-	result = filterResumeDesignResult(result)
-	if result.Count == 0 && (domain != "style" || query != resumeDesignFallbackQuery) {
-		fallback, fallbackErr := designskill.SearchSkill(resumeDesignFallbackQuery, "style", "", limit)
-		if fallbackErr == nil {
-			result = filterResumeDesignResult(fallback)
-			if note != "" {
-				note += " "
-			}
-			note += "已回退到保守 A4 简历风格查询。"
-		}
+		return fmt.Sprintf(`{"error":"%s"}`, err.Error()), nil
 	}
 
-	resp := resumeDesignSkillResponse{
-		SkillSearchResult: result,
-		ResumeConstraints: append([]string(nil), resumeDesignConstraints...),
-		QueryUsed:         query,
-		DomainUsed:        result.Domain,
-		Note:              strings.TrimSpace(note),
+	// Mark skill as loaded for this session.
+	if sessionID, ok := ctx.Value(sessionIDKey).(uint); ok {
+		e.markSkillLoaded(sessionID, skillName)
 	}
-	b, err := json.Marshal(resp)
+
+	b, err := json.Marshal(desc)
 	if err != nil {
-		return "", fmt.Errorf("marshal result: %w", err)
+		return "", fmt.Errorf("marshal skill descriptor: %w", err)
 	}
 	return string(b), nil
 }
 
-func normalizeResumeDesignSearch(query, domain, stack string) (string, string, string, string) {
-	query = strings.TrimSpace(query)
-	domain = strings.ToLower(strings.TrimSpace(domain))
-	stack = strings.ToLower(strings.TrimSpace(stack))
+// ---------------------------------------------------------------------------
+// get_skill_reference
+// ---------------------------------------------------------------------------
 
-	var notes []string
-	if query == "" {
-		query = resumeDesignFallbackQuery
-		notes = append(notes, "空查询已替换为保守 A4 简历设计查询。")
-	} else if !strings.Contains(strings.ToLower(query), "resume") && !strings.Contains(query, "简历") {
-		query += " resume"
+func (e *AgentToolExecutor) getSkillReference(ctx context.Context, params map[string]interface{}) (string, error) {
+	if e.skillLoader == nil {
+		return `{"error":"技能库未加载"}`, nil
 	}
 
-	switch domain {
-	case "", "style", "color", "ux", "typography":
-	case "prompt", "landing", "product", "chart":
-		domain = "style"
-		notes = append(notes, "网页/产品/图表类 domain 已收敛为 style，避免生成非简历 UI。")
-	default:
-		domain = "style"
-		notes = append(notes, "未知 domain 已收敛为 style。")
+	skillName, _ := params["skill_name"].(string)
+	refName, _ := params["reference_name"].(string)
+
+	if skillName == "" {
+		return `{"error":"skill_name is required"}`, nil
+	}
+	if refName == "" {
+		return `{"error":"reference_name is required"}`, nil
 	}
 
-	if stack != "" {
-		stack = ""
-		notes = append(notes, "技术栈建议已忽略，避免把简历改成前端应用界面。")
-	}
-
-	if !strings.Contains(strings.ToLower(query), "a4") {
-		query += " " + resumeDesignQuerySuffix
-	}
-	return strings.TrimSpace(query), domain, stack, strings.Join(notes, " ")
-}
-
-func filterResumeDesignResult(result designskill.SkillSearchResult) designskill.SkillSearchResult {
-	if len(result.Results) == 0 {
-		return result
-	}
-
-	filtered := make([]map[string]string, 0, len(result.Results))
-	for _, row := range result.Results {
-		if isResumeDesignResultAllowed(row) {
-			filtered = append(filtered, row)
+	// Check that the skill has been loaded first (order enforcement).
+	if sessionID, ok := ctx.Value(sessionIDKey).(uint); ok {
+		if !e.isSkillLoaded(sessionID, skillName) {
+			return fmt.Sprintf(`{"error":"skill '%s' not loaded: call '%s' tool first"}`, skillName, skillName), nil
 		}
 	}
-	result.Results = filtered
-	result.Count = len(filtered)
-	return result
+
+	debugLog("tools", "获取技能参考文档 %s/%s", skillName, refName)
+
+	ref, err := e.skillLoader.GetReference(skillName, refName)
+	if err != nil {
+		return fmt.Sprintf(`{"error":"%s"}`, err.Error()), nil
+	}
+
+	b, err := json.Marshal(ref)
+	if err != nil {
+		return "", fmt.Errorf("marshal reference: %w", err)
+	}
+	return string(b), nil
 }
 
-func isResumeDesignResultAllowed(row map[string]string) bool {
-	labels := []string{
-		row["Style Category"],
-		row["Pattern Name"],
-		row["Product Type"],
-		row["Best Chart Type"],
+// ---------------------------------------------------------------------------
+// session skill tracking helpers
+// ---------------------------------------------------------------------------
+
+func (e *AgentToolExecutor) markSkillLoaded(sessionID uint, skillName string) {
+	val, _ := e.loadedSkills.LoadOrStore(sessionID, &sync.Map{})
+	m := val.(*sync.Map)
+	m.Store(skillName, true)
+}
+
+func (e *AgentToolExecutor) isSkillLoaded(sessionID uint, skillName string) bool {
+	val, ok := e.loadedSkills.Load(sessionID)
+	if !ok {
+		return false
 	}
-	joined := strings.ToLower(strings.Join(labels, " "))
-	for _, term := range resumeDesignBlockedResultTerms {
-		if strings.Contains(joined, term) {
-			return false
-		}
+	m := val.(*sync.Map)
+	_, loaded := m.Load(skillName)
+	return loaded
+}
+
+func (e *AgentToolExecutor) clearSessionSkills(sessionID uint) {
+	e.loadedSkills.Delete(sessionID)
+}
+
+func (e *AgentToolExecutor) hasLoadedSkills(sessionID uint) bool {
+	val, ok := e.loadedSkills.Load(sessionID)
+	if !ok {
+		return false
 	}
-	return true
+	m := val.(*sync.Map)
+	has := false
+	m.Range(func(_, _ interface{}) bool {
+		has = true
+		return false
+	})
+	return has
 }
 
 // ---------------------------------------------------------------------------
@@ -352,6 +329,7 @@ func (e *AgentToolExecutor) getDraft(ctx context.Context, params map[string]inte
 
 	selector, _ := params["selector"].(string)
 	if selector == "" {
+		debugLog("tools", "get_draft，返回完整 HTML 长度 %d", len(draft.HTMLContent))
 		return draft.HTMLContent, nil
 	}
 
@@ -363,6 +341,7 @@ func (e *AgentToolExecutor) getDraft(ctx context.Context, params map[string]inte
 	if err != nil {
 		return "", fmt.Errorf("extract selector: %w", err)
 	}
+	debugLog("tools", "get_draft，selector=%s，返回 HTML 长度 %d", selector, len(html))
 	return html, nil
 }
 
@@ -408,6 +387,7 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 			return "", fmt.Errorf("ops[%d].new_string must be a string", i)
 		}
 		if err := validateResumeEditFragment(newStr); err != nil {
+			debugLog("tools", "操作 %d 验证失败: %v", i, err)
 			return "", fmt.Errorf("ops[%d].new_string violates resume design constraints: %w", i, err)
 		}
 		desc, _ := opMap["description"].(string)
@@ -417,6 +397,9 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 	if len(ops) == 0 {
 		return "", errors.New("ops must not be empty")
 	}
+
+	debugLog("tools", "apply_edits 开始，共 %d 个操作", len(ops))
+	start := time.Now()
 
 	// Use a closure variable to capture the result from within the transaction.
 	var result string
@@ -445,8 +428,9 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 		}
 
 		// 3. Validate all ops first (dry run)
-		for _, op := range ops {
+		for i, op := range ops {
 			if !strings.Contains(html, op.OldString) {
+				debugLog("tools", "操作 %d 验证失败: old_string 未找到: %s", i, truncateHTML(op.OldString))
 				return fmt.Errorf("old_string not found: %q", op.OldString)
 			}
 		}
@@ -454,7 +438,8 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 		// 4. Apply all ops for real
 		nextSeq := draft.CurrentEditSequence + 1
 		applied := 0
-		for _, op := range ops {
+		for i, op := range ops {
+			debugLog("tools", "操作 %d/%d: old=%s → new=%s", i+1, len(ops), truncateHTML(op.OldString), truncateHTML(op.NewString))
 			html = strings.ReplaceAll(html, op.OldString, op.NewString)
 
 			// 5. Record each op as DraftEdit with HtmlSnapshot
@@ -495,6 +480,11 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 		return nil
 	})
 
+	if err != nil {
+		debugLog("tools", "apply_edits 失败，耗时 %v: %v", time.Since(start), err)
+	} else {
+		debugLog("tools", "apply_edits 完成，耗时 %v", time.Since(start))
+	}
 	return result, err
 }
 
@@ -517,7 +507,8 @@ func (e *AgentToolExecutor) searchAssets(ctx context.Context, params map[string]
 	}
 
 	// Optional keyword filter (search in content)
-	if keyword, ok := params["query"].(string); ok && keyword != "" {
+	keyword, _ := params["query"].(string)
+	if keyword != "" {
 		query = query.Where("content ILIKE ?", "%"+keyword+"%")
 	}
 
@@ -534,6 +525,8 @@ func (e *AgentToolExecutor) searchAssets(ctx context.Context, params map[string]
 	if err := query.Find(&assets).Error; err != nil {
 		return "", fmt.Errorf("search assets: %w", err)
 	}
+
+	debugLog("tools", "search_assets，查询=%s，结果 %d 条", keyword, len(assets))
 
 	type assetResult struct {
 		ID        uint   `json:"id"`
@@ -569,36 +562,6 @@ func (e *AgentToolExecutor) searchAssets(ctx context.Context, params map[string]
 	b, err := json.Marshal(resultData)
 	if err != nil {
 		return "", fmt.Errorf("marshal result: %w", err)
-	}
-	return string(b), nil
-}
-
-// ---------------------------------------------------------------------------
-// search_skills
-// ---------------------------------------------------------------------------
-
-func (e *AgentToolExecutor) searchSkills(ctx context.Context, params map[string]interface{}) (string, error) {
-	if e.skillLoader == nil {
-		return `{"skills":[],"message":"技能库未加载"}`, nil
-	}
-
-	keyword, _ := params["keyword"].(string)
-	category, _ := params["category"].(string)
-	limit := 3
-	if _, ok := params["limit"]; ok {
-		if n, err := getIntParam(params, "limit"); err == nil && n > 0 {
-			limit = n
-		}
-	}
-
-	results := e.skillLoader.Search(keyword, category, limit)
-
-	resp := map[string]interface{}{
-		"skills": results,
-	}
-	b, err := json.Marshal(resp)
-	if err != nil {
-		return "", fmt.Errorf("marshal search results: %w", err)
 	}
 	return string(b), nil
 }

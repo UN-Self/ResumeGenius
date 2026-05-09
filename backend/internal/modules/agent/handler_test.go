@@ -279,8 +279,8 @@ type mockToolExecutor struct {
 	db      *gorm.DB          // optional — if set, apply_edits updates the draft row
 }
 
-func (m *mockToolExecutor) Tools() []ToolDef {
-	return NewAgentToolExecutor(nil, nil).Tools()
+func (m *mockToolExecutor) Tools(_ context.Context) []ToolDef {
+	return NewAgentToolExecutor(nil, nil).Tools(context.Background())
 }
 
 func (m *mockToolExecutor) Execute(_ context.Context, name string, params map[string]interface{}) (string, error) {

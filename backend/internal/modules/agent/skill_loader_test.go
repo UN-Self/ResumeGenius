@@ -7,72 +7,113 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSkillLoader_LoadAll(t *testing.T) {
+// --- LoadSkill tests ---
+
+func TestSkillLoader_LoadSkill_Existing(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
-	assert.NotEmpty(t, loader.Skills(), "should load at least one skill")
+
+	desc, err := loader.LoadSkill("resume-interview")
+	require.NoError(t, err)
+	assert.Equal(t, "resume-interview", desc.Name)
+	assert.NotEmpty(t, desc.Description)
+	assert.NotEmpty(t, desc.Usage)
+	assert.NotEmpty(t, desc.Tools)
+	assert.NotEmpty(t, desc.References)
 }
 
-func TestSkillLoader_SearchByKeyword(t *testing.T) {
+func TestSkillLoader_LoadSkill_NotFound(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
 
-	results := loader.Search("测试工程师", "", 0)
-	require.NotEmpty(t, results, "should find test-resume skill")
-	assert.Equal(t, "test-resume", results[0].Name)
-	assert.NotEmpty(t, results[0].Content, "should include full content")
+	_, err = loader.LoadSkill("nonexistent-skill")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "skill not found")
 }
 
-func TestSkillLoader_SearchByKeyword_WithLimit(t *testing.T) {
+func TestSkillLoader_LoadSkill_Design(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
 
-	results := loader.Search("测试工程师", "", 1)
-	require.Len(t, results, 1)
+	desc, err := loader.LoadSkill("resume-design")
+	require.NoError(t, err)
+	assert.Equal(t, "resume-design", desc.Name)
+	assert.NotEmpty(t, desc.References)
+	assert.Equal(t, "a4-guidelines", desc.References[0].Name)
 }
 
-func TestSkillLoader_SearchByCategory(t *testing.T) {
+// --- HasSkill tests ---
+
+func TestSkillLoader_HasSkill_Existing(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
-
-	results := loader.Search("", "test", 0)
-	require.NotEmpty(t, results, "should find skills in test category")
+	assert.True(t, loader.HasSkill("resume-interview"))
+	assert.True(t, loader.HasSkill("resume-design"))
 }
 
-func TestSkillLoader_SearchResumeDesignSkill(t *testing.T) {
+func TestSkillLoader_HasSkill_NotFound(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
-
-	results := loader.Search("简历设计", "design", 0)
-	require.NotEmpty(t, results, "should find resume design guardrail skill")
-	assert.Equal(t, "resume-design-a4", results[0].Name)
-	assert.Contains(t, results[0].Content, "A4 单页简历设计规范")
+	assert.False(t, loader.HasSkill("nonexistent"))
 }
 
-func TestSkillLoader_SearchNoMatch(t *testing.T) {
+// --- GetReference tests ---
+
+func TestSkillLoader_GetReference_Existing(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
 
-	results := loader.Search("nonexistent_keyword_xyz", "", 0)
-	assert.Empty(t, results)
+	ref, err := loader.GetReference("resume-interview", "test-engineer")
+	require.NoError(t, err)
+	assert.Equal(t, "test-engineer", ref.Name)
+	assert.NotEmpty(t, ref.Content)
+	assert.Contains(t, ref.Content, "测试工程师")
 }
 
-func TestSkillLoader_SearchAllReturnsFullContent(t *testing.T) {
+func TestSkillLoader_GetReference_NotFound(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
 
-	results := loader.Search("", "", 0)
-	require.NotEmpty(t, results)
-	assert.NotEmpty(t, results[0].Content, "should include full content when no filter")
+	_, err = loader.GetReference("resume-interview", "nonexistent-ref")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+	assert.Contains(t, err.Error(), "test-engineer") // should list available references
 }
 
-func TestSkillLoader_ContentNotEmpty(t *testing.T) {
+func TestSkillLoader_GetReference_WrongSkill(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
 
-	for _, s := range loader.Skills() {
-		assert.NotEmpty(t, s.Content, "skill %s must have content", s.Name)
-		assert.NotEmpty(t, s.Metadata.Keywords, "skill %s must have keywords", s.Name)
-		assert.NotEmpty(t, s.Metadata.Category, "skill %s must have category", s.Name)
+	_, err = loader.GetReference("nonexistent-skill", "test-engineer")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "skill not found")
+}
+
+func TestSkillLoader_GetReference_DesignSkill(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+
+	ref, err := loader.GetReference("resume-design", "a4-guidelines")
+	require.NoError(t, err)
+	assert.Equal(t, "a4-guidelines", ref.Name)
+	assert.Contains(t, ref.Content, "A4 单页简历设计规范")
+}
+
+// --- Skills listing ---
+
+func TestSkillLoader_Skills_ReturnsAllDescriptors(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+
+	skills := loader.Skills()
+	require.Len(t, skills, 2)
+
+	names := map[string]bool{}
+	for _, s := range skills {
+		names[s.Name] = true
+		assert.NotEmpty(t, s.Description)
+		assert.NotEmpty(t, s.References)
 	}
+	assert.True(t, names["resume-interview"])
+	assert.True(t, names["resume-design"])
 }

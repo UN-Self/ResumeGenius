@@ -1,0 +1,23 @@
+name: resume-design
+description: 提供 A4 单页简历设计规范和保守风格参考，帮助用户调整视觉、排版、配色
+trigger: 用户要求调整简历样式或需要设计参考时
+
+usage: |
+  1. 使用 get_skill_reference 获取 A4 设计规范
+  2. 基于规范指导简历样式修改
+
+tools:
+  - name: get_skill_reference
+    description: 获取 A4 简历设计规范
+    params:
+      - name: skill_name
+        type: string
+        description: 固定传 "resume-design"
+      - name: reference_name
+        type: string
+        description: 固定传 "a4-guidelines"
+    usage: 返回完整的 A4 单页简历设计规范
+
+references:
+  - name: a4-guidelines
+    description: A4 单页简历设计规范，包含推荐样式、禁止样式和修改策略

@@ -58,6 +58,7 @@ uploads/
 *.out
 /backend/tmp/
 /backend/vendor/
+backend/server
 
 # Test utilities (local DB config, not for CI)
 backend/internal/modules/agent/testutil.go
