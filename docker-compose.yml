@@ -51,6 +51,11 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       TZ: ${TZ:-Asia/Shanghai}
       CHROME_BIN: "/usr/bin/chromium"
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8080/health > /dev/null 2>&1 || exit 1"]
       interval: 60m
