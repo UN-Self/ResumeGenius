@@ -9,7 +9,7 @@ const MIN_INFLUENCE = 0.006
 const INFLUENCE_POWER = 1.55
 
 function shouldShowRipple(pathname: string) {
-  return pathname === '/' || pathname === '/login' || /^\/projects\/\d+$/.test(pathname)
+  return pathname === '/' || pathname === '/login' || pathname === '/register' || /^\/projects\/\d+$/.test(pathname)
 }
 
 export function GridRippleCanvas() {

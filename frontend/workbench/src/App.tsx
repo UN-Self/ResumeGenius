@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ProjectList from '@/pages/ProjectList'
 import ProjectDetail from '@/pages/ProjectDetail'
 import LoginPage from '@/pages/LoginPage'
+import RegisterPage from '@/pages/RegisterPage'
 import EditorPage from '@/pages/EditorPage'
 import { authApi } from '@/lib/api-client'
 import { FullPageState } from '@/components/ui/full-page-state'
@@ -69,6 +70,12 @@ export default function App() {
           element={authState === 'authed'
             ? <Navigate to="/" replace />
             : <LoginPage onSuccess={() => { setAuthState('authed') }} />}
+        />
+        <Route
+          path="/register"
+          element={authState === 'authed'
+            ? <Navigate to="/" replace />
+            : <RegisterPage />}
         />
         <Route
           path="/"

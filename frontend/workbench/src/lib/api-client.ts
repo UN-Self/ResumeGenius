@@ -67,6 +67,17 @@ export interface User {
   username: string
 }
 
+export interface AuthUser {
+  id: string
+  username: string
+  email?: string
+  email_verified?: boolean
+}
+
+export interface CheckAvailability {
+  available: boolean
+}
+
 export const authApi = {
   login: (username: string, password: string) =>
     request<User>('/auth/login', {
@@ -75,6 +86,25 @@ export const authApi = {
     }),
   me: () => request<User>('/auth/me'),
   logout: () => request<null>('/auth/logout', { method: 'POST' }),
+  register: (username: string, password: string, email: string) =>
+    request<AuthUser>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, email }),
+    }),
+  sendCode: (email: string) =>
+    request<null>('/auth/send-code', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  verifyEmail: (email: string, code: string) =>
+    request<AuthUser>('/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ email, code }),
+    }),
+  checkUsername: (q: string) =>
+    request<CheckAvailability>(`/auth/check-username?q=${encodeURIComponent(q)}`),
+  checkEmail: (q: string) =>
+    request<CheckAvailability>(`/auth/check-email?q=${encodeURIComponent(q)}`),
 }
 
 // --- Intake API ---

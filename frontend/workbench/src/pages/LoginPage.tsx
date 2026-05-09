@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { FileText, LockKeyhole, Sparkles, UserRound } from 'lucide-react'
 import { ApiError, authApi, type User } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert } from '@/components/ui/alert'
 import { ThemeSwitcher } from '@/components/ui/theme-switcher'
+import { AnimatedBrandTitle } from '@/components/ui/animated-brand-title'
 
 interface LoginPageProps {
   onSuccess: (user: User) => void
@@ -16,6 +18,9 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  const [searchParams] = useSearchParams()
+  const justRegistered = searchParams.get('registered') === 'true'
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,9 +46,11 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
               <Sparkles size={14} className="text-primary" />
               Futuristic resume intelligence
             </div>
-            <h1 className="gradient-text max-w-2xl text-6xl font-semibold tracking-tight">
-              让 AI 把经历整理成作品。
-            </h1>
+            <div className="group">
+              <h1 className="gradient-text max-w-2xl text-6xl font-semibold tracking-tight cursor-default select-none transition-all duration-500 group-hover:animate-[brand-title-wobble_680ms_cubic-bezier(0.34,1.56,0.64,1)] group-hover:[filter:drop-shadow(0_0_18px_color-mix(in_srgb,var(--color-primary),transparent_58%))]">
+                让 AI 把经历整理成作品。
+              </h1>
+            </div>
             <p className="mt-6 max-w-xl text-sm leading-7 text-muted-foreground">
               上传资料、生成初稿、边聊边改，最后在白纸画布里得到一份可编辑、可导出的专业简历。
             </p>
@@ -63,11 +70,17 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
           <div className="glass-panel stagger-in w-full min-w-0 rounded-3xl p-6">
             <div className="mb-6 flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h1 className="text-2xl font-semibold text-foreground">ResumeGenius</h1>
-                <p className="mt-2 text-sm text-muted-foreground">输入用户名和密码后继续</p>
+                <AnimatedBrandTitle className="text-2xl font-semibold" />
+                <p className="mt-2 text-sm text-muted-foreground">登录以访问你的工作台</p>
               </div>
               <ThemeSwitcher compact className="shrink-0" />
             </div>
+
+            {justRegistered && (
+              <div className="mb-3 rounded-lg border border-green-300/40 bg-green-50/60 px-4 py-2.5 text-sm text-green-800 dark:border-green-500/30 dark:bg-green-950/40 dark:text-green-300">
+                注册成功！请登录你的账号。
+              </div>
+            )}
 
             <form id="login-form" onSubmit={handleSubmit} className="space-y-3">
               <label className="relative block">
@@ -104,6 +117,13 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
                 {loading ? '登录中...' : '进入工作台'}
               </Button>
             </form>
+
+            <div className="mt-5 text-center text-sm text-muted-foreground">
+              还没有账号？
+              <Link to="/register" className="ml-1 text-primary hover:underline">
+                注册
+              </Link>
+            </div>
           </div>
         </div>
       </div>
