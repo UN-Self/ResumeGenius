@@ -285,7 +285,129 @@ func TestApplyEdits_OldStringNotFound(t *testing.T) {
 	assert.Empty(t, edits)
 }
 
-func TestApplyEdits_RejectsOverdesignedResumeStyle(t *testing.T) {
+func TestApplyEdits_RejectsEmptyOldStringWithoutReplaceAll(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db, nil)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	html := `<html><body><p>Original</p></body></html>`
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	ctx := WithDraftID(context.Background(), draft.ID)
+	_, err := executor.Execute(ctx, "apply_edits", map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string": "",
+				"new_string": "Inserted everywhere",
+			},
+		},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "old_string not found")
+
+	var unchanged models.Draft
+	require.NoError(t, db.First(&unchanged, draft.ID).Error)
+	assert.Equal(t, html, unchanged.HTMLContent)
+}
+
+func TestApplyEdits_ReplaceAllMode(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db, nil)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	html := `<p></p>`
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	replacement := `<html><body><section class="resume"><h1>Generated Resume</h1></section></body></html>`
+	ctx := WithDraftID(context.Background(), draft.ID)
+	result, err := executor.Execute(ctx, "apply_edits", map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string":  "",
+				"new_string":  replacement,
+				"mode":        "replace_all",
+				"description": "generate full resume",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &data))
+	assert.Equal(t, float64(1), data["applied"])
+
+	var updated models.Draft
+	require.NoError(t, db.First(&updated, draft.ID).Error)
+	assert.Equal(t, replacement, updated.HTMLContent)
+
+	var edit models.DraftEdit
+	require.NoError(t, db.Where("draft_id = ? AND sequence = 1", draft.ID).First(&edit).Error)
+	assert.Equal(t, html, edit.OldString)
+	assert.Equal(t, replacement, edit.NewString)
+}
+
+func TestApplyEdits_BlankDraftAllowsCompleteResumeReplacement(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db, nil)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: `<p></p>`}
+	require.NoError(t, db.Create(&draft).Error)
+
+	replacement := `<div class="resume"><section><h1>候选人</h1></section></div>`
+	ctx := WithDraftID(context.Background(), draft.ID)
+	_, err := executor.Execute(ctx, "apply_edits", map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string": "model guessed blank shell",
+				"new_string": replacement,
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	var updated models.Draft
+	require.NoError(t, db.First(&updated, draft.ID).Error)
+	assert.Equal(t, replacement, updated.HTMLContent)
+}
+
+func TestApplyEdits_LooseWhitespaceMatch(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db, nil)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	html := "<html><body><section>\n  <h1>Old Title</h1>\n</section></body></html>"
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	ctx := WithDraftID(context.Background(), draft.ID)
+	_, err := executor.Execute(ctx, "apply_edits", map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string": "<section> <h1>Old Title</h1> </section>",
+				"new_string": "<section><h1>New Title</h1></section>",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	var updated models.Draft
+	require.NoError(t, db.First(&updated, draft.ID).Error)
+	assert.Contains(t, updated.HTMLContent, "New Title")
+	assert.NotContains(t, updated.HTMLContent, "Old Title")
+}
+
+func TestApplyEdits_SanitizesOverdesignedResumeStyle(t *testing.T) {
 	db := SetupTestDB(t)
 	executor := NewAgentToolExecutor(db, nil)
 
@@ -301,16 +423,40 @@ func TestApplyEdits_RejectsOverdesignedResumeStyle(t *testing.T) {
 		"ops": []interface{}{
 			map[string]interface{}{
 				"old_string": "Original",
-				"new_string": `<style>.resume{background:linear-gradient(135deg,#667eea,#764ba2);}</style><p>Modified</p>`,
+				"new_string": `<style>.resume{background:linear-gradient(135deg,#667eea,#764ba2);box-shadow:0 10px 30px rgba(0,0,0,.2);}</style><p>Modified</p>`,
 			},
 		},
 	})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "violates resume design constraints")
+	require.NoError(t, err)
 
-	var unchanged models.Draft
-	require.NoError(t, db.First(&unchanged, draft.ID).Error)
-	assert.Equal(t, html, unchanged.HTMLContent)
+	var updated models.Draft
+	require.NoError(t, db.First(&updated, draft.ID).Error)
+	assert.Contains(t, updated.HTMLContent, "Modified")
+	assert.NotContains(t, updated.HTMLContent, "linear-gradient")
+	assert.NotContains(t, updated.HTMLContent, "box-shadow")
+}
+
+func TestSanitizeResumeEditFragment_RemovesWebStyleCSS(t *testing.T) {
+	input := `<style>
+.resume {
+  position: absolute;
+  min-height: 100vh;
+  background: linear-gradient(135deg,#667eea,#764ba2);
+  box-shadow: 0 10px 30px rgba(0,0,0,.2);
+  animation: fade 1s ease;
+}
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+</style>`
+
+	result := sanitizeResumeEditFragment(input)
+
+	assert.NotContains(t, result, "position: absolute")
+	assert.NotContains(t, result, "100vh")
+	assert.NotContains(t, result, "linear-gradient")
+	assert.NotContains(t, result, "box-shadow")
+	assert.NotContains(t, result, "animation:")
+	assert.NotContains(t, result, "@keyframes")
+	assert.Contains(t, result, "min-height: 297mm")
 }
 
 func TestApplyEdits_BaseSnapshot(t *testing.T) {

@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
-	"github.com/gin-gonic/gin"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/response"
+	"github.com/gin-gonic/gin"
 )
 
 const (
@@ -107,6 +109,8 @@ func errorCode(err error) int {
 		return CodeModelFormat
 	case errors.Is(err, ErrMaxIterations):
 		return CodeMaxIterations
+	case errors.Is(err, ErrEditFailed):
+		return CodeModelFormat
 	default:
 		return CodeInternalError
 	}
@@ -161,7 +165,44 @@ func (h *Handler) GetHistory(c *gin.Context) {
 		response.Error(c, CodeInternalError, "failed to get history")
 		return
 	}
-	response.Success(c, gin.H{"items": messages})
+
+	var toolCalls []struct {
+		Name      string                 `json:"name"`
+		Status    string                 `json:"status"`
+		Params    map[string]interface{} `json:"params,omitempty"`
+		Result    string                 `json:"result,omitempty"`
+		CreatedAt string                 `json:"created_at"`
+	}
+	var dbToolCalls []models.AIToolCall
+	if err := h.chatSvc.db.Where("session_id = ?", sessionID).Order("id ASC").Find(&dbToolCalls).Error; err != nil {
+		response.Error(c, CodeInternalError, "failed to get tool calls")
+		return
+	}
+	for _, call := range dbToolCalls {
+		result := ""
+		if call.Error != nil && *call.Error != "" {
+			result = toolErrorForClient(*call.Error)
+		} else if call.Result != nil {
+			if b, err := json.Marshal(call.Result); err == nil {
+				result = string(b)
+			}
+		}
+		toolCalls = append(toolCalls, struct {
+			Name      string                 `json:"name"`
+			Status    string                 `json:"status"`
+			Params    map[string]interface{} `json:"params,omitempty"`
+			Result    string                 `json:"result,omitempty"`
+			CreatedAt string                 `json:"created_at"`
+		}{
+			Name:      call.ToolName,
+			Status:    call.Status,
+			Params:    call.Params,
+			Result:    result,
+			CreatedAt: call.CreatedAt.Format(time.RFC3339Nano),
+		})
+	}
+
+	response.Success(c, gin.H{"items": messages, "tool_calls": toolCalls})
 }
 
 func (h *Handler) Undo(c *gin.Context) {

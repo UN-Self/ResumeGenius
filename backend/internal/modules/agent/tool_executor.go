@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -132,7 +134,7 @@ func (e *AgentToolExecutor) Tools() []ToolDef {
 		},
 		{
 			Name:        "apply_edits",
-			Description: "对简历 HTML 应用搜索替换编辑。提交一组操作，全部验证通过后原子执行。old_string 必须精确匹配当前 HTML。",
+			Description: "对简历 HTML 应用搜索替换编辑。提交一组操作，全部验证通过后原子执行。old_string 必须精确匹配当前 HTML。简历 HTML 必须使用普通文档流布局，禁止 position:absolute/fixed、动画、复杂渐变、玻璃拟态、发光阴影等网页化设计。",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -144,6 +146,7 @@ func (e *AgentToolExecutor) Tools() []ToolDef {
 							"properties": map[string]interface{}{
 								"old_string":  map[string]interface{}{"type": "string", "description": "必须在当前 HTML 中精确匹配的文本"},
 								"new_string":  map[string]interface{}{"type": "string", "description": "替换后的文本"},
+								"mode":        map[string]interface{}{"type": "string", "description": "可选。传 replace_all 时用 new_string 替换整份当前简历 HTML，适合空白草稿或完整重写。"},
 								"description": map[string]interface{}{"type": "string", "description": "修改说明（可选）"},
 							},
 							"required": []string{"old_string", "new_string"},
@@ -373,6 +376,7 @@ func (e *AgentToolExecutor) getDraft(ctx context.Context, params map[string]inte
 type editOp struct {
 	OldString   string `json:"old_string"`
 	NewString   string `json:"new_string"`
+	Mode        string `json:"mode"`
 	Description string `json:"description"`
 }
 
@@ -407,11 +411,13 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 		if !ok {
 			return "", fmt.Errorf("ops[%d].new_string must be a string", i)
 		}
+		newStr = sanitizeResumeEditFragment(newStr)
 		if err := validateResumeEditFragment(newStr); err != nil {
 			return "", fmt.Errorf("ops[%d].new_string violates resume design constraints: %w", i, err)
 		}
+		mode, _ := opMap["mode"].(string)
 		desc, _ := opMap["description"].(string)
-		ops = append(ops, editOp{OldString: oldStr, NewString: newStr, Description: desc})
+		ops = append(ops, editOp{OldString: oldStr, NewString: newStr, Mode: mode, Description: desc})
 	}
 
 	if len(ops) == 0 {
@@ -444,18 +450,24 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 			}
 		}
 
-		// 3. Validate all ops first (dry run)
-		for _, op := range ops {
-			if !strings.Contains(html, op.OldString) {
-				return fmt.Errorf("old_string not found: %q", op.OldString)
+		// 3. Validate and apply in memory first. This lets later ops target
+		// content produced by earlier ops while keeping DB writes atomic.
+		nextHTML := html
+		resolvedOps := make([]editOp, 0, len(ops))
+		for i, op := range ops {
+			resolved, updatedHTML, err := resolveEditOp(nextHTML, op)
+			if err != nil {
+				return fmt.Errorf("ops[%d]: %w", i, err)
 			}
+			nextHTML = updatedHTML
+			resolvedOps = append(resolvedOps, resolved)
 		}
 
-		// 4. Apply all ops for real
+		// 4. Record the already-validated ops.
 		nextSeq := draft.CurrentEditSequence + 1
 		applied := 0
-		for _, op := range ops {
-			html = strings.ReplaceAll(html, op.OldString, op.NewString)
+		for _, op := range resolvedOps {
+			html, _, _ = applyResolvedEditOp(html, op)
 
 			// 5. Record each op as DraftEdit with HtmlSnapshot
 			edit := models.DraftEdit{
@@ -496,6 +508,142 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 	})
 
 	return result, err
+}
+
+func resolveEditOp(current string, op editOp) (editOp, string, error) {
+	mode := strings.ToLower(strings.TrimSpace(op.Mode))
+	if mode == "replace_all" || mode == "full_document" || mode == "full_html" {
+		op.OldString = current
+		op.Mode = "replace_all"
+		return op, op.NewString, nil
+	}
+
+	if shouldReplaceWholeBlankDraft(current, op) {
+		op.OldString = current
+		op.Mode = "replace_all"
+		return op, op.NewString, nil
+	}
+
+	next, matched, ok := applyResolvedEditOp(current, op)
+	if !ok {
+		return op, current, fmt.Errorf("old_string not found: %q", op.OldString)
+	}
+	op.OldString = matched
+	return op, next, nil
+}
+
+func applyResolvedEditOp(current string, op editOp) (string, string, bool) {
+	if strings.ToLower(strings.TrimSpace(op.Mode)) == "replace_all" {
+		return op.NewString, current, true
+	}
+	if op.OldString == "" {
+		return current, "", false
+	}
+	if strings.Contains(current, op.OldString) {
+		return strings.ReplaceAll(current, op.OldString, op.NewString), op.OldString, true
+	}
+	if normalized := normalizeLineEndings(op.OldString); normalized != op.OldString && strings.Contains(current, normalized) {
+		return strings.ReplaceAll(current, normalized, op.NewString), normalized, true
+	}
+	if unescaped := html.UnescapeString(op.OldString); unescaped != op.OldString && strings.Contains(current, unescaped) {
+		return strings.ReplaceAll(current, unescaped, op.NewString), unescaped, true
+	}
+	if next, matched, ok := replaceLooseWhitespace(current, op.OldString, op.NewString); ok {
+		return next, matched, true
+	}
+	return current, "", false
+}
+
+func shouldReplaceWholeBlankDraft(current string, op editOp) bool {
+	if !isBlankDraftHTML(current) {
+		return false
+	}
+	if strings.TrimSpace(op.NewString) == "" {
+		return false
+	}
+	return looksLikeCompleteResumeHTML(op.NewString)
+}
+
+func isBlankDraftHTML(value string) bool {
+	compact := strings.ToLower(strings.TrimSpace(value))
+	compact = strings.ReplaceAll(compact, "\n", "")
+	compact = strings.ReplaceAll(compact, "\r", "")
+	compact = strings.ReplaceAll(compact, "\t", "")
+	compact = strings.ReplaceAll(compact, " ", "")
+	blankForms := []string{
+		"",
+		"<p></p>",
+		"<p><br></p>",
+		"<html><body></body></html>",
+		"<html><body><p></p></body></html>",
+		"<body></body>",
+		"<body><p></p></body>",
+	}
+	for _, form := range blankForms {
+		if compact == form {
+			return true
+		}
+	}
+	return false
+}
+
+func looksLikeCompleteResumeHTML(value string) bool {
+	lower := strings.ToLower(value)
+	return strings.Contains(lower, "<body") ||
+		strings.Contains(lower, "<section") ||
+		strings.Contains(lower, "class=\"resume") ||
+		strings.Contains(lower, "class='resume")
+}
+
+func normalizeLineEndings(value string) string {
+	value = strings.ReplaceAll(value, "\r\n", "\n")
+	return strings.ReplaceAll(value, "\r", "\n")
+}
+
+func replaceLooseWhitespace(current, oldString, newString string) (string, string, bool) {
+	oldString = strings.TrimSpace(oldString)
+	if oldString == "" {
+		return current, "", false
+	}
+	pattern := regexp.QuoteMeta(oldString)
+	spacePattern := regexp.MustCompile(`(?:\\ |\\\t|\\\n|\\\r)+`)
+	pattern = spacePattern.ReplaceAllString(pattern, `\s+`)
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return current, "", false
+	}
+	loc := re.FindStringIndex(current)
+	if loc == nil {
+		return current, "", false
+	}
+	matched := current[loc[0]:loc[1]]
+	next := current[:loc[0]] + newString + current[loc[1]:]
+	return next, matched, true
+}
+
+func sanitizeResumeEditFragment(fragment string) string {
+	replacements := []struct {
+		pattern string
+		value   string
+	}{
+		{`(?is)@keyframes\s+[^{]+\{(?:[^{}]|\{[^{}]*\})*\}`, ""},
+		{`(?i)\bposition\s*:\s*(absolute|fixed)\s*;?`, ""},
+		{`(?i)\bbox-shadow\s*:[^;"'}]+;?`, ""},
+		{`(?i)\btext-shadow\s*:[^;"'}]+;?`, ""},
+		{`(?i)\b-webkit-backdrop-filter\s*:[^;"'}]+;?`, ""},
+		{`(?i)\bbackdrop-filter\s*:[^;"'}]+;?`, ""},
+		{`(?i)\bfilter\s*:\s*blur\([^;"'}]+;?`, ""},
+		{`(?i)\banimation(?:-[a-z-]+)?\s*:[^;"'}]+;?`, ""},
+		{`(?i)\bmin-height\s*:\s*100vh\s*;?`, "min-height: 297mm;"},
+		{`(?i)\bheight\s*:\s*100vh\s*;?`, "min-height: 297mm;"},
+		{`(?i)\b(?:background|background-image)\s*:[^;"'}]*(?:linear|radial|conic)-gradient\([^;"'}]*;?`, "background: #fff;"},
+	}
+
+	sanitized := fragment
+	for _, item := range replacements {
+		sanitized = regexp.MustCompile(item.pattern).ReplaceAllString(sanitized, item.value)
+	}
+	return sanitized
 }
 
 // ---------------------------------------------------------------------------
@@ -608,23 +756,37 @@ func (e *AgentToolExecutor) searchSkills(ctx context.Context, params map[string]
 // ---------------------------------------------------------------------------
 
 var resumeEditRejectPatterns = []struct {
-	Pattern string
-	Reason  string
+	Pattern  string
+	Reason   string
+	Guidance string
 }{
-	{"linear-gradient(", "简历禁止复杂渐变背景"},
-	{"radial-gradient(", "简历禁止复杂渐变背景"},
-	{"conic-gradient(", "简历禁止复杂渐变背景"},
-	{"backdrop-filter:", "简历禁止玻璃拟态模糊效果"},
-	{"-webkit-backdrop-filter:", "简历禁止玻璃拟态模糊效果"},
-	{"filter:blur(", "简历禁止模糊滤镜"},
-	{"@keyframes", "简历禁止动画"},
-	{"animation:", "简历禁止动画"},
-	{"text-shadow:", "简历禁止发光或阴影文字"},
-	{"box-shadow:", "简历禁止厚重卡片阴影"},
-	{"position:fixed", "简历禁止固定定位布局"},
-	{"position:absolute", "简历禁止绝对定位布局"},
-	{"height:100vh", "简历禁止网页视口高度布局"},
-	{"min-height:100vh", "简历禁止网页视口高度布局"},
+	{"linear-gradient(", "简历禁止复杂渐变背景", "改用纯白或极浅色纸面，最多使用一个克制强调色。"},
+	{"radial-gradient(", "简历禁止复杂渐变背景", "改用纯白或极浅色纸面，最多使用一个克制强调色。"},
+	{"conic-gradient(", "简历禁止复杂渐变背景", "改用纯白或极浅色纸面，最多使用一个克制强调色。"},
+	{"backdrop-filter:", "简历禁止玻璃拟态模糊效果", "删除 backdrop-filter，改用普通边框和浅色分隔线。"},
+	{"-webkit-backdrop-filter:", "简历禁止玻璃拟态模糊效果", "删除 backdrop-filter，改用普通边框和浅色分隔线。"},
+	{"filter:blur(", "简历禁止模糊滤镜", "删除滤镜效果，保持文字和分区清晰可打印。"},
+	{"@keyframes", "简历禁止动画", "删除动画代码，简历应是静态可打印文档。"},
+	{"animation:", "简历禁止动画", "删除动画代码，简历应是静态可打印文档。"},
+	{"text-shadow:", "简历禁止发光或阴影文字", "删除 text-shadow，用字号、字重和分隔线建立层级。"},
+	{"box-shadow:", "简历禁止厚重卡片阴影", "删除 box-shadow，改用细边框或浅色分隔线。"},
+	{"position:fixed", "简历禁止固定定位布局", "使用普通文档流、flex 或简单两列布局，不要固定元素位置。"},
+	{"position:absolute", "简历禁止绝对定位布局", "使用普通文档流、flex 或简单两列布局，不要绝对定位头像、装饰或分区。"},
+	{"height:100vh", "简历禁止网页视口高度布局", "改用 A4 尺寸约束，例如 width:210mm; min-height:297mm。"},
+	{"min-height:100vh", "简历禁止网页视口高度布局", "改用 A4 尺寸约束，例如 width:210mm; min-height:297mm。"},
+}
+
+type resumeDesignConstraintError struct {
+	Pattern  string
+	Reason   string
+	Guidance string
+}
+
+func (e resumeDesignConstraintError) Error() string {
+	if e.Guidance == "" {
+		return e.Reason
+	}
+	return e.Reason + "；" + e.Guidance
 }
 
 func validateResumeEditFragment(fragment string) error {
@@ -636,7 +798,11 @@ func validateResumeEditFragment(fragment string) error {
 
 	for _, item := range resumeEditRejectPatterns {
 		if strings.Contains(compact, item.Pattern) {
-			return errors.New(item.Reason)
+			return resumeDesignConstraintError{
+				Pattern:  item.Pattern,
+				Reason:   item.Reason,
+				Guidance: item.Guidance,
+			}
 		}
 	}
 	return nil
