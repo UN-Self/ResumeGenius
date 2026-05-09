@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { FileText, LockKeyhole, Sparkles, Upload, UserRound, WandSparkles } from 'lucide-react'
 import { ApiError, authApi, type User } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ interface LoginPageProps {
 }
 
 export default function LoginPage({ onSuccess }: LoginPageProps) {
+  const navigate = useNavigate()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -21,6 +22,8 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
 
   const [searchParams] = useSearchParams()
   const justRegistered = searchParams.get('registered') === 'true'
+  const redirectParam = searchParams.get('redirect')
+  const redirectOut = redirectParam !== null
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -30,6 +33,11 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
       setError('')
       const user = await authApi.login(username.trim(), password)
       onSuccess(user)
+      if (redirectOut) {
+        window.location.assign(redirectParam || '/')
+      } else {
+        navigate('/', { replace: true })
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '登录失败')
     } finally {

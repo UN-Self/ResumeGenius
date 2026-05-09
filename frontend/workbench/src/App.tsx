@@ -67,15 +67,11 @@ export default function App() {
       <Routes>
         <Route
           path="/login"
-          element={authState === 'authed'
-            ? <Navigate to="/" replace />
-            : <LoginPage onSuccess={() => { setAuthState('authed') }} />}
+          element={<LoginPage onSuccess={() => { setAuthState('authed') }} />}
         />
         <Route
           path="/register"
-          element={authState === 'authed'
-            ? <Navigate to="/" replace />
-            : <RegisterPage />}
+          element={<RegisterPage />}
         />
         <Route
           path="/"
