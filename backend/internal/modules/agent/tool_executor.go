@@ -60,6 +60,8 @@ type ToolExecutor interface {
 	Tools(ctx context.Context) []ToolDef
 	// Execute runs a tool by name with the given parameters and returns the result as a JSON string.
 	Execute(ctx context.Context, toolName string, params map[string]interface{}) (string, error)
+	// ClearSessionState releases any per-session cached state (e.g. loaded skill tracking).
+	ClearSessionState(sessionID uint)
 }
 
 // AgentToolExecutor implements ToolExecutor using database queries.
@@ -294,7 +296,7 @@ func (e *AgentToolExecutor) isSkillLoaded(sessionID uint, skillName string) bool
 	return loaded
 }
 
-func (e *AgentToolExecutor) clearSessionSkills(sessionID uint) {
+func (e *AgentToolExecutor) ClearSessionState(sessionID uint) {
 	e.loadedSkills.Delete(sessionID)
 }
 

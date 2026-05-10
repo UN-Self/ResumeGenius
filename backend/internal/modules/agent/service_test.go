@@ -212,6 +212,8 @@ func (e *MockToolExecutor) Execute(_ context.Context, toolName string, _ map[str
 	return fmt.Sprintf(`{"result":"%s executed"}`, toolName), nil
 }
 
+func (e *MockToolExecutor) ClearSessionState(_ uint) {}
+
 // ToolCallLoopMock only produces tool calls (no text), simulating an infinite loop.
 type ToolCallLoopMock struct{}
 

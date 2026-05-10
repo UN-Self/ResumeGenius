@@ -41,6 +41,3 @@ func truncateHTML(s string) string { return truncateDebug(s, 200) }
 
 // truncateParams truncates tool parameters JSON to 300 runes.
 func truncateParams(s string) string { return truncateDebug(s, 300) }
-
-// truncateResult truncates tool result to 200 runes.
-func truncateResult(s string) string { return truncateDebug(s, 200) }

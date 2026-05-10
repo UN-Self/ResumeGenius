@@ -40,10 +40,3 @@ func TestDebugEnabled_DefaultOn(t *testing.T) {
 	// By default (no env set), debug is enabled
 	assert.True(t, debugEnabled())
 }
-
-func TestDebugEnabled_WhenFalse(t *testing.T) {
-	t.Setenv("AGENT_DEBUG_LOG", "false")
-	// debugEnabled uses sync.OnceValue so it's cached at init;
-	// this test verifies the function exists and compiles.
-	// The actual behavior is tested by the env var check.
-}

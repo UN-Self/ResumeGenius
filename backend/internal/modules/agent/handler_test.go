@@ -301,6 +301,8 @@ func (m *mockToolExecutor) Execute(_ context.Context, name string, params map[st
 	return "{}", nil
 }
 
+func (m *mockToolExecutor) ClearSessionState(_ uint) {}
+
 // ---------------------------------------------------------------------------
 // Custom mock adapters for specific test scenarios
 // ---------------------------------------------------------------------------
