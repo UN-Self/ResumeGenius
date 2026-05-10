@@ -182,7 +182,6 @@ export interface AIMessageItem {
   id: number
   role: 'user' | 'assistant'
   content: string
-  thinking?: string
   created_at: string
 }
 
@@ -191,7 +190,6 @@ export interface ToolCallEntry {
   status: 'running' | 'completed' | 'failed'
   params?: Record<string, unknown>
   result?: string
-  created_at?: string
 }
 
 export async function undoDraft(draftId: number) {
@@ -211,7 +209,7 @@ export const agentApi = {
       body: JSON.stringify({ draft_id: draftId }),
     }),
   getHistory: (sessionId: number) =>
-    request<{ items: AIMessageItem[]; tool_calls?: ToolCallEntry[] }>(`/ai/sessions/${sessionId}/history`),
+    request<{ items: AIMessageItem[] }>(`/ai/sessions/${sessionId}/history`),
 }
 
 export const parsingApi = {

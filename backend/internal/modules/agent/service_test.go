@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -235,52 +234,6 @@ func (m *ToolCallLoopMock) StreamChatReAct(
 	})
 }
 
-// ApplyEditLoopMock repeatedly asks to apply edits, simulating a model that
-// keeps retrying after failed edit attempts.
-type ApplyEditLoopMock struct {
-	callCount int
-}
-
-func (m *ApplyEditLoopMock) StreamChat(_ context.Context, _ []Message, _ func(string) error) error {
-	return nil
-}
-
-func (m *ApplyEditLoopMock) StreamChatReAct(
-	_ context.Context,
-	_ []Message,
-	_ []ToolDef,
-	_ func(string) error,
-	onToolCall func(ToolCallRequest) error,
-	_ func(string) error,
-) error {
-	m.callCount++
-	return onToolCall(ToolCallRequest{
-		ID:   fmt.Sprintf("call_apply_%d", m.callCount),
-		Name: "apply_edits",
-		Params: map[string]interface{}{
-			"ops": []interface{}{
-				map[string]interface{}{
-					"old_string": "missing",
-					"new_string": "replacement",
-				},
-			},
-		},
-	})
-}
-
-type FailingApplyExecutor struct{}
-
-func (e *FailingApplyExecutor) Tools() []ToolDef {
-	return NewAgentToolExecutor(nil, nil).Tools()
-}
-
-func (e *FailingApplyExecutor) Execute(_ context.Context, toolName string, _ map[string]interface{}) (string, error) {
-	if toolName == "apply_edits" {
-		return "", fmt.Errorf("old_string not found: %q", "missing")
-	}
-	return fmt.Sprintf(`{"result":"%s executed"}`, toolName), nil
-}
-
 // TextAndToolCallMock sends text + tool_call in first response, then final text in second.
 // This reproduces the real-world bug where AI explains what it's doing AND calls a tool
 // in the same response.
@@ -510,31 +463,6 @@ func TestChatService_StreamChatReAct_MaxIterationsExceeded(t *testing.T) {
 	err = chatSvc.StreamChatReAct(session.ID, "帮我优化简历", func(string) {})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "max tool-calling iterations exceeded")
-}
-
-func TestChatService_StreamChatReAct_StopsAfterRepeatedApplyFailures(t *testing.T) {
-	db := SetupTestDB(t)
-	draftID := createTestDraftDirect(t, db)
-	sessionSvc := NewSessionService(db)
-	mock := &ApplyEditLoopMock{}
-	chatSvc := NewChatService(db, mock, &FailingApplyExecutor{}, 5)
-
-	session, err := sessionSvc.Create(draftID)
-	require.NoError(t, err)
-
-	err = chatSvc.StreamChatReAct(session.ID, "重新设计简历", func(string) {})
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrEditFailed))
-	assert.Equal(t, 2, mock.callCount, "should stop after two failed apply_edits attempts")
-}
-
-func TestToolErrorForModel_AddsDesignRepairHints(t *testing.T) {
-	payload := toolErrorForModel("apply_edits", "ops[0].new_string violates resume design constraints: 简历禁止绝对定位布局")
-
-	assert.Contains(t, payload["error"], "绝对定位")
-	assert.Contains(t, payload["next_action"], "call apply_edits again")
-	assert.Contains(t, payload["repair_hint"], "position:absolute")
-	assert.Contains(t, payload["fix_strategy"], "normal document flow")
 }
 
 // ---------------------------------------------------------------------------

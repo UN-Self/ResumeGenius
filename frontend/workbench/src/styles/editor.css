@@ -171,11 +171,6 @@
   flex: 0 0 auto;
 }
 
-.ai-turn {
-  display: grid;
-  gap: 8px;
-}
-
 .ai-empty-chat {
   display: grid;
   place-items: center;
