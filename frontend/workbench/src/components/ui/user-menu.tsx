@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { LogOut, UserRound } from 'lucide-react'
 import { authApi, type AuthUser } from '@/lib/api-client'
 
 export function UserMenu() {
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [user, setUser] = useState<AuthUser | null>(null)
   const ref = useRef<HTMLDivElement>(null)
@@ -30,6 +32,7 @@ export function UserMenu() {
 
   const displayName = user?.username || ''
   const email = (user as any)?.email || ''
+  const avatarUrl = (user as any)?.avatar_url || ''
   const initial = displayName ? displayName.charAt(0).toUpperCase() : '?'
 
   return (
@@ -37,11 +40,15 @@ export function UserMenu() {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-sm font-bold text-white shadow-[0_0_14px_color-mix(in_srgb,var(--color-primary),transparent_55%)] transition-all duration-200 hover:scale-105 hover:shadow-[0_0_22px_color-mix(in_srgb,var(--color-primary),transparent_40%)] active:scale-95"
+        className="relative flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary to-accent text-sm font-bold text-white shadow-[0_0_14px_color-mix(in_srgb,var(--color-primary),transparent_55%)] transition-all duration-200 hover:scale-105 hover:shadow-[0_0_22px_color-mix(in_srgb,var(--color-primary),transparent_40%)] active:scale-95 overflow-hidden"
         aria-label="用户菜单"
         title={displayName}
       >
-        {initial}
+        {avatarUrl ? (
+          <img src={avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+        ) : (
+          initial
+        )}
       </button>
 
       {open && (
@@ -60,7 +67,7 @@ export function UserMenu() {
 
           <button
             type="button"
-            onClick={() => { setOpen(false) }}
+            onClick={() => { setOpen(false); navigate('/profile') }}
             className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground"
           >
             <UserRound size={16} />
