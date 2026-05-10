@@ -175,7 +175,7 @@ func TestExecute_SkillAsTool(t *testing.T) {
 	assert.NotEmpty(t, data["usage"])
 }
 
-func TestSkillTool_ResumeDesign_DescriptionContainsCSSGuidelines(t *testing.T) {
+func TestSkillTool_ResumeDesign_DescriptionIsConcise(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
 	executor := NewAgentToolExecutor(nil, loader)
@@ -189,9 +189,18 @@ func TestSkillTool_ResumeDesign_DescriptionContainsCSSGuidelines(t *testing.T) {
 	desc, ok := data["description"].(string)
 	require.True(t, ok)
 
-	assert.Contains(t, desc, "linear-gradient", "description should mention banned gradient")
-	assert.Contains(t, desc, "backdrop-filter", "description should mention banned backdrop-filter")
-	assert.Contains(t, desc, "Noto Sans CJK SC", "description should mention Chinese font requirement")
+	// description 应该是简短触发条件，不包含 CSS 摘要
+	assert.NotContains(t, desc, "linear-gradient", "description should not contain CSS guidelines")
+	assert.NotContains(t, desc, "backdrop-filter", "description should not contain CSS guidelines")
+	assert.NotContains(t, desc, "Noto Sans CJK SC", "description should not contain CSS guidelines")
+	assert.Less(t, len(desc), 100, "description should be concise (< 100 chars)")
+
+	// CSS 内容应在 reference 中（a4-guidelines 是中文设计规范，包含样式限制）
+	ref, err := loader.GetReference("resume-design", "a4-guidelines")
+	require.NoError(t, err)
+	assert.Contains(t, ref.Content, "复杂渐变", "reference should contain gradient ban")
+	assert.Contains(t, ref.Content, "glassmorphism", "reference should contain style ban")
+	assert.Contains(t, ref.Content, "position fixed/absolute", "reference should contain layout ban")
 }
 
 func TestExecute_SkillAsTool_NotFound(t *testing.T) {
