@@ -1,13 +1,21 @@
 package auth
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"image"
+	"image/jpeg"
+	_ "image/png" // register PNG decoder
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/image/draw"
 	"gorm.io/gorm"
 
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
@@ -258,6 +266,249 @@ func (s *Service) GetByID(id string) (*models.User, error) {
 		return nil, fmt.Errorf("query user by id: %w", err)
 	}
 	return &user, nil
+}
+
+// UpdateProfile updates the user's display name (nickname).
+func (s *Service) UpdateProfile(userID, nickname string) (*models.User, error) {
+	nickname = strings.TrimSpace(nickname)
+	if len(nickname) < 2 || len(nickname) > 32 {
+		return nil, ErrInvalidUsername
+	}
+	var user models.User
+	if err := s.db.First(&user, "id = ?", userID).Error; err != nil {
+		return nil, fmt.Errorf("query user: %w", err)
+	}
+	user.Username = nickname
+	if err := s.db.Save(&user).Error; err != nil {
+		return nil, fmt.Errorf("update profile: %w", err)
+	}
+	return &user, nil
+}
+
+// ChangePassword validates the old password and sets a new one.
+func (s *Service) ChangePassword(userID, oldPassword, newPassword string) error {
+	if len(newPassword) < 6 || len(newPassword) > 128 {
+		return ErrInvalidPassword
+	}
+	var user models.User
+	if err := s.db.First(&user, "id = ?", userID).Error; err != nil {
+		return fmt.Errorf("query user: %w", err)
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(oldPassword)); err != nil {
+		return ErrInvalidCredentials
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	user.PasswordHash = string(hash)
+	return s.db.Save(&user).Error
+}
+
+// UpdateAvatar compresses and saves an avatar image for the user.
+// The image is resized to max 256x256 and saved as JPEG quality 80.
+func (s *Service) UpdateAvatar(userID string, reader io.Reader, uploadDir string) (*models.User, error) {
+	img, _, err := image.Decode(reader)
+	if err != nil {
+		return nil, fmt.Errorf("decode image: %w", err)
+	}
+
+	// Resize to max 256x256 maintaining aspect ratio
+	resized := resizeToFit(img, 256, 256)
+
+	// Ensure avatar directory exists
+	avatarDir := filepath.Join(uploadDir, "avatars")
+	if err := os.MkdirAll(avatarDir, 0755); err != nil {
+		return nil, fmt.Errorf("create avatars dir: %w", err)
+	}
+
+	// Save as JPEG
+	filePath := filepath.Join(avatarDir, userID+".jpg")
+	buf := new(bytes.Buffer)
+	if err := jpeg.Encode(buf, resized, &jpeg.Options{Quality: 80}); err != nil {
+		return nil, fmt.Errorf("encode jpeg: %w", err)
+	}
+	if err := os.WriteFile(filePath, buf.Bytes(), 0644); err != nil {
+		return nil, fmt.Errorf("write avatar: %w", err)
+	}
+
+	// Update user record
+	var user models.User
+	if err := s.db.First(&user, "id = ?", userID).Error; err != nil {
+		return nil, fmt.Errorf("query user: %w", err)
+	}
+	avatarURL := "/api/v1/auth/avatar/" + userID
+	user.AvatarURL = &avatarURL
+	if err := s.db.Save(&user).Error; err != nil {
+		return nil, fmt.Errorf("update user: %w", err)
+	}
+	return &user, nil
+}
+
+// GetAvatarPath returns the file path to the user's avatar, or empty string.
+func (s *Service) GetAvatarPath(userID string, uploadDir string) string {
+	filePath := filepath.Join(uploadDir, "avatars", userID+".jpg")
+	if _, err := os.Stat(filePath); err == nil {
+		return filePath
+	}
+	return ""
+}
+
+// GetPointsRecords returns the recent points transactions for a user.
+func (s *Service) GetPointsRecords(userID string, limit int) ([]models.PointsRecord, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 30
+	}
+	var records []models.PointsRecord
+	if err := s.db.Where("user_id = ?", userID).Order("created_at DESC").Limit(limit).Find(&records).Error; err != nil {
+		return nil, fmt.Errorf("query points records: %w", err)
+	}
+	return records, nil
+}
+
+type PointsStats struct {
+	Balance     int   `json:"balance"`
+	MonthUsed   int64 `json:"month_used"`
+	TotalEarned int64 `json:"total_earned"`
+}
+
+type DailyUsage struct {
+	Date  string `json:"date"`
+	Used  int64  `json:"used"`
+	Earned int64 `json:"earned"`
+}
+
+type CategoryUsage struct {
+	Type  string `json:"type"`
+	Total int64  `json:"total"`
+}
+
+type PointsDashboard struct {
+	Balance     int              `json:"balance"`
+	MonthUsed   int64            `json:"month_used"`
+	TotalEarned int64            `json:"total_earned"`
+	DailyUsage  []DailyUsage     `json:"daily_usage"`
+	Categories  []CategoryUsage  `json:"categories"`
+}
+
+// GetPointsStats returns aggregated points stats for a user.
+func (s *Service) GetPointsStats(userID string) (*PointsStats, error) {
+	var user models.User
+	if err := s.db.First(&user, "id = ?", userID).Error; err != nil {
+		return nil, fmt.Errorf("query user: %w", err)
+	}
+
+	now := time.Now()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	var monthUsed int64
+	s.db.Model(&models.PointsRecord{}).
+		Where("user_id = ? AND amount < 0 AND created_at >= ?", userID, monthStart).
+		Select("COALESCE(SUM(amount), 0)").Scan(&monthUsed)
+
+	var totalEarned int64
+	s.db.Model(&models.PointsRecord{}).
+		Where("user_id = ? AND amount > 0", userID).
+		Select("COALESCE(SUM(amount), 0)").Scan(&totalEarned)
+
+	return &PointsStats{
+		Balance:     user.Points,
+		MonthUsed:   -monthUsed,
+		TotalEarned: totalEarned,
+	}, nil
+}
+
+// GetDashboard returns full dashboard data: stats + daily usage + category breakdown.
+func (s *Service) GetDashboard(userID string) (*PointsDashboard, error) {
+	var user models.User
+	if err := s.db.First(&user, "id = ?", userID).Error; err != nil {
+		return nil, fmt.Errorf("query user: %w", err)
+	}
+
+	now := time.Now()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+
+	var monthUsed int64
+	s.db.Model(&models.PointsRecord{}).
+		Where("user_id = ? AND amount < 0 AND created_at >= ?", userID, monthStart).
+		Select("COALESCE(SUM(amount), 0)").Scan(&monthUsed)
+
+	var totalEarned int64
+	s.db.Model(&models.PointsRecord{}).
+		Where("user_id = ? AND amount > 0", userID).
+		Select("COALESCE(SUM(amount), 0)").Scan(&totalEarned)
+
+	// Daily usage for last 30 days
+	dailyUsage := make([]DailyUsage, 30)
+	daysAgo := now.AddDate(0, 0, -29)
+	for i := 0; i < 30; i++ {
+		day := daysAgo.AddDate(0, 0, i)
+		dayStart := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, now.Location())
+		dayEnd := dayStart.Add(24 * time.Hour)
+
+		var used int64
+		s.db.Model(&models.PointsRecord{}).
+			Where("user_id = ? AND amount < 0 AND created_at >= ? AND created_at < ?", userID, dayStart, dayEnd).
+			Select("COALESCE(SUM(amount), 0)").Scan(&used)
+
+		var earned int64
+		s.db.Model(&models.PointsRecord{}).
+			Where("user_id = ? AND amount > 0 AND created_at >= ? AND created_at < ?", userID, dayStart, dayEnd).
+			Select("COALESCE(SUM(amount), 0)").Scan(&earned)
+
+		dailyUsage[i] = DailyUsage{
+			Date:   dayStart.Format("01-02"),
+			Used:   -used,
+			Earned: earned,
+		}
+	}
+
+	// Category breakdown (all time)
+	var catRows []struct {
+		Type  string
+		Total int64
+	}
+	s.db.Model(&models.PointsRecord{}).
+		Where("user_id = ? AND amount < 0", userID).
+		Select("type, COALESCE(SUM(ABS(amount)), 0) as total").
+		Group("type").Order("total DESC").Scan(&catRows)
+
+	categories := make([]CategoryUsage, len(catRows))
+	for i, r := range catRows {
+		categories[i] = CategoryUsage{Type: r.Type, Total: r.Total}
+	}
+
+	return &PointsDashboard{
+		Balance:     user.Points,
+		MonthUsed:   -monthUsed,
+		TotalEarned: totalEarned,
+		DailyUsage:  dailyUsage,
+		Categories:  categories,
+	}, nil
+}
+
+func resizeToFit(img image.Image, maxW, maxH int) image.Image {
+	bounds := img.Bounds()
+	w := bounds.Dx()
+	h := bounds.Dy()
+
+	if w <= maxW && h <= maxH {
+		return img
+	}
+
+	// Maintain aspect ratio
+	ratio := float64(w) / float64(h)
+	var newW, newH int
+	if ratio > float64(maxW)/float64(maxH) {
+		newW = maxW
+		newH = int(float64(maxW) / ratio)
+	} else {
+		newH = maxH
+		newW = int(float64(maxH) * ratio)
+	}
+
+	dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
+	draw.CatmullRom.Scale(dst, dst.Bounds(), img, bounds, draw.Over, nil)
+	return dst
 }
 
 func isValidEmail(email string) bool {

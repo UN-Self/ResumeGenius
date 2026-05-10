@@ -38,8 +38,20 @@ type User struct {
 	VerificationCode string     `gorm:"size:6" json:"-"`
 	CodeExpiry       *time.Time `gorm:"index" json:"-"`
 	PasswordHash     string     `gorm:"size:255;not null" json:"-"`
+	AvatarURL        *string    `gorm:"size:512" json:"avatar_url,omitempty"`
+	Points           int        `gorm:"not null;default:0" json:"points"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+type PointsRecord struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    string    `gorm:"size:36;not null;index" json:"user_id"`
+	Amount    int       `gorm:"not null" json:"amount"`
+	Balance   int       `gorm:"not null" json:"balance"`
+	Type      string    `gorm:"size:50;not null" json:"type"`
+	Note      string    `gorm:"size:255" json:"note,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Project struct {

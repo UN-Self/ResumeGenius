@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"net/http"
 	"time"
 
@@ -21,13 +22,14 @@ type Handler struct {
 	ttl          time.Duration
 	cookieSecure bool
 	cookieDomain string
+	uploadDir    string
 }
 
-func NewHandler(service *Service, secret string, ttl time.Duration, cookieSecure bool, cookieDomain string) *Handler {
+func NewHandler(service *Service, secret string, ttl time.Duration, cookieSecure bool, cookieDomain string, uploadDir string) *Handler {
 	if ttl <= 0 {
 		ttl = defaultTokenTTL
 	}
-	return &Handler{service: service, secret: secret, ttl: ttl, cookieSecure: cookieSecure, cookieDomain: cookieDomain}
+	return &Handler{service: service, secret: secret, ttl: ttl, cookieSecure: cookieSecure, cookieDomain: cookieDomain, uploadDir: uploadDir}
 }
 
 // ── Request/Response types ──────────────────────────────────────────
@@ -57,15 +59,20 @@ type userResp struct {
 	Username      string `json:"username"`
 	Email         string `json:"email,omitempty"`
 	EmailVerified bool   `json:"email_verified,omitempty"`
+	AvatarURL     string `json:"avatar_url,omitempty"`
+	Points        int    `json:"points"`
 	DevCode       string `json:"dev_code,omitempty"`
 }
 
 func toUserResp(u *models.User, devMode bool) userResp {
-	r := userResp{ID: u.ID, Username: u.Username}
+	r := userResp{ID: u.ID, Username: u.Username, Points: u.Points}
 	if u.Email != nil {
 		r.Email = *u.Email
 	}
 	r.EmailVerified = u.EmailVerified
+	if u.AvatarURL != nil {
+		r.AvatarURL = *u.AvatarURL
+	}
 	if devMode && !u.EmailVerified && u.VerificationCode != "" {
 		r.DevCode = u.VerificationCode
 	}
@@ -253,6 +260,57 @@ func (h *Handler) Me(c *gin.Context) {
 	response.Success(c, toUserResp(user, h.service.email.IsDevMode()))
 }
 
+// UpdateProfile updates the user's display name.
+func (h *Handler) UpdateProfile(c *gin.Context) {
+	userID := middleware.UserIDFromContext(c)
+	if userID == "" {
+		response.Error(c, 40100, "未登录")
+		return
+	}
+	var req struct {
+		Nickname string `json:"nickname"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 40000, "请求格式错误")
+		return
+	}
+	user, err := h.service.UpdateProfile(userID, req.Nickname)
+	if err != nil {
+		response.Error(c, 40000, "昵称需 2-32 个字符")
+		return
+	}
+	response.Success(c, toUserResp(user, h.service.email.IsDevMode()))
+}
+
+// ChangePassword changes the user's password.
+func (h *Handler) ChangePassword(c *gin.Context) {
+	userID := middleware.UserIDFromContext(c)
+	if userID == "" {
+		response.Error(c, 40100, "未登录")
+		return
+	}
+	var req struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 40000, "请求格式错误")
+		return
+	}
+	if err := h.service.ChangePassword(userID, req.OldPassword, req.NewPassword); err != nil {
+		switch err {
+		case ErrInvalidPassword:
+			response.Error(c, 40000, "新密码需 6-128 个字符")
+		case ErrInvalidCredentials:
+			response.Error(c, 40000, "原密码错误")
+		default:
+			response.Error(c, 50000, "修改失败")
+		}
+		return
+	}
+	response.Success(c, nil)
+}
+
 // Logout clears the auth cookie.
 func (h *Handler) Logout(c *gin.Context) {
 	http.SetCookie(c.Writer, &http.Cookie{
@@ -266,4 +324,96 @@ func (h *Handler) Logout(c *gin.Context) {
 		SameSite: http.SameSiteLaxMode,
 	})
 	response.Success(c, nil)
+}
+
+// UploadAvatar handles avatar image upload with server-side compression.
+func (h *Handler) UploadAvatar(c *gin.Context) {
+	userID := middleware.UserIDFromContext(c)
+	if userID == "" {
+		response.Error(c, 40100, "未登录")
+		return
+	}
+
+	file, _, err := c.Request.FormFile("avatar")
+	if err != nil {
+		response.Error(c, 40000, "请选择图片文件")
+		return
+	}
+	defer file.Close()
+
+	// Validate: max 5MB
+	const maxSize = 5 << 20
+	buf := make([]byte, maxSize+1)
+	n, _ := file.Read(buf)
+	if n > maxSize {
+		response.Error(c, 40000, "图片不能超过 5MB")
+		return
+	}
+
+	user, err := h.service.UpdateAvatar(userID, bytes.NewReader(buf[:n]), h.uploadDir)
+	if err != nil {
+		response.Error(c, 40000, "图片格式不支持或处理失败")
+		return
+	}
+	response.Success(c, toUserResp(user, h.service.email.IsDevMode()))
+}
+
+// ServeAvatar serves the avatar file for a given user.
+func (h *Handler) ServeAvatar(c *gin.Context) {
+	userID := c.Param("user_id")
+	filePath := h.service.GetAvatarPath(userID, h.uploadDir)
+	if filePath == "" {
+		c.Header("Content-Type", "image/svg+xml")
+		c.String(http.StatusOK, `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><rect fill="%23e2e8f0" width="256" height="256"/><circle cx="128" cy="100" r="48" fill="%2394a3b8"/><ellipse cx="128" cy="220" rx="80" ry="60" fill="%2394a3b8"/></svg>`)
+		return
+	}
+	c.File(filePath)
+}
+
+// GetPointsRecords returns the user's points transaction history.
+func (h *Handler) GetPointsRecords(c *gin.Context) {
+	userID := middleware.UserIDFromContext(c)
+	if userID == "" {
+		response.Error(c, 40100, "未登录")
+		return
+	}
+
+	records, err := h.service.GetPointsRecords(userID, 50)
+	if err != nil {
+		response.Error(c, 50000, "获取积分记录失败")
+		return
+	}
+	response.Success(c, gin.H{"items": records})
+}
+
+// GetPointsStats returns the user's points summary statistics.
+func (h *Handler) GetPointsStats(c *gin.Context) {
+	userID := middleware.UserIDFromContext(c)
+	if userID == "" {
+		response.Error(c, 40100, "未登录")
+		return
+	}
+
+	stats, err := h.service.GetPointsStats(userID)
+	if err != nil {
+		response.Error(c, 50000, "获取积分统计失败")
+		return
+	}
+	response.Success(c, stats)
+}
+
+// GetPointsDashboard returns full dashboard data with charts.
+func (h *Handler) GetPointsDashboard(c *gin.Context) {
+	userID := middleware.UserIDFromContext(c)
+	if userID == "" {
+		response.Error(c, 40100, "未登录")
+		return
+	}
+
+	dashboard, err := h.service.GetDashboard(userID)
+	if err != nil {
+		response.Error(c, 50000, "获取仪表盘数据失败")
+		return
+	}
+	response.Success(c, dashboard)
 }
