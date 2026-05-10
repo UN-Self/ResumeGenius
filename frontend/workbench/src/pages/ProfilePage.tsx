@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Camera, KeyRound, LockKeyhole, ShieldCheck, Sparkles, UserRound, TrendingUp, TrendingDown, Clock, BarChart3, PieChart } from 'lucide-react'
+import { ArrowLeft, Camera, KeyRound, LockKeyhole, ShieldCheck, ShoppingBag, Sparkles, UserRound, TrendingUp, TrendingDown, Clock, BarChart3, PieChart } from 'lucide-react'
 import { authApi, ApiError, type AuthUser, type PointsRecord, type PointsDashboard } from '@/lib/api-client'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RePieChart, Pie, Cell } from 'recharts'
 import { Button } from '@/components/ui/button'
@@ -9,11 +9,12 @@ import { Alert } from '@/components/ui/alert'
 import { ThemeSwitcher } from '@/components/ui/theme-switcher'
 import { PointsCoin } from '@/components/ui/PointsCoin'
 
-type Tab = 'profile' | 'points' | 'password'
+type Tab = 'profile' | 'points' | 'password' | 'shop'
 
 const tabs: { key: Tab; label: string; icon: typeof UserRound }[] = [
   { key: 'profile', label: '个人信息', icon: UserRound },
   { key: 'points', label: '积分面板', icon: Sparkles },
+  { key: 'shop', label: '套餐商城', icon: ShoppingBag },
   { key: 'password', label: '密码修改', icon: LockKeyhole },
 ]
 
@@ -97,7 +98,7 @@ export default function ProfilePage() {
 
   return (
     <div className="app-shell min-h-screen">
-      <div className="relative z-10 mx-auto max-w-5xl px-5 py-6 sm:px-8 lg:px-10">
+      <div className="relative z-10 mx-auto w-full max-w-[1400px] px-5 py-6 sm:px-8 lg:px-10">
         {/* Header */}
         <header className="stagger-in mb-8 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -157,14 +158,8 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* Points card */}
-            <div className="glass-panel rounded-2xl p-5 text-center">
-              <div className="mx-auto mb-2 flex items-center justify-center">
-                <PointsCoin size={40} />
-              </div>
-              <div className="text-3xl font-bold gradient-text">{user?.points ?? 0}</div>
-              <p className="mt-1 text-xs text-muted-foreground">可用积分</p>
-            </div>
+            {/* Plan card */}
+            <PlanCard user={user} />
 
             {/* Nav */}
             <nav className="glass-panel rounded-2xl p-1.5">
@@ -183,6 +178,7 @@ export default function ProfilePage() {
                 </button>
               ))}
             </nav>
+
           </aside>
 
           {/* ── Right content area ── */}
@@ -193,10 +189,58 @@ export default function ProfilePage() {
             {tab === 'points' && (
               <PointsPanel />
             )}
+            {tab === 'shop' && (
+              <ShopPanel />
+            )}
             {tab === 'password' && (
               <PasswordPanel />
             )}
           </main>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Plan Card ──
+
+function PlanCard({ user }: { user: AuthUser | null }) {
+  const plan = (user as any)?.plan || 'free'
+  const isPro = plan === 'pro'
+  const startedAt = (user as any)?.plan_started_at
+  const expiresAt = (user as any)?.plan_expires_at
+
+  const formatDate = (d?: string) => {
+    if (!d) return '—'
+    return new Date(d).toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+  }
+
+  return (
+    <div className={`glass-panel rounded-2xl p-5 text-center relative overflow-hidden ${
+      isPro ? 'border-primary/30' : ''
+    }`}>
+      {/* Decorative glow */}
+      {isPro && (
+        <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full bg-primary/15 blur-xl" />
+      )}
+      <p className="relative z-10 text-xs font-medium text-muted-foreground tracking-widest uppercase mb-1">
+        当前套餐
+      </p>
+      <p className={`relative z-10 font-serif italic text-2xl font-semibold mb-3 cursor-default select-none ${
+        isPro ? 'gradient-text' : 'text-foreground animate-plan-title'
+      }`}>
+        {isPro ? 'Pro' : 'Free'}
+      </p>
+      <div className="relative z-10 space-y-1.5 text-xs text-muted-foreground">
+        <div className="flex items-center justify-between gap-2">
+          <span>开通时间</span>
+          <span className="text-foreground font-medium">{formatDate(startedAt)}</span>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <span>到期时间</span>
+          <span className={`font-medium ${isPro && expiresAt ? 'text-amber-500' : 'text-emerald-500'}`}>
+            {isPro && expiresAt ? formatDate(expiresAt) : '永久有效'}
+          </span>
         </div>
       </div>
     </div>
@@ -236,7 +280,7 @@ function ProfilePanel({ user, onUpdated }: { user: AuthUser | null; onUpdated: (
       <h2 className="mb-4 text-lg font-semibold text-foreground">个人信息</h2>
       <div className="space-y-4 max-w-md">
         <div>
-          <label className="mb-1.5 block text-sm text-muted-foreground">昵称</label>
+          <label className="mb-1.5 flex items-center gap-1.5 text-sm text-muted-foreground"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-icon-float text-primary/70"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>昵称</label>
           <Input
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
@@ -244,7 +288,7 @@ function ProfilePanel({ user, onUpdated }: { user: AuthUser | null; onUpdated: (
           />
         </div>
         <div>
-          <label className="mb-1.5 block text-sm text-muted-foreground">邮箱</label>
+          <label className="mb-1.5 flex items-center gap-1.5 text-sm text-muted-foreground"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-icon-float text-primary/70"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 4-10 7.5L2 4"/></svg>邮箱</label>
           <Input
             value={(user as any)?.email || '未绑定'}
             disabled
@@ -535,6 +579,182 @@ function PointsPanel() {
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Shop Panel (point packages) ──
+
+const packages = [
+  {
+    name: '尝鲜包',
+    points: 100,
+    price: '¥1',
+    period: '',
+    highlight: false,
+    badge: '',
+    features: ['100 积分到账', '适合轻度体验', '有效期 2 年'],
+  },
+  {
+    name: '进阶包',
+    points: 600,
+    price: '¥5',
+    period: '',
+    highlight: false,
+    badge: '省 ¥1',
+    features: ['600 积分到账', '送 100 积分 (省 ¥1)', '约 60 次 AI 对话', '有效期 2 年'],
+  },
+  {
+    name: '专业包',
+    points: 1200,
+    price: '¥10',
+    period: '',
+    highlight: true,
+    badge: '推荐 · 省 ¥2',
+    features: ['1200 积分到账', '送 200 积分 (省 ¥2)', '约 120 次 AI 对话', '有效期 2 年'],
+  },
+  {
+    name: '旗舰包',
+    points: 3400,
+    price: '¥29',
+    period: '',
+    highlight: false,
+    premium: true,
+    badge: '超值 · 省 ¥5',
+    features: ['3400 积分到账', '送 500 积分 (省 ¥5)', '约 340 次 AI 对话', '有效期 2 年'],
+  },
+]
+
+const memberships = [
+  {
+    name: 'Free',
+    price: '¥0',
+    period: '',
+    desc: '免费开始，按需使用',
+    features: ['所有功能开放', '注册即送 100 积分', 'AI 对话消耗积分', '带水印 PDF 导出 10 积分/次'],
+    cta: '当前方案',
+    active: true,
+  },
+  {
+    name: 'Pro',
+    price: '¥19',
+    period: '/ 月',
+    desc: '专业用户，无限导出',
+    features: ['所有功能开放', '每月赠送 2,000 积分', '无限次无水印 PDF 导出', 'AI / 导出优先使用，无需排队', '积分充值享 9 折'],
+    cta: '升级 Pro',
+    active: false,
+    highlight: true,
+  },
+]
+
+function ShopPanel() {
+  return (
+    <div className="space-y-6">
+      {/* ── Membership plans ── */}
+      <div className="glass-panel rounded-2xl p-6">
+        <h2 className="mb-1 text-lg font-semibold text-foreground">会员方案</h2>
+        <p className="mb-6 text-sm text-muted-foreground">选择适合你的计划，随时升级</p>
+        <div className="grid gap-5 sm:grid-cols-2">
+          {memberships.map((m) => (
+            <div
+              key={m.name}
+              className={`card-hover relative flex flex-col rounded-lg border px-6 py-7 transition-all duration-200 ${
+                m.highlight
+                  ? 'border-primary/40 ring-1 ring-primary/20 bg-primary/[0.03] shadow-[0_0_28px_color-mix(in_srgb,var(--color-primary),transparent_90%)]'
+                  : 'border-border bg-card'
+              }`}
+            >
+              <h3 className="font-sans font-semibold text-base text-foreground mb-1">{m.name}</h3>
+              <p className="text-xs text-muted-foreground mb-3">{m.desc}</p>
+              <div className="flex items-baseline gap-1 mb-5">
+                <span className="font-serif font-semibold text-[2.25rem] leading-none text-foreground">{m.price}</span>
+                {m.period && <span className="text-sm text-muted-foreground">{m.period}</span>}
+              </div>
+              <ul className="flex-1 space-y-2.5 mb-7">
+                {m.features.map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <svg className="w-4 h-4 mt-0.5 shrink-0 text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                disabled={m.active}
+                className={`inline-flex items-center justify-center h-11 w-full rounded-lg text-sm font-medium transition-colors ${
+                  m.active
+                    ? 'border border-border bg-transparent text-muted-foreground cursor-default'
+                    : m.highlight
+                      ? 'bg-primary text-primary-foreground border border-primary/30 hover:brightness-110 active:brightness-90'
+                      : 'border border-border bg-card text-foreground hover:bg-surface-hover'
+                }`}
+              >
+                {m.cta}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Point packages ── */}
+      <div className="glass-panel rounded-2xl p-6">
+        <h2 className="mb-1 text-lg font-semibold text-foreground">积分充值</h2>
+        <p className="mb-6 text-sm text-muted-foreground">
+          基准汇率 1 元 = 100 积分，大额套餐享额外赠送。购买后即时到账，有效期 2 年。
+        </p>
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+          {packages.map((pkg) => {
+            let borderClass = 'border-border bg-card'
+            if (pkg.highlight) {
+              borderClass = 'border-primary/40 ring-1 ring-primary/20 bg-primary/[0.03] shadow-[0_0_28px_color-mix(in_srgb,var(--color-primary),transparent_90%)]'
+            } else if ((pkg as any).premium) {
+              borderClass = 'border-amber-400/50 ring-1 ring-amber-400/20 bg-amber-500/[0.03] shadow-[0_0_28px_color-mix(in_srgb,#f59e0b,transparent_92%)]'
+            }
+            return (
+            <div
+              key={pkg.name}
+              className={`card-hover relative flex flex-col rounded-lg border px-6 py-7 transition-all duration-200 ${borderClass}`}
+            >
+              {pkg.badge && (
+                <span className={`absolute -top-2.5 right-4 rounded-full px-3 py-0.5 text-xs font-semibold ${
+                  pkg.badge.includes('推荐')
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-amber-500 text-white'
+                }`}>
+                  {pkg.badge}
+                </span>
+              )}
+              <h3 className="font-sans font-semibold text-base text-foreground mb-2">{pkg.name}</h3>
+              <div className="flex items-baseline gap-1 mb-5">
+                <span className="font-serif font-semibold text-[2.25rem] leading-none text-foreground">{pkg.price}</span>
+                {pkg.period && <span className="text-sm text-muted-foreground">{pkg.period}</span>}
+              </div>
+              <ul className="flex-1 space-y-2.5 mb-7">
+                {pkg.features.map((f) => (
+                  <li key={f} className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <svg className="w-4 h-4 mt-0.5 shrink-0 text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                className={`inline-flex items-center justify-center h-11 w-full rounded-lg text-sm font-medium transition-colors ${
+                  pkg.highlight
+                    ? 'bg-primary text-primary-foreground border border-primary/30 hover:brightness-110 active:brightness-90'
+                    : 'border border-border bg-card text-foreground hover:bg-surface-hover'
+                }`}
+                onClick={() => alert(`购买 ${pkg.name}：${pkg.price} / ${pkg.points} 积分\n\n支付功能即将上线，敬请期待！`)}
+              >
+                立即购买
+              </button>
+            </div>
+          )})}
+        </div>
+      </div>
+
+      <div className="text-center text-xs text-muted-foreground space-y-1">
+        <p>积分不可兑换会员、转赠或提现，充值后不支持退款。</p>
+        <p>Pro 会员充值享 <span className="text-primary font-medium">9 折</span> 优惠。</p>
       </div>
     </div>
   )

@@ -74,6 +74,9 @@ export interface AuthUser {
   email_verified?: boolean
   avatar_url?: string
   points: number
+  plan: string
+  plan_started_at?: string
+  plan_expires_at?: string
 }
 
 export interface PointsRecord {
