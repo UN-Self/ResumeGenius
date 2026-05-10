@@ -1,12 +1,6 @@
 # ResumeGenius Docker Compose
 # 统一编排 postgres + backend + workbench + marketing
 
-networks:
-  default:
-    ipam:
-      config:
-        - subnet: ${DOCKER_SUBNET:-10.200.0.0/16}
-
 services:
   postgres:
     image: ${PGVECTOR_IMAGE:-docker.1ms.run/ankane/pgvector:latest}
@@ -77,7 +71,7 @@ services:
       context: ./frontend/workbench
       dockerfile: Dockerfile
     ports:
-      - "${HOST_WORKBENCH_PORT:-}:80"
+      - "${HOST_WORKBENCH_PORT:-3000}:80"
     depends_on:
       backend:
         condition: service_started

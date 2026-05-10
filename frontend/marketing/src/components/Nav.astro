@@ -28,7 +28,7 @@ const themePresets = [
         </a>
       ))}
       <div id="user-menu-container" class="relative shrink-0">
-        <a href="/app/login?redirect=/" class="btn-primary inline-flex h-10 items-center justify-center rounded-full px-5 text-sm font-medium text-white no-underline hover:brightness-110 active:brightness-90" style="background:var(--color-primary)">
+        <a href="/app/login?redirect=/" data-app-link="/app/login?redirect=/" class="btn-primary inline-flex h-10 items-center justify-center rounded-full px-5 text-sm font-medium text-white no-underline hover:brightness-110 active:brightness-90" style="background:var(--color-primary)">
           登录
         </a>
       </div>
@@ -47,7 +47,7 @@ const themePresets = [
           ))}
         </div>
       </div>
-      <a href="/app"
+      <a href="/app" data-app-link="/app"
         class="btn-primary inline-flex h-10 items-center justify-center rounded-full px-5 text-sm font-medium text-white no-underline hover:brightness-110 active:brightness-90" style="background:var(--color-primary)">
         开始使用
       </a>
@@ -83,7 +83,7 @@ const themePresets = [
         ))}
       </div>
     </div>
-    <a href="/app"
+    <a href="/app" data-app-link="/app"
       class="btn-primary mt-2 inline-flex h-10 items-center justify-center rounded-full bg-[#007aff] px-5 text-sm font-medium text-white no-underline hover:bg-[#0067d8]">
       开始使用
     </a>
@@ -93,7 +93,7 @@ const themePresets = [
 <!-- Spacer for fixed nav -->
 <div class="h-16"></div>
 
-<script>
+<script is:inline>
   const toggle = document.getElementById('menu-toggle');
   const menu = document.getElementById('mobile-menu');
   toggle?.addEventListener('click', () => {
@@ -101,45 +101,4 @@ const themePresets = [
     toggle.setAttribute('aria-expanded', expanded);
     menu?.classList.toggle('hidden');
   });
-
-  const loginBtnHtml = '<a href="/app/login?redirect=/" class="btn-primary inline-flex h-10 items-center justify-center rounded-full px-5 text-sm font-medium text-white no-underline hover:brightness-110 active:brightness-90" style="background:var(--color-primary)">登录</a>';
-  const userIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>';
-  const logOutIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>';
-
-  function renderAvatar(container, user) {
-    var initial = (user.username || '?').charAt(0).toUpperCase();
-    container.innerHTML = '<div class="user-menu relative shrink-0">'
-      + '<button class="user-menu-btn relative flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)] text-sm font-bold text-white transition-all duration-200 hover:scale-105 active:scale-95" style="box-shadow:0 0 14px color-mix(in srgb,var(--color-primary),transparent 55%)" title="' + user.username + '">' + initial + '</button>'
-      + '<div class="user-menu-dropdown absolute right-0 top-full z-50 mt-2 hidden w-52 origin-top-right rounded-2xl border border-[var(--color-border)] bg-[var(--color-popover)]/95 p-1.5 shadow-[0_20px_60px_rgba(2,8,23,0.28)] backdrop-blur-2xl">'
-      + '<div class="px-3 py-2 text-sm font-medium truncate" style="color:var(--color-foreground)">' + user.username + '</div>'
-      + '<div class="my-1 h-px" style="background:var(--color-border)"></div>'
-      + '<a href="/app" class="user-profile-link flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm no-underline transition-colors" style="color:var(--color-muted-foreground)">' + userIconSvg + ' 个人中心</a>'
-      + '<button class="user-logout-btn flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors" style="color:var(--color-muted-foreground)">' + logOutIconSvg + ' 退出登录</button>'
-      + '</div></div>';
-
-    container.querySelector('.user-profile-link').addEventListener('mouseenter', function(){ this.style.backgroundColor='var(--color-surface-hover)'; this.style.color='var(--color-foreground)'; });
-    container.querySelector('.user-profile-link').addEventListener('mouseleave', function(){ this.style.backgroundColor=''; this.style.color='var(--color-muted-foreground)'; });
-    container.querySelector('.user-logout-btn').addEventListener('mouseenter', function(){ this.style.backgroundColor='color-mix(in srgb, var(--color-destructive), transparent 90%)'; this.style.color='var(--color-destructive)'; });
-    container.querySelector('.user-logout-btn').addEventListener('mouseleave', function(){ this.style.backgroundColor=''; this.style.color='var(--color-muted-foreground)'; });
-
-    var btn = container.querySelector('.user-menu-btn');
-    var dd = container.querySelector('.user-menu-dropdown');
-    btn.addEventListener('click', function(e){ e.stopPropagation(); dd.classList.toggle('hidden'); });
-    document.addEventListener('click', function(){ dd.classList.add('hidden'); });
-
-    container.querySelector('.user-logout-btn').addEventListener('click', async function(){
-      await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' });
-      container.innerHTML = loginBtnHtml;
-    });
-  }
-
-  var container = document.getElementById('user-menu-container');
-  if (container) {
-    try {
-      var res = await fetch('/api/v1/auth/me', { credentials: 'include' });
-      var json = await res.json();
-      if (json.code === 0) { renderAvatar(container, json.data); }
-      else { container.innerHTML = loginBtnHtml; }
-    } catch { container.innerHTML = loginBtnHtml; }
-  }
 </script>
