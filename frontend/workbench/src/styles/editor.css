@@ -68,6 +68,30 @@
   --resume-document-text: #333333;
 }
 
+/* === Multi-Page Pagination (tiptap-pagination-plus) === */
+
+/* Each page gets A4 paper styling */
+.rm-page-break .page {
+  background: #ffffff;
+  box-shadow: 0 4px 24px rgba(2, 8, 23, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* Ensure page breaker clears floats */
+.rm-page-break .breaker {
+  clear: both;
+}
+
+/* Page gap blends with canvas background */
+.rm-pagination-gap {
+  background-color: var(--color-canvas-bg, #ede8e0) !important;
+}
+
+/* Hide extension headers/footers (we don't use them) */
+.rm-page-header,
+.rm-page-footer {
+  display: none !important;
+}
+
 /* AI Panel */
 .ai-panel {
   width: 100%;
@@ -1459,7 +1483,9 @@
 /* Print Protection */
 @media print {
   .canvas-area,
-  .a4-page {
+  .a4-page,
+  .rm-pagination-gap,
+  .rm-page-break .breaker {
     display: none !important;
   }
 

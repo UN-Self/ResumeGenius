@@ -10,16 +10,16 @@ interface A4CanvasProps {
   scopedCSS?: string
 }
 
-const CANVAS_WIDTH_MM = 210
-const CANVAS_PADDING_PX = 48 // 24px * 2 page margin
+const CANVAS_PADDING_PX = 48 // 24px * 2 container padding
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 1.0
 
+// Total canvas width in px: page (794px) + margins (76px * 2) at 96dpi
+const CANVAS_TOTAL_WIDTH_PX = 794 + 76 + 76
+
 function computeZoom(containerWidth: number): number {
   const availableWidth = containerWidth - CANVAS_PADDING_PX
-  // 1mm ≈ 3.7795px at 96dpi
-  const canvasPx = CANVAS_WIDTH_MM * 3.7795
-  const zoom = availableWidth / canvasPx
+  const zoom = availableWidth / CANVAS_TOTAL_WIDTH_PX
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom))
 }
 
@@ -46,10 +46,8 @@ export function A4Canvas({ editor, children, scopedCSS }: A4CanvasProps) {
     <div ref={containerRef} className="canvas-area bg-canvas-bg">
       <div
         data-testid="a4-canvas"
-        className={`${RESUME_DOCUMENT_CLASS} relative bg-resume-paper p-[18mm_20mm] shadow-[0_22px_80px_rgba(2,8,23,0.24)] ring-1 ring-black/5`}
+        className={`${RESUME_DOCUMENT_CLASS} relative bg-resume-paper shadow-[0_22px_80px_rgba(2,8,23,0.24)] ring-1 ring-black/5`}
         style={{
-          width: '210mm',
-          minHeight: '297mm',
           transform: `scale(${zoom})`,
           transformOrigin: 'top center',
         }}

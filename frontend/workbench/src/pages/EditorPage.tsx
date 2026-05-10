@@ -6,6 +6,7 @@ import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
 import TextAlign from '@tiptap/extension-text-align'
 import { TextStyleKit } from '@tiptap/extension-text-style'
+import { PaginationPlus } from 'tiptap-pagination-plus'
 import { A4Canvas } from '@/components/editor/A4Canvas'
 import { Div, PresetAttributes, Span } from '@/components/editor/extensions'
 import { ActionBar } from '@/components/editor/ActionBar'
@@ -62,12 +63,31 @@ export default function EditorPage() {
       PresetAttributes,
       Div,
       Span,
+      PaginationPlus.configure({
+        // A4 at 96dpi: 210×297mm ≈ 794×1123px
+        pageHeight: 1123,
+        pageWidth: 794,
+        // Margins: 18mm top/bottom ≈ 68px, 20mm left/right ≈ 76px
+        marginTop: 68,
+        marginBottom: 68,
+        marginLeft: 76,
+        marginRight: 76,
+        pageGap: 32,
+        contentMarginTop: 0,
+        contentMarginBottom: 0,
+        pageBreakBackground: '#ede8e0',
+        pageGapBorderSize: 0,
+        // No headers/footers
+        headerLeft: '',
+        headerRight: '',
+        footerLeft: '',
+        footerRight: '',
+      }),
     ],
     content: '',
     editorProps: {
       attributes: {
         class: 'resume-content outline-none',
-        style: 'min-height: 261mm;',
       },
       handleDOMEvents: {
         copy(_view, event) {

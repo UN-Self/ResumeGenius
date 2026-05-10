@@ -28,11 +28,13 @@ describe('A4Canvas', () => {
     )
   })
 
-  it('renders the editor page with a 210mm by 297mm canvas', async () => {
+  it('renders the editor page with an A4 canvas using zoom transform', async () => {
     // Wait for the canvas to appear (after project + draft + parsing load)
     const canvas = await screen.findByTestId('a4-canvas')
     expect(canvas).toBeInTheDocument()
-    expect(canvas).toHaveStyle({ width: '210mm', minHeight: '297mm' })
+    // Canvas has the resume-document class and uses a scale() transform for zoom
+    expect(canvas).toHaveClass('resume-document')
+    expect(canvas.style.transform).toMatch(/scale\(/)
   })
 
   it('renders watermark overlay on the canvas', async () => {

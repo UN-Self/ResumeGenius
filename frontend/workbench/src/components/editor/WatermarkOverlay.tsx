@@ -9,9 +9,36 @@ const SVG_CONTENT = `<svg xmlns="http://www.w3.org/2000/svg" width="280" height=
   <text x="140" y="60" text-anchor="middle" font-size="10" fill="#1a1815">导出无水印 PDF 即可去除水印</text>
 </svg>`
 
+function createWatermarkElement(bgImage: string): HTMLElement {
+  const watermark = document.createElement('div')
+  watermark.setAttribute('data-testid', 'watermark-overlay')
+  watermark.style.cssText = [
+    'position: absolute;',
+    'inset: 0;',
+    'overflow: hidden;',
+    'pointer-events: none;',
+    'z-index: 5;',
+  ].join('')
+
+  const inner = document.createElement('div')
+  inner.style.cssText = [
+    'position: absolute;',
+    'inset: -50%;',
+    `background-image: ${bgImage};`,
+    'background-repeat: repeat;',
+    'background-size: 280px 100px;',
+    'transform: rotate(-30deg);',
+    'pointer-events: none;',
+    'user-select: none;',
+    'opacity: 0.12;',
+  ].join('')
+
+  watermark.appendChild(inner)
+  return watermark
+}
+
 export function WatermarkOverlay({ visible = true }: WatermarkOverlayProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const watermarkRef = useRef<HTMLDivElement>(null)
+  const anchorRef = useRef<HTMLDivElement>(null)
 
   const bgImage = useMemo(
     () => `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(SVG_CONTENT)}")`,
@@ -19,38 +46,50 @@ export function WatermarkOverlay({ visible = true }: WatermarkOverlayProps) {
   )
 
   useEffect(() => {
-    if (!visible || !containerRef.current) return
+    if (!visible || !anchorRef.current) return
 
-    const container = containerRef.current
+    const anchor = anchorRef.current
 
-    const observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        for (const removed of mutation.removedNodes) {
-          if (!(removed instanceof HTMLElement)) continue
-          if (removed.dataset?.testid === 'watermark-overlay') {
-            const existing = container.querySelector('[data-testid="watermark-overlay"]')
-            if (!existing && watermarkRef.current) {
-              container.appendChild(watermarkRef.current)
-            }
-          }
-        }
-      }
+    const ensureWatermarks = () => {
+      // Find the editor root that contains the pagination decorations
+      const resumeDoc = anchor.parentElement
+      if (!resumeDoc) return
+
+      const pagesWrapper = resumeDoc.querySelector('[data-rm-pagination]')
+      if (!pagesWrapper) return
+
+      const pageBreaks = pagesWrapper.querySelectorAll(':scope > .rm-page-break')
+      pageBreaks.forEach((pageBreak) => {
+        const page = pageBreak.querySelector(':scope > .page')
+        if (!page) return
+
+        // Skip if this page already has a watermark
+        if (page.querySelector('[data-testid="watermark-overlay"]')) return
+
+        page.appendChild(createWatermarkElement(bgImage))
+      })
+    }
+
+    // Initial injection — wait for decorations to render (rAF)
+    const rafId = requestAnimationFrame(() => ensureWatermarks())
+
+    // Watch for page DOM changes
+    const observer = new MutationObserver(() => {
+      ensureWatermarks()
     })
 
-    observer.observe(container, { childList: true })
-    return () => observer.disconnect()
-  }, [visible])
+    const resumeDoc = anchor.parentElement
+    if (resumeDoc) {
+      observer.observe(resumeDoc, { childList: true, subtree: true })
+    }
+
+    return () => {
+      cancelAnimationFrame(rafId)
+      observer.disconnect()
+    }
+  }, [visible, bgImage])
 
   if (!visible) return null
 
-  return (
-    <div ref={containerRef} className="watermark-container">
-      <div
-        ref={watermarkRef}
-        data-testid="watermark-overlay"
-        className="watermark-overlay"
-        style={{ backgroundImage: bgImage }}
-      />
-    </div>
-  )
+  return <div ref={anchorRef} style={{ display: 'contents' }} />
 }
