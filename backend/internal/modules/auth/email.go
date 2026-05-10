@@ -3,6 +3,7 @@ package auth
 import (
 	"crypto/rand"
 	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"math/big"
@@ -69,32 +70,52 @@ func (s *EmailService) SendVerificationCode(to, code string) error {
 	}
 
 	msg := []byte(fmt.Sprintf(
-		"From: %s\r\nTo: %s\r\nSubject: ResumeGenius Email Verification\r\n\r\n"+
-			"Your verification code is: %s\r\n\r\n"+
-			"This code expires in 15 minutes.\r\n"+
-			"If you did not request this code, please ignore this email.",
-		s.from, to, code,
+		"From: %s\r\nTo: %s\r\nSubject: =?utf-8?B?%s?=\r\n"+
+			"MIME-Version: 1.0\r\n"+
+			"Content-Type: text/plain; charset=UTF-8\r\n\r\n"+
+			"您的验证码是：%s\r\n\r\n"+
+			"验证码 15 分钟内有效，请勿告知他人。\r\n"+
+			"如非本人操作，请忽略此邮件。",
+		s.from, to, base64Encode("ResumeGenius 邮箱验证"),
+		code,
 	))
 
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
-	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
-	if err != nil {
-		log.Printf("[SMTP] Failed to connect to %s: %v — falling back to dev mode, code for %s: %s", addr, err, to, code)
-		return nil
-	}
-	defer conn.Close()
 
-	client, err := smtp.NewClient(conn, s.host)
-	if err != nil {
-		log.Printf("[SMTP] Failed to create client: %v — code for %s: %s", err, to, code)
-		return nil
-	}
-	defer client.Quit()
-
+	var client *smtp.Client
 	if s.port == 465 {
-		if err := client.StartTLS(&tls.Config{ServerName: s.host}); err != nil {
-			log.Printf("[SMTP] StartTLS failed: %v — code for %s: %s", err, to, code)
+		// Implicit TLS (SMTPS) — TLS from the start
+		tlsConn, err := tls.DialWithDialer(&net.Dialer{Timeout: 10 * time.Second}, "tcp", addr, &tls.Config{ServerName: s.host})
+		if err != nil {
+			log.Printf("[SMTP] TLS connection to %s failed: %v — falling back to dev mode, code for %s: %s", addr, err, to, code)
 			return nil
+		}
+		defer tlsConn.Close()
+		client, err = smtp.NewClient(tlsConn, s.host)
+		if err != nil {
+			log.Printf("[SMTP] Failed to create client: %v — code for %s: %s", err, to, code)
+			return nil
+		}
+		defer client.Quit()
+	} else {
+		conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+		if err != nil {
+			log.Printf("[SMTP] Failed to connect to %s: %v — falling back to dev mode, code for %s: %s", addr, err, to, code)
+			return nil
+		}
+		defer conn.Close()
+		client, err = smtp.NewClient(conn, s.host)
+		if err != nil {
+			log.Printf("[SMTP] Failed to create client: %v — code for %s: %s", err, to, code)
+			return nil
+		}
+		defer client.Quit()
+		// Try STARTTLS for non-465 ports if server supports it
+		if ok, _ := client.Extension("STARTTLS"); ok {
+			if err := client.StartTLS(&tls.Config{ServerName: s.host}); err != nil {
+				log.Printf("[SMTP] StartTLS failed: %v — code for %s: %s", err, to, code)
+				return nil
+			}
 		}
 	}
 
@@ -125,4 +146,9 @@ func (s *EmailService) SendVerificationCode(to, code string) error {
 
 	log.Printf("[SMTP] Verification code sent to %s", to)
 	return nil
+}
+
+// base64Encode returns the base64-encoded string for use in RFC 2047 encoded-words.
+func base64Encode(s string) string {
+	return base64.StdEncoding.EncodeToString([]byte(s))
 }
