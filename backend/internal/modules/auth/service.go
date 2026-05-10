@@ -150,7 +150,8 @@ func (s *Service) Register(username, password, email string) (*models.User, erro
 	if err != nil {
 		return nil, err
 	}
-	expiry := time.Now().Add(15 * time.Minute)
+	now := time.Now()
+	expiry := now.Add(15 * time.Minute)
 	user := models.User{
 		ID:               uuid.NewString(),
 		Username:         username,
@@ -159,10 +160,21 @@ func (s *Service) Register(username, password, email string) (*models.User, erro
 		VerificationCode: code,
 		CodeExpiry:       &expiry,
 		PasswordHash:     string(hash),
+		Plan:             "free",
+		Points:           100,
+		PlanStartedAt:    &now,
 	}
 	if createErr := s.db.Create(&user).Error; createErr != nil {
 		return nil, fmt.Errorf("create user: %w", createErr)
 	}
+	// Registration bonus
+	s.db.Create(&models.PointsRecord{
+		UserID:  user.ID,
+		Amount:  100,
+		Balance: 100,
+		Type:    "register_bonus",
+		Note:    "首次注册赠送",
+	})
 	if sendErr := s.email.SendVerificationCode(email, code); sendErr != nil {
 		return nil, fmt.Errorf("send verification code: %w", sendErr)
 	}

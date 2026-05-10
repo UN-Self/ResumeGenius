@@ -60,12 +60,16 @@ type userResp struct {
 	Email         string `json:"email,omitempty"`
 	EmailVerified bool   `json:"email_verified,omitempty"`
 	AvatarURL     string `json:"avatar_url,omitempty"`
-	Points        int    `json:"points"`
-	DevCode       string `json:"dev_code,omitempty"`
+	Points           int        `json:"points"`
+	Plan             string     `json:"plan"`
+	PlanStartedAt    *time.Time `json:"plan_started_at,omitempty"`
+	PlanExpiresAt    *time.Time `json:"plan_expires_at,omitempty"`
+	DevCode          string     `json:"dev_code,omitempty"`
 }
 
 func toUserResp(u *models.User, devMode bool) userResp {
-	r := userResp{ID: u.ID, Username: u.Username, Points: u.Points}
+	r := userResp{ID: u.ID, Username: u.Username, Points: u.Points, Plan: u.Plan, PlanStartedAt: u.PlanStartedAt, PlanExpiresAt: u.PlanExpiresAt}
+	if r.Plan == "" { r.Plan = "free" }
 	if u.Email != nil {
 		r.Email = *u.Email
 	}

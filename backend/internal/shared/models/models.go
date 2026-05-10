@@ -40,6 +40,9 @@ type User struct {
 	PasswordHash     string     `gorm:"size:255;not null" json:"-"`
 	AvatarURL        *string    `gorm:"size:512" json:"avatar_url,omitempty"`
 	Points           int        `gorm:"not null;default:0" json:"points"`
+	Plan             string     `gorm:"size:20;not null;default:'free'" json:"plan"`
+	PlanStartedAt    *time.Time `json:"plan_started_at,omitempty"`
+	PlanExpiresAt    *time.Time `json:"plan_expires_at,omitempty"`
 	CreatedAt        time.Time  `json:"created_at"`
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
