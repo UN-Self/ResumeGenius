@@ -5,6 +5,7 @@ import ProjectDetail from '@/pages/ProjectDetail'
 import LoginPage from '@/pages/LoginPage'
 import RegisterPage from '@/pages/RegisterPage'
 import EditorPage from '@/pages/EditorPage'
+import ProfilePage from '@/pages/ProfilePage'
 import { authApi } from '@/lib/api-client'
 import { FullPageState } from '@/components/ui/full-page-state'
 import { GridRippleCanvas } from '@/components/ui/GridRippleCanvas'
@@ -84,6 +85,10 @@ export default function App() {
         <Route
           path="/projects/:projectId/edit"
           element={authState === 'authed' ? <EditorPage /> : <Navigate to="/login" replace />}
+        />
+        <Route
+          path="/profile"
+          element={authState === 'authed' ? <ProfilePage /> : <Navigate to="/login" replace />}
         />
         <Route path="*" element={<Navigate to={authState === 'authed' ? '/' : '/login'} replace />} />
       </Routes>
