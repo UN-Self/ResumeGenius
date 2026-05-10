@@ -523,6 +523,7 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 			})
 			debugLog("service", "保存助手回复，长度 %d 字符", len(fullText.String()))
 			debugLog("service", "循环结束，共 %d 轮，总耗时 %v", totalIter+1, time.Since(loopStart))
+			s.toolExecutor.ClearSessionState(sessionID)
 			sendEvent(`{"type":"done"}`)
 			return nil
 		}
@@ -536,6 +537,7 @@ func (s *ChatService) StreamChatReAct(sessionID uint, userMessage string, sendEv
 	}
 
 	debugLog("service", "迭代汇总: 总轮次 %d，总耗时 %v", s.maxIterations*2+1, time.Since(loopStart))
+	s.toolExecutor.ClearSessionState(sessionID)
 	return ErrMaxIterations
 }
 
