@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
@@ -253,13 +252,8 @@ func (c *ChromeExporter) ExportHTMLToPDF(htmlContent string) ([]byte, error) {
 			var err error
 			buf, _, err = page.PrintToPDF().
 				WithPrintBackground(true).
-				WithPreferCSSPageSize(true).
 				WithPaperWidth(8.27).   // A4
 				WithPaperHeight(11.69). // A4
-				WithMarginTop(0).
-				WithMarginRight(0).
-				WithMarginBottom(0).
-				WithMarginLeft(0).
 				Do(ctx)
 			return err
 		}),
@@ -301,62 +295,5 @@ func injectFontCSS(html string) string {
 // wrapWithTemplate inserts the HTML fragment into the render template,
 // replacing the {{CONTENT}} placeholder.
 func wrapWithTemplate(htmlFragment string) string {
-	bodyHTML, styleHTML := extractRenderableHTML(htmlFragment)
-	html := strings.Replace(renderTemplate, "{{CONTENT}}", bodyHTML, 1)
-	if strings.TrimSpace(styleHTML) == "" {
-		return html
-	}
-	return strings.Replace(html, "<style>", styleHTML+"<style>", 1)
-}
-
-func extractRenderableHTML(htmlContent string) (string, string) {
-	if strings.TrimSpace(htmlContent) == "" {
-		return "", ""
-	}
-
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlContent))
-	if err != nil {
-		return htmlContent, ""
-	}
-
-	var styles []string
-	doc.Find("style").Each(func(_ int, s *goquery.Selection) {
-		if css := strings.TrimSpace(s.Text()); css != "" {
-			styles = append(styles, "<style>"+css+"</style>")
-		}
-		s.Remove()
-	})
-
-	body := doc.Find("body")
-	if body.Length() > 0 {
-		if bodyHTML, err := body.Html(); err == nil {
-			return normalizeRenderableBodyHTML(bodyHTML), strings.Join(styles, "\n")
-		}
-	}
-
-	html, err := doc.Find("html").Html()
-	if err != nil || strings.TrimSpace(html) == "" {
-		return normalizeRenderableBodyHTML(htmlContent), strings.Join(styles, "\n")
-	}
-	return normalizeRenderableBodyHTML(html), strings.Join(styles, "\n")
-}
-
-func normalizeRenderableBodyHTML(bodyHTML string) string {
-	normalized := strings.NewReplacer(
-		" ", " ",
-		" ", " ",
-		" ", " ",
-		" ", " ",
-		" ", " ",
-		" ", " ",
-		" ", " ",
-		" ", " ",
-		" ", " ",
-		" ", " ",
-		" ", " ",
-		" ", " ",
-		"　", " ",
-		"\t", " ",
-	).Replace(bodyHTML)
-	return strings.TrimSpace(normalized)
+	return strings.Replace(renderTemplate, "{{CONTENT}}", htmlFragment, 1)
 }
