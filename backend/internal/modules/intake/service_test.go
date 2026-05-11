@@ -433,11 +433,11 @@ func TestAssetService_CreateGitRepo(t *testing.T) {
 	proj, err := projSvc.Create("user-1", "测试项目")
 	require.NoError(t, err)
 
-	asset, err := svc.CreateGitRepo("user-1", proj.ID, "https://github.com/example/resume.git")
+	assets, err := svc.CreateGitRepo("user-1", proj.ID, []string{"https://github.com/example/resume.git"})
 	assert.NoError(t, err)
-	assert.NotNil(t, asset)
-	assert.Equal(t, "git_repo", asset.Type)
-	assert.Equal(t, "https://github.com/example/resume.git", *asset.URI)
+	assert.Len(t, assets, 1)
+	assert.Equal(t, "git_repo", assets[0].Type)
+	assert.Equal(t, "https://github.com/example/resume.git", *assets[0].URI)
 }
 
 func TestAssetService_CreateGitRepo_InvalidURL(t *testing.T) {
@@ -449,7 +449,7 @@ func TestAssetService_CreateGitRepo_InvalidURL(t *testing.T) {
 	proj, err := projSvc.Create("user-1", "测试项目")
 	require.NoError(t, err)
 
-	_, err = svc.CreateGitRepo("user-1", proj.ID, "not-a-url")
+	_, err = svc.CreateGitRepo("user-1", proj.ID, []string{"not-a-url"})
 	assert.ErrorIs(t, err, ErrInvalidGitURL)
 }
 

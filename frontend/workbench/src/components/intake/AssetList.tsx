@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { ChevronDown, Folder, MoreHorizontal, PencilLine, RefreshCcw, Trash2 } from 'lucide-react'
+import { ChevronDown, Folder, Loader2, MoreHorizontal, PencilLine, RefreshCcw, Trash2 } from 'lucide-react'
 import type { Asset } from '@/lib/api-client'
 import { getAssetVisual, getDisplayAssetTitle, getDisplayFileName, getOriginalFilenameFromAsset } from './fileVisuals'
 
@@ -181,6 +181,17 @@ export function getDisplayTitle(asset: AssetItem, fallbackLabel: string) {
 
 function isFileAsset(assetType: string) {
   return assetType === 'resume_pdf' || assetType === 'resume_docx' || assetType === 'resume_image'
+}
+
+type ParseStatus = 'parsing' | 'success' | 'failed' | 'skipped' | null
+
+function getParseStatus(asset: AssetItem): ParseStatus {
+  const parsing = asset.metadata?.parsing as Record<string, unknown> | undefined
+  const status = parsing?.status
+  if (status === 'parsing' || status === 'success' || status === 'failed' || status === 'skipped') {
+    return status
+  }
+  return null
 }
 
 function isGenericAssetLabel(asset: AssetItem, label: string) {
@@ -552,6 +563,19 @@ export default function AssetList({
                       >
                         {visual.chipLabel}
                       </span>
+                      {getParseStatus(asset) === 'parsing' && (
+                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-amber-500" />
+                      )}
+                      {getParseStatus(asset) === 'success' && (
+                        <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600" title="解析成功">
+                          <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"/></svg>
+                        </span>
+                      )}
+                      {getParseStatus(asset) === 'failed' && (
+                        <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-500" title="解析失败">
+                          <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/></svg>
+                        </span>
+                      )}
                     </div>
 
                     {showGitSource && (

@@ -40,7 +40,7 @@ type stubGitExtractor struct {
 	err        error
 }
 
-func (s *stubGitExtractor) Extract(repoURL string) (*ParsedContent, error) {
+func (s *stubGitExtractor) Extract(repoURL string, _ string) (*ParsedContent, error) {
 	s.calledWith = repoURL
 	return s.result, s.err
 }

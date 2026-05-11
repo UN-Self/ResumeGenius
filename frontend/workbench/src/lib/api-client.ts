@@ -108,10 +108,10 @@ export const intakeApi = {
       method: 'POST',
       body: JSON.stringify({ project_id: projectId, name, parent_folder_id: parentFolderId ?? null }),
     }),
-  createGitRepo: (projectId: number, repoUrl: string) =>
-    request<Asset>('/assets/git', {
+  createGitRepo: (projectId: number, repoUrls: string[]) =>
+    request<Asset[]>('/assets/git', {
       method: 'POST',
-      body: JSON.stringify({ project_id: projectId, repo_url: repoUrl }),
+      body: JSON.stringify({ project_id: projectId, repo_urls: repoUrls }),
     }),
   updateAsset: (id: number, payload: { content?: string; label?: string }) =>
     request<Asset>(`/assets/${id}`, {
@@ -219,6 +219,10 @@ export const parsingApi = {
     request<{ parsed_contents: ParsedContent[] }>('/parsing/parse', {
       method: 'POST',
       body: JSON.stringify({ project_id: projectId }),
+    }),
+  parseAsset: (assetId: number) =>
+    request<ParsedContent>(`/parsing/assets/${assetId}/parse`, {
+      method: 'POST',
     }),
 }
 

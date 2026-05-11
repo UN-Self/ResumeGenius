@@ -34,7 +34,7 @@ func TestGitExtractorExtract_SummarizesLocalRepository(t *testing.T) {
 	}
 
 	extractor := NewGitExtractor()
-	parsed, err := extractor.Extract(repoDir)
+	parsed, err := extractor.Extract(repoDir, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestGitExtractorExtract_ClonesRemoteRepositoryWhenNeeded(t *testing.T) {
 		},
 	}
 
-	parsed, err := extractor.Extract("https://github.com/example/project.git")
+	parsed, err := extractor.Extract("https://github.com/example/project.git", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestGitExtractorExtract_ClonesRemoteRepositoryWhenNeeded(t *testing.T) {
 func TestGitExtractorExtract_ReturnsErrorForBlankRepositoryURL(t *testing.T) {
 	extractor := NewGitExtractor()
 
-	_, err := extractor.Extract("   ")
+	_, err := extractor.Extract("   ", "")
 	if err == nil {
 		t.Fatal("expected blank repository url error")
 	}

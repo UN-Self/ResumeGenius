@@ -113,6 +113,68 @@ func (s *ParsingService) Parse(projectID uint) ([]ParsedContent, error) {
 	return parsedContents, nil
 }
 
+// ParseAssetForUser validates ownership then parses a single asset.
+func (s *ParsingService) ParseAssetForUser(userID string, assetID uint, userContext string) (*ParsedContent, error) {
+	asset, err := s.loadOwnedAsset(userID, assetID)
+	if err != nil {
+		return nil, err
+	}
+	return s.ParseAsset(*asset, userContext)
+}
+
+// loadOwnedAsset fetches an asset with ownership validation via its project.
+func (s *ParsingService) loadOwnedAsset(userID string, assetID uint) (*models.Asset, error) {
+	if s.db == nil {
+		return nil, ErrDatabaseNotConfigured
+	}
+	var asset models.Asset
+	if err := s.db.Take(&asset, assetID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrAssetNotFound
+		}
+		return nil, err
+	}
+	if err := s.ensureOwnedProject(userID, asset.ProjectID); err != nil {
+		return nil, err
+	}
+	return &asset, nil
+}
+
+// ParseAsset parses a single asset and persists the result.
+func (s *ParsingService) ParseAsset(asset models.Asset, userContext string) (*ParsedContent, error) {
+	if s.shouldSkipAssetInParseFlow(asset) {
+		return nil, ErrAssetTypeSkipped
+	}
+
+	if err := s.persistAssetParsingStatus(asset, "parsing"); err != nil {
+		return nil, err
+	}
+
+	var parsed *ParsedContent
+	var err error
+	if asset.Type == AssetTypeGitRepo {
+		parsed, err = s.parseGitAsset(asset, userContext)
+	} else {
+		parsed, err = s.parseAsset(asset)
+	}
+	if err != nil {
+		_ = s.persistAssetParsingStatus(asset, "failed")
+		return nil, err
+	}
+	if parsed == nil {
+		_ = s.persistAssetParsingStatus(asset, "failed")
+		return nil, ErrUnsupportedAssetType
+	}
+
+	if !shouldUsePersistedTextFallback(asset) {
+		if err := s.persistParsedAsset(asset, parsed); err != nil {
+			return nil, err
+		}
+	}
+
+	return parsed, nil
+}
+
 func (s *ParsingService) ensureOwnedProject(userID string, projectID uint) error {
 	if s.db == nil {
 		return ErrDatabaseNotConfigured
@@ -190,7 +252,7 @@ func (s *ParsingService) parseAsset(asset models.Asset) (*ParsedContent, error) 
 	case AssetTypeResumeImage:
 		return nil, ErrAssetTypeSkipped
 	case AssetTypeGitRepo:
-		return s.parseGitAsset(asset)
+		return s.parseGitAsset(asset, "")
 	case AssetTypeNote:
 		return s.parseNoteAsset(asset)
 	default:
@@ -236,7 +298,7 @@ func (s *ParsingService) parseDOCXAsset(asset models.Asset) (*ParsedContent, err
 	return cleanParsedContentText(attachAssetMetadata(asset, parsed)), nil
 }
 
-func (s *ParsingService) parseGitAsset(asset models.Asset) (*ParsedContent, error) {
+func (s *ParsingService) parseGitAsset(asset models.Asset, userContext string) (*ParsedContent, error) {
 	if s.gitExtractor == nil {
 		return nil, ErrGitExtractorNotConfigured
 	}
@@ -245,7 +307,7 @@ func (s *ParsingService) parseGitAsset(asset models.Asset) (*ParsedContent, erro
 		return nil, err
 	}
 
-	parsed, err := s.gitExtractor.Extract(repoURL)
+	parsed, err := s.gitExtractor.Extract(repoURL, userContext)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrGitExtractFailed, err)
 	}
@@ -782,6 +844,8 @@ func isRecoverableAssetError(err error) bool {
 	case errors.Is(err, ErrDOCXParseFailed):
 		return true
 	case errors.Is(err, ErrGitExtractFailed):
+		return true
+	case errors.Is(err, ErrGitAIAnalysisFailed):
 		return true
 	default:
 		return false

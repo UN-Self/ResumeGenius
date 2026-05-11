@@ -1,30 +1,33 @@
 import { useState } from 'react'
 import { Modal, ModalHeader, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 
 interface GitRepoDialogProps {
   open: boolean
   onClose: () => void
-  onSubmit: (repoUrl: string) => Promise<void>
+  onSubmit: (repoUrls: string[]) => Promise<void>
 }
 
 export default function GitRepoDialog({ open, onClose, onSubmit }: GitRepoDialogProps) {
-  const [repoUrl, setRepoUrl] = useState('')
+  const [repoUrlsText, setRepoUrlsText] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async () => {
-    const trimmed = repoUrl.trim()
-    if (!trimmed) {
-      setError('请输入 Git 仓库地址')
+    const urls = repoUrlsText
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line !== '')
+
+    if (urls.length === 0) {
+      setError('请输入至少一个 Git 仓库 HTTPS 地址')
       return
     }
     try {
       setSubmitting(true)
       setError('')
-      await onSubmit(trimmed)
-      setRepoUrl('')
+      await onSubmit(urls)
+      setRepoUrlsText('')
       onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : '创建失败')
@@ -34,7 +37,7 @@ export default function GitRepoDialog({ open, onClose, onSubmit }: GitRepoDialog
   }
 
   const handleClose = () => {
-    setRepoUrl('')
+    setRepoUrlsText('')
     setError('')
     onClose()
   }
@@ -42,14 +45,16 @@ export default function GitRepoDialog({ open, onClose, onSubmit }: GitRepoDialog
   return (
     <Modal open={open} onClose={handleClose}>
       <ModalHeader>接入 Git 仓库</ModalHeader>
-      <p className="text-xs text-muted-foreground mt-1">输入 GitHub / GitLab 仓库的 HTTPS 地址</p>
+      <p className="text-xs text-muted-foreground mt-1">
+        输入 GitHub / GitLab 仓库的 HTTPS 地址，每行一个
+      </p>
 
-      <Input
-        value={repoUrl}
-        onChange={(e) => setRepoUrl(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-        placeholder="https://github.com/user/repo"
-        className="mt-4"
+      <textarea
+        value={repoUrlsText}
+        onChange={(e) => setRepoUrlsText(e.target.value)}
+        placeholder={'https://github.com/user/repo1\nhttps://github.com/user/repo2'}
+        className="mt-4 w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[80px] resize-y"
+        rows={4}
       />
 
       {error && (
@@ -60,7 +65,7 @@ export default function GitRepoDialog({ open, onClose, onSubmit }: GitRepoDialog
         <Button variant="secondary" onClick={handleClose}>
           取消
         </Button>
-        <Button onClick={handleSubmit} disabled={!repoUrl.trim() || submitting}>
+        <Button onClick={handleSubmit} disabled={!repoUrlsText.trim() || submitting}>
           {submitting ? '接入中...' : '接入'}
         </Button>
       </ModalFooter>
