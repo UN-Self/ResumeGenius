@@ -18,7 +18,7 @@ import (
 const (
 	maxReadmePreviewLength   = 1800
 	maxTopLevelEntries       = 10
-	defaultGitCommandTimeout = 30 * time.Second
+	defaultGitCommandTimeout = 60 * time.Second
 )
 
 type gitCommandRunner func(dir string, args ...string) ([]byte, error)
@@ -41,7 +41,7 @@ func NewGitExtractor() *GitRepositoryExtractor {
 	}
 }
 
-func (g *GitRepositoryExtractor) Extract(repoURL string) (*ParsedContent, error) {
+func (g *GitRepositoryExtractor) Extract(repoURL string, _ string) (*ParsedContent, error) {
 	repoURL = strings.TrimSpace(repoURL)
 	if repoURL == "" {
 		return nil, ErrAssetURIMissing

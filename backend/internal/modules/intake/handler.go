@@ -41,8 +41,9 @@ type createProjectReq struct {
 }
 
 type createGitReq struct {
-	ProjectID uint   `json:"project_id"`
-	RepoURL   string `json:"repo_url"`
+	ProjectID uint     `json:"project_id"`
+	RepoURL   string   `json:"repo_url"`
+	RepoURLs  []string `json:"repo_urls"`
 }
 
 type createNoteReq struct {
@@ -251,11 +252,18 @@ func (h *Handler) CreateGitRepo(c *gin.Context) {
 		return
 	}
 
-	asset, err := h.assetSvc.CreateGitRepo(userID(c), req.ProjectID, req.RepoURL)
+	urls := req.RepoURLs
+	if req.RepoURL != "" {
+		urls = append(urls, req.RepoURL)
+	}
+
+	assets, err := h.assetSvc.CreateGitRepo(userID(c), req.ProjectID, urls)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidGitURL):
 			response.Error(c, CodeInvalidGitURL, "invalid git repository URL")
+		case errors.Is(err, ErrNoGitURLs):
+			response.Error(c, CodeParamInvalid, "repo_url or repo_urls is required")
 		case errors.Is(err, ErrProjectNotFound):
 			response.Error(c, CodeProjectNotFound, "project not found")
 		default:
@@ -264,7 +272,7 @@ func (h *Handler) CreateGitRepo(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, asset)
+	response.Success(c, assets)
 }
 
 // ListAssets handles GET /assets?project_id=X

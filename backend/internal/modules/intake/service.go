@@ -128,6 +128,7 @@ var (
 	ErrUnsupportedFormat    = errors.New("unsupported file format")
 	ErrFileTooLarge         = errors.New("file size exceeds 20MB limit")
 	ErrInvalidGitURL        = errors.New("invalid git repository URL")
+	ErrNoGitURLs            = errors.New("no git URLs provided")
 	ErrProjectNotFound      = errors.New("project not found")
 	ErrAssetNotFound        = errors.New("asset not found")
 	ErrAssetURIMissing      = errors.New("asset uri is required")
@@ -279,28 +280,57 @@ func (s *AssetService) CreateFolder(userID string, projectID uint, name string, 
 	return &asset, nil
 }
 
-func (s *AssetService) CreateGitRepo(userID string, projectID uint, repoURL string) (*models.Asset, error) {
+func (s *AssetService) CreateGitRepo(userID string, projectID uint, repoURLs []string) ([]models.Asset, error) {
 	if err := s.validateProject(userID, projectID); err != nil {
 		return nil, err
 	}
 
-	if !gitURLPattern.MatchString(repoURL) {
-		return nil, ErrInvalidGitURL
-	}
-	if _, err := url.Parse(repoURL); err != nil {
-		return nil, ErrInvalidGitURL
-	}
-
-	asset := models.Asset{
-		ProjectID: projectID,
-		Type:      "git_repo",
-		URI:       &repoURL,
-	}
-	if err := s.db.Create(&asset).Error; err != nil {
-		return nil, fmt.Errorf("create git repo asset: %w", err)
+	// Deduplicate and trim
+	seen := make(map[string]bool, len(repoURLs))
+	var cleaned []string
+	for _, raw := range repoURLs {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" || seen[trimmed] {
+			continue
+		}
+		seen[trimmed] = true
+		cleaned = append(cleaned, trimmed)
 	}
 
-	return &asset, nil
+	if len(cleaned) == 0 {
+		return nil, ErrNoGitURLs
+	}
+
+	for _, repoURL := range cleaned {
+		if !gitURLPattern.MatchString(repoURL) {
+			return nil, ErrInvalidGitURL
+		}
+		if _, err := url.Parse(repoURL); err != nil {
+			return nil, ErrInvalidGitURL
+		}
+	}
+
+	assets := make([]models.Asset, 0, len(cleaned))
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		for _, repoURL := range cleaned {
+			urlCopy := repoURL
+			asset := models.Asset{
+				ProjectID: projectID,
+				Type:      "git_repo",
+				URI:       &urlCopy,
+			}
+			if err := tx.Create(&asset).Error; err != nil {
+				return fmt.Errorf("create git repo asset: %w", err)
+			}
+			assets = append(assets, asset)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return assets, nil
 }
 
 func (s *AssetService) CreateNote(userID string, projectID uint, content, label string) (*models.Asset, error) {

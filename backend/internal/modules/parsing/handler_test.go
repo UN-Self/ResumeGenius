@@ -14,16 +14,25 @@ import (
 )
 
 type stubParseService struct {
-	calledWithUser string
-	calledWith     uint
-	parseResult    []ParsedContent
-	parseErr       error
+	calledWithUser      string
+	calledWith          uint
+	parseResult         []ParsedContent
+	parseErr            error
+	singleAssetResult   *ParsedContent
+	singleAssetErr      error
+	calledAssetID       uint
 }
 
 func (s *stubParseService) ParseForUser(userID string, projectID uint) ([]ParsedContent, error) {
 	s.calledWithUser = userID
 	s.calledWith = projectID
 	return s.parseResult, s.parseErr
+}
+
+func (s *stubParseService) ParseAssetForUser(userID string, assetID uint, _ string) (*ParsedContent, error) {
+	s.calledWithUser = userID
+	s.calledAssetID = assetID
+	return s.singleAssetResult, s.singleAssetErr
 }
 
 func TestParse_SucceedsAndReturnsParsedContents(t *testing.T) {

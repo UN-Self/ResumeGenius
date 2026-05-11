@@ -188,14 +188,13 @@ export default function AssetSidebar({
     }
   }
 
-  const handleCreateGit = async (repoUrl: string) => {
+  const handleCreateGit = async (repoUrls: string[]) => {
     setError('')
     try {
-      await intakeApi.createGitRepo(projectId, repoUrl)
-      await parsingApi.parseProject(projectId)
+      await intakeApi.createGitRepo(projectId, repoUrls)
+      await refreshAssets()
     } catch (createGitError) {
       setError(createGitError instanceof Error ? createGitError.message : '创建 Git 素材失败')
-    } finally {
       await refreshAssets()
     }
   }
@@ -368,12 +367,10 @@ export default function AssetSidebar({
   }
 
   const handleReparseAsset = async (asset: Asset) => {
-    const dirtyCount = dirtyReparseAssets.length
-    if (dirtyCount > 0) {
+    const isDirty = dirtyReparseAssets.some((a) => a.id === asset.id)
+    if (isDirty) {
       const confirmed = window.confirm(
-        dirtyCount === 1
-          ? '重新解析会覆盖当前已手动修改的素材正文，是否继续？'
-          : `重新解析会刷新项目中所有可解析素材，并覆盖 ${dirtyCount} 项已手动修改的正文，是否继续？`
+        '重新解析会覆盖当前已手动修改的素材正文，是否继续？'
       )
       if (!confirmed) {
         return
@@ -383,7 +380,7 @@ export default function AssetSidebar({
     try {
       setReparseLoadingAssetId(asset.id)
       setError('')
-      await parsingApi.parseProject(projectId)
+      await parsingApi.parseAsset(asset.id)
       await refreshAssets()
     } catch (reparseError) {
       setError(reparseError instanceof Error ? reparseError.message : '重新解析失败')

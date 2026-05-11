@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -16,11 +17,14 @@ const (
 	CodeParseDOCXFailed  = 2002
 	CodeProjectNotFound  = 2003
 	CodeNoUsableAssets   = 2004
-	CodeGitExtractFailed = 2007
+	CodeGitExtractFailed     = 2007
+	CodeGitAIAnalysisFailed  = 2008
+	CodeAssetNotFound        = 2009
 )
 
 type parseService interface {
 	ParseForUser(userID string, projectID uint) ([]ParsedContent, error)
+	ParseAssetForUser(userID string, assetID uint, userContext string) (*ParsedContent, error)
 }
 
 // Handler handles parsing HTTP requests.
@@ -66,9 +70,39 @@ func (h *Handler) Parse(c *gin.Context) {
 	})
 }
 
+// ParseAsset handles POST /api/v1/parsing/assets/:asset_id/parse.
+func (h *Handler) ParseAsset(c *gin.Context) {
+	userID := middleware.UserIDFromContext(c)
+	if userID == "" {
+		response.Error(c, 40100, "unauthorized")
+		return
+	}
+
+	assetID, err := strconv.ParseUint(c.Param("asset_id"), 10, 64)
+	if err != nil || assetID == 0 {
+		response.Error(c, 40000, "invalid asset_id")
+		return
+	}
+
+	var req struct {
+		UserContext string `json:"user_context"`
+	}
+	_ = c.ShouldBindJSON(&req) // body is optional
+
+	parsed, err := h.service.ParseAssetForUser(userID, uint(assetID), req.UserContext)
+	if err != nil {
+		h.respondParseError(c, err)
+		return
+	}
+
+	response.Success(c, parsed)
+}
+
 func (h *Handler) respondParseError(c *gin.Context, err error) {
 	log.Printf("[parsing] error: %v", err)
 	switch {
+	case errors.Is(err, ErrAssetNotFound):
+		response.ErrorWithStatus(c, http.StatusNotFound, CodeAssetNotFound, "asset not found")
 	case errors.Is(err, ErrProjectNotFound):
 		response.ErrorWithStatus(c, http.StatusNotFound, CodeProjectNotFound, "project not found")
 	case errors.Is(err, ErrNoUsableAssets):
@@ -81,6 +115,10 @@ func (h *Handler) respondParseError(c *gin.Context, err error) {
 		response.Error(c, CodeParseDOCXFailed, "docx parse failed")
 	case errors.Is(err, ErrGitExtractFailed):
 		response.Error(c, CodeGitExtractFailed, "git repository extract failed")
+	case errors.Is(err, ErrGitAIAnalysisFailed):
+		response.Error(c, CodeGitAIAnalysisFailed, "git repository AI analysis failed")
+	case errors.Is(err, ErrAssetTypeSkipped), errors.Is(err, ErrUnsupportedAssetType):
+		response.Error(c, 2006, "asset type is not supported for parsing")
 	default:
 		response.Error(c, 50000, "internal server error")
 	}

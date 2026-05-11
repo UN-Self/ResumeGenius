@@ -1,6 +1,6 @@
 # 模块 parsing 契约：文件解析与文本清洗
 
-更新时间：2026-05-07
+更新时间：2026-05-11
 
 > 说明：本文件描述当前分支已实现的 parsing 素材正文链路。
 > 重点包括：文本清洗、正文回写、派生图片持久化、原始文件删除。
@@ -11,7 +11,7 @@
 
 - PDF 文件解析（提取文本块和内嵌图片）
 - DOCX 文件解析（提取段落、表格、样式）
-- Git 仓库信息抽取（README、技术栈）
+- Git 仓库 AI 深度分析（生成 `repository_{name}.md`，含常用命令、高层架构、规则合并；AI 不可用时 fallback 到正则 README 提取）
 - 文本清洗和持久化回写
 
 **不负责**：
@@ -91,7 +91,7 @@ Notes:
 | PDF | ledongthuc/pdf 原生解析（文本 + 图片提取）→ 文本清洗 → 回写 `assets.content` |
 | DOCX | nguyenthenguyen/docx 段落/表格/样式提取 → 文本清洗 → 回写 `assets.content` |
 | 图片 | 上传得到的 `resume_image` 在 v1 仍跳过解析；PDF / DOCX 解析出的图片会持久化成派生 `resume_image` 资产供前端引用 |
-| Git | clone → 抽 README + 项目名 + 技术栈 + 目录结构 → 清洗后回写 `assets.content` |
+| Git | clone → 收集上下文（README、技术栈、目录结构、`.cursor/rules/`、构建配置）→ AI 单次请求生成 `repository_{name}.md` → 回写 `assets.content`。AI 未配置时 fallback 到正则 README + 技术栈 + 目录结构提取 |
 | 补充文本 | 直接使用 `content` 字段，并做轻量清洗 |
 
 清洗目标：
@@ -130,6 +130,7 @@ Notes:
 | 2003 | 404 | 项目不存在 |
 | 2004 | 400 | 项目无可用资产 |
 | 2007 | 400 | Git 仓库提取失败（clone 或读取异常） |
+| 2008 | 400 | Git 仓库 AI 分析失败（AI API 调用异常） |
 
 ## 8. 测试策略
 

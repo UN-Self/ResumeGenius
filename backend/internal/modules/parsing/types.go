@@ -25,9 +25,11 @@ var (
 	ErrPDFParseFailed            = errors.New("pdf parse failed")
 	ErrDOCXParseFailed           = errors.New("docx parse failed")
 	ErrGitExtractFailed          = errors.New("git extract failed")
+	ErrGitAIAnalysisFailed       = errors.New("git AI analysis failed")
 	ErrPDFParserNotConfigured    = errors.New("pdf parser is not configured")
 	ErrDOCXParserNotConfigured   = errors.New("docx parser is not configured")
 	ErrGitExtractorNotConfigured = errors.New("git extractor is not configured")
+	ErrAssetNotFound             = errors.New("asset not found")
 )
 
 type ParsedImage struct {
@@ -52,7 +54,7 @@ type DocxParser interface {
 }
 
 type GitExtractor interface {
-	Extract(repoURL string) (*ParsedContent, error)
+	Extract(repoURL string, userContext string) (*ParsedContent, error)
 }
 
 // AssetLabel returns a display label from the asset's explicit label or URI.
