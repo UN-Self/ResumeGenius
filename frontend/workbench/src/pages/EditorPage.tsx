@@ -17,6 +17,7 @@ import { AssetWorkspace } from '@/components/intake/AssetWorkspace'
 import { getDisplayTitle } from '@/components/intake/AssetList'
 import { getAssetVisual } from '@/components/intake/fileVisuals'
 import { request, intakeApi, workbenchApi, ApiError, type Asset } from '@/lib/api-client'
+import { captureCopy, sliceFromJson, getMimeType } from '@/lib/clipboard'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useExport } from '@/hooks/useExport'
 import { FullPageState } from '@/components/ui/full-page-state'
@@ -92,9 +93,33 @@ export default function EditorPage() {
       handleDOMEvents: {
         copy(_view, event) {
           const { from, to } = _view.state.selection
-          const plainText = _view.state.doc.textBetween(from, to, '\n')
+          const { text, json } = captureCopy(_view.state, from, to)
           event.preventDefault()
-          event.clipboardData?.setData('text/plain', plainText)
+          event.clipboardData?.setData('text/plain', text)
+          event.clipboardData?.setData(getMimeType(), json)
+          return true
+        },
+        cut(_view, event) {
+          const { from, to } = _view.state.selection
+          const { text, json } = captureCopy(_view.state, from, to)
+          event.preventDefault()
+          event.clipboardData?.setData('text/plain', text)
+          event.clipboardData?.setData(getMimeType(), json)
+          _view.dispatch(_view.state.tr.deleteSelection())
+          return true
+        },
+        paste(_view, event) {
+          event.preventDefault()
+          const raw = event.clipboardData?.getData(getMimeType())
+          if (raw) {
+            const slice = sliceFromJson(_view.state.schema, raw)
+            _view.dispatch(_view.state.tr.replaceSelection(slice))
+            return true
+          }
+          const text = event.clipboardData?.getData('text/plain') || ''
+          if (text) {
+            _view.dispatch(_view.state.tr.insertText(text))
+          }
           return true
         },
       },

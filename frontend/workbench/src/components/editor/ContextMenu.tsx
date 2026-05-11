@@ -2,6 +2,7 @@ import { useRef, useLayoutEffect, useState } from 'react'
 import { type Editor } from '@tiptap/react'
 import { Undo2, Redo2, Scissors, Copy, ClipboardPaste, MousePointerClick } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { captureCopy, sliceFromJson, getMimeType, getLastCopy } from '@/lib/clipboard'
 
 export interface ContextMenuProps {
   editor: Editor | null
@@ -90,8 +91,12 @@ export function ContextMenu({ editor, isOpen, x, y, onClose }: ContextMenuProps)
       icon: Scissors,
       disabled: !hasSelection,
       action: () => {
-        const plainText = editor.view.state.doc.textBetween(from, to, '\n')
-        navigator.clipboard.writeText(plainText).then(() => {
+        const { text, json } = captureCopy(editor.state, from, to)
+        const item = new ClipboardItem({
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+          [getMimeType()]: new Blob([json], { type: getMimeType() }),
+        })
+        navigator.clipboard.write([item]).then(() => {
           editor.chain().focus().deleteSelection().run()
           onClose()
         }).catch((err) => {
@@ -106,12 +111,17 @@ export function ContextMenu({ editor, isOpen, x, y, onClose }: ContextMenuProps)
       icon: Copy,
       disabled: !hasSelection,
       action: () => {
-        const plainText = editor.view.state.doc.textBetween(from, to, '\n')
-        navigator.clipboard.writeText(plainText).catch((err) => {
+        const { text, json } = captureCopy(editor.state, from, to)
+        const item = new ClipboardItem({
+          'text/plain': new Blob([text], { type: 'text/plain' }),
+          [getMimeType()]: new Blob([json], { type: getMimeType() }),
+        })
+        navigator.clipboard.write([item]).then(() => {
+          onClose()
+        }).catch((err) => {
           console.error('Clipboard write failed:', err)
           setClipboardError('剪贴板访问被拒绝')
         })
-        onClose()
       },
     },
     {
@@ -119,14 +129,25 @@ export function ContextMenu({ editor, isOpen, x, y, onClose }: ContextMenuProps)
       shortcut: 'Ctrl+V',
       icon: ClipboardPaste,
       disabled: false,
-      action: () => {
-        navigator.clipboard.readText().then((text) => {
+      action: async () => {
+        try {
+          const internal = getLastCopy()
+          if (internal) {
+            const currentText = await navigator.clipboard.readText()
+            if (currentText === internal.text) {
+              const slice = sliceFromJson(editor.state.schema, internal.json)
+              editor.view.dispatch(editor.view.state.tr.replaceSelection(slice))
+              onClose()
+              return
+            }
+          }
+          const text = await navigator.clipboard.readText()
           editor.chain().focus().insertContent(text).run()
           onClose()
-        }).catch((err) => {
+        } catch (err) {
           console.error('Clipboard read failed:', err)
           setClipboardError('剪贴板访问被拒绝')
-        })
+        }
       },
     },
     {
