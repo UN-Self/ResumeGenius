@@ -301,6 +301,10 @@ export default function EditorPage() {
       await flush()
       const html = await rollbackVersion()
       applyHtmlToEditor(html)
+      if (editor) {
+        editor.setEditable(true)
+      }
+      savedContentBeforePreview.current = null
       setRollbackDialogOpen(false)
     } catch (e) {
       toast(e instanceof Error ? e.message : '回滚失败')
