@@ -8,7 +8,7 @@ import TextAlign from '@tiptap/extension-text-align'
 import { TextStyleKit } from '@tiptap/extension-text-style'
 import { PaginationPlus } from 'tiptap-pagination-plus'
 import { A4Canvas } from '@/components/editor/A4Canvas'
-import { Div, PresetAttributes, Span } from '@/components/editor/extensions'
+import { Div, PresetAttributes, Span, SmartSplitExtension } from '@/components/editor/extensions'
 import { ActionBar } from '@/components/editor/ActionBar'
 import { SaveIndicator } from '@/components/editor/SaveIndicator'
 import { ChatPanel } from '@/components/chat/ChatPanel'
@@ -84,6 +84,7 @@ export default function EditorPage() {
         footerLeft: '',
         footerRight: '',
       }),
+      SmartSplitExtension,
     ],
     content: '',
     editorProps: {

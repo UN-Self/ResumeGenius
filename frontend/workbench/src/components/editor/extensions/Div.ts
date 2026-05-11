@@ -36,6 +36,8 @@ export const Div = Node.create({
       },
       class: nullSafeAttr('class'),
       style: nullSafeAttr('style'),
+      id: nullSafeAttr('id'),
+      'data-ss-parent': nullSafeAttr('data-ss-parent'),
     }
   },
 })
