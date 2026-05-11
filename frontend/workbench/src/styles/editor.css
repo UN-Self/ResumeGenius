@@ -86,10 +86,11 @@
   background-color: var(--color-canvas-bg, #ede8e0) !important;
 }
 
-/* Hide extension headers/footers (we don't use them) */
+/* Hide extension headers/footers visually, but preserve layout for page margins */
 .rm-page-header,
 .rm-page-footer {
-  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 /* AI Panel */
