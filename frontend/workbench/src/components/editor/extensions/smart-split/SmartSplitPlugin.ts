@@ -8,6 +8,9 @@ const pluginKey = new PluginKey('smartSplit')
 
 export function smartSplitPlugin(options: SmartSplitOptions) {
   let timer: ReturnType<typeof setTimeout> | null = null
+  const log = options.debug
+    ? (...args: any[]) => console.log('[SmartSplit]', ...args)
+    : () => {}
 
   return new Plugin({
     key: pluginKey,
@@ -24,14 +27,14 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
         update(_view: EditorView) {
           const isOwnDispatch = pluginKey.getState(_view.state)
           if (isOwnDispatch) {
-            console.log('[SmartSplit] skipping re-detection after own dispatch')
+            log('skipping re-detection after own dispatch')
             return
           }
 
           if (timer) clearTimeout(timer)
 
           timer = setTimeout(() => {
-            performDetectionAndSplit(_view, options)
+            performDetectionAndSplit(_view, options, log)
             timer = null
           }, options.debounce)
         },
@@ -43,14 +46,17 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
   })
 }
 
-function performDetectionAndSplit(view: EditorView, options: SmartSplitOptions) {
+function performDetectionAndSplit(
+  view: EditorView, options: SmartSplitOptions,
+  log: (...args: any[]) => void,
+) {
   const editorDom = view.dom
   const breakers = getBreakerPositions(editorDom)
-  console.log('[SmartSplit] breakers:', breakers.length, breakers)
+  log('breakers:', breakers.length, breakers)
   if (breakers.length === 0) return
 
   const crossings = findCrossingPositions(view, editorDom, breakers, options.threshold)
-  console.log('[SmartSplit] crossings:', crossings.length,
+  log('crossings:', crossings.length,
     crossings.map(c => ({ pos: c.pos, breaker: c.breakerIndex })))
   if (crossings.length === 0) return
 
@@ -61,25 +67,36 @@ function performDetectionAndSplit(view: EditorView, options: SmartSplitOptions) 
   for (const c of crossings) {
     const $pos = state.doc.resolve(c.pos)
     const crossIndex = $pos.index($pos.depth - 1)
-    console.log(`[SmartSplit] crossing pos=${c.pos} depth=${$pos.depth}`,
+    log(`crossing pos=${c.pos} depth=${$pos.depth}`,
       `parent(${$pos.depth - 1})=${$pos.node($pos.depth - 1)?.type?.name ?? '?'}`,
       `index=${crossIndex}`)
     if ($pos.depth >= 2 && crossIndex > 0 && crossPos < 0) {
       crossPos = c.pos
     }
   }
+  // Fallback: pad at doc level if all crossings are first children (index=0)
   if (crossPos < 0) {
-    console.log('[SmartSplit] no splittable crossing (depth>=2, index>0), skipping')
+    for (const c of crossings) {
+      const $pos = state.doc.resolve(c.pos)
+      const crossIndex = $pos.index($pos.depth - 1)
+      if ($pos.depth >= 1 && crossIndex > 0 && crossPos < 0) {
+        crossPos = c.pos
+        log(`falling back to doc-level pad at pos=${c.pos}`)
+      }
+    }
+  }
+  if (crossPos < 0) {
+    log('no splittable crossing (depth>=1, index>0), skipping')
     return
   }
-  console.log('[SmartSplit] selected crossPos:', crossPos)
+  log('selected crossPos:', crossPos)
 
-  const tr = buildSplitTransaction(state, crossPos, options.parentAttr)
+  const tr = buildSplitTransaction(state, crossPos, options.parentAttr, log)
   if (tr) {
-    console.log('[SmartSplit] dispatching transaction ✓')
+    log('dispatching transaction ✓')
     tr.setMeta(pluginKey, { ownDispatch: true })
     view.dispatch(tr)
   } else {
-    console.log('[SmartSplit] buildSplitTransaction returned null ✗')
+    log('buildSplitTransaction returned null ✗')
   }
 }

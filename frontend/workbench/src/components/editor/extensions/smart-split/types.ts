@@ -19,12 +19,15 @@ export interface SmartSplitOptions {
   threshold: number
   /** Attribute name for tracing split siblings */
   parentAttr: string
+  /** Enable debug logging */
+  debug: boolean
 }
 
 export const DEFAULT_OPTIONS: SmartSplitOptions = {
   debounce: 300,
   threshold: 0,
   parentAttr: 'data-ss-parent',
+  debug: false,
 }
 
 /** Block-level HTML tags that can cross page boundaries */

@@ -34,17 +34,27 @@ export function buildSplitTransaction(
   state: EditorState,
   crossPos: number,
   parentAttr: string,
+  log: (...args: any[]) => void = () => {},
 ): Transaction | null {
   const { doc, tr, schema } = state
   const $pos = doc.resolve(crossPos)
-  if ($pos.depth < 2) return null
+
+  // Fallback: depth=1 means we can insert padding at doc level
+  if ($pos.depth < 2) {
+    if ($pos.depth < 1) return null
+    const insertPos = $pos.before(1)
+    log(`depth=${$pos.depth}, inserting doc-level <p> at pos=${insertPos}`)
+    tr.insert(insertPos, schema.nodes.paragraph.create())
+    tr.setMeta('skipTrailingNode', true)
+    return tr
+  }
 
   const parentDepth = $pos.depth - 1
   if (parentDepth < 1) return null
 
   const parent = $pos.node(parentDepth)
   const crossIndex = $pos.index(parentDepth)
-  console.log(`[SmartSplit.buildTr] depth=${$pos.depth} parentDepth=${parentDepth}`,
+  log(`depth=${$pos.depth} parentDepth=${parentDepth}`,
     `parentType=${parent.type.name} parentClass=${parent.attrs.class}`,
     `crossIndex=${crossIndex} childCount=${parent.childCount}`)
   if (crossIndex === 0) return null
@@ -56,7 +66,7 @@ export function buildSplitTransaction(
     if (i < crossIndex) front.push(child)
     else back.push(child)
   })
-  console.log(`[SmartSplit.buildTr] front=${front.length} back=${back.length}`,
+  log(`front=${front.length} back=${back.length}`,
     `frontClasses=${front.map((c: any) => c.attrs.class)}`,
     `backClasses=${back.map((c: any) => c.attrs.class)}`)
   if (front.length === 0 || back.length === 0) return null
@@ -73,7 +83,7 @@ export function buildSplitTransaction(
 
   const padNode = schema.nodes.paragraph.create()
 
-  console.log(`[SmartSplit.buildTr] splitting into front(${front.length}) + <p> + back(${back.length})`)
+  log(`splitting into front(${front.length}) + <p> + back(${back.length})`)
   const newDoc = rebuildAncestors(doc, $pos, parentDepth, frontNode, padNode, backNode)
   tr.step(new ReplaceDocStep(newDoc))
   tr.setMeta('skipTrailingNode', true)
