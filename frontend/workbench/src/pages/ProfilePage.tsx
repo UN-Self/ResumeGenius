@@ -280,7 +280,7 @@ function ProfilePanel({ user, onUpdated }: { user: AuthUser | null; onUpdated: (
       <h2 className="mb-4 text-lg font-semibold text-foreground">个人信息</h2>
       <div className="space-y-4 max-w-md">
         <div>
-          <label className="mb-1.5 flex items-center gap-1.5 text-sm text-muted-foreground"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-icon-float text-primary/70"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>昵称</label>
+          <label className="mb-1.5 flex items-center gap-1.5 text-sm text-muted-foreground"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="animate-icon-float text-primary/70"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>昵称</label>
           <Input
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
@@ -288,7 +288,7 @@ function ProfilePanel({ user, onUpdated }: { user: AuthUser | null; onUpdated: (
           />
         </div>
         <div>
-          <label className="mb-1.5 flex items-center gap-1.5 text-sm text-muted-foreground"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-icon-float text-primary/70"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 4-10 7.5L2 4"/></svg>邮箱</label>
+          <label className="mb-1.5 flex items-center gap-1.5 text-sm text-muted-foreground"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="animate-icon-float text-primary/70"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 4-10 7.5L2 4"/></svg>邮箱</label>
           <Input
             value={(user as any)?.email || '未绑定'}
             disabled
@@ -497,7 +497,7 @@ function PointsPanel() {
                         borderRadius: '10px',
                         fontSize: '13px',
                       }}
-                      formatter={(value: number, _name: string, _props: any) => [`${value} 积分`, POINTS_TYPE_LABELS[_name] || _name]}
+                      formatter={((value: any, _name: any, _props: any) => [`${value} 积分`, POINTS_TYPE_LABELS[_name] || _name]) as any}
                     />
                   </RePieChart>
                 </ResponsiveContainer>

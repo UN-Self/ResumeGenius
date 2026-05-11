@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileText, LockKeyhole, Mail, ShieldCheck, Sparkles, UserRound } from 'lucide-react'
@@ -24,6 +24,36 @@ export default function RegisterPage() {
   const [error, setError] = useState('')
   const [devCode, setDevCode] = useState('')
   const [codeSent, setCodeSent] = useState(false)
+  const [countdown, setCountdown] = useState(60)
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const stopCountdown = useCallback(() => {
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current)
+      countdownRef.current = null
+    }
+  }, [])
+
+  const startCountdown = useCallback(() => {
+    stopCountdown()
+    setCountdown(60)
+    countdownRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          stopCountdown()
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+  }, [stopCountdown])
+
+  useEffect(() => {
+    if (step === 'verify') {
+      startCountdown()
+    }
+    return () => stopCountdown()
+  }, [step, startCountdown, stopCountdown])
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -78,6 +108,7 @@ export default function RegisterPage() {
       } else {
         setCodeSent(true)
       }
+      startCountdown()
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '发送失败')
     } finally {
@@ -238,10 +269,12 @@ export default function RegisterPage() {
                 <button
                   type="button"
                   onClick={handleResendCode}
-                  disabled={loading}
+                  disabled={loading || countdown > 0}
                   className="mt-3 w-full text-center text-sm text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
                 >
-                  {codeSent ? '验证码已重新发送' : '重新发送验证码'}
+                  {countdown > 0
+                    ? `重新发送 (${countdown}s)`
+                    : codeSent ? '验证码已重新发送' : '重新发送验证码'}
                 </button>
               </form>
             )}

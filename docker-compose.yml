@@ -1,6 +1,12 @@
 # ResumeGenius Docker Compose
 # 统一编排 postgres + backend + workbench + marketing
 
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${DOCKER_SUBNET:-10.200.0.0/16}
+
 services:
   postgres:
     image: ${PGVECTOR_IMAGE:-docker.1ms.run/ankane/pgvector:latest}

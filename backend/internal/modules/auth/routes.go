@@ -5,6 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/middleware"
 )
 
 func RegisterRoutes(publicRG, protectedRG *gin.RouterGroup, db *gorm.DB, jwtSecret string, tokenTTL time.Duration, cookieSecure bool, cookieDomain string, emailService *EmailService, uploadDir string) {
@@ -14,8 +16,8 @@ func RegisterRoutes(publicRG, protectedRG *gin.RouterGroup, db *gorm.DB, jwtSecr
 	publicRG.POST("/auth/login", h.Login)
 	publicRG.POST("/auth/logout", h.Logout)
 	publicRG.POST("/auth/register", h.Register)
-	publicRG.POST("/auth/send-code", h.SendCode)
-	publicRG.POST("/auth/verify-email", h.VerifyEmail)
+	publicRG.POST("/auth/send-code", middleware.RateLimit(3, time.Minute), h.SendCode)
+	publicRG.POST("/auth/verify-email", middleware.RateLimit(3, time.Minute), h.VerifyEmail)
 	publicRG.GET("/auth/check-username", h.CheckUsername)
 	publicRG.GET("/auth/check-email", h.CheckEmail)
 	publicRG.GET("/auth/avatar/:user_id", h.ServeAvatar)
