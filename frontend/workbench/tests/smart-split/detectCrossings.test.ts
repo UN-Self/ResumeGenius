@@ -82,6 +82,24 @@ describe('elementCrossesBreaker', () => {
       4,
     )).toBe(true)
   })
+
+  it('with jitter, element starting near breaker bottom is not crossing', () => {
+    expect(elementCrossesBreaker(
+      { top: 628, bottom: 900 },
+      { top: 500, bottom: 632 },
+      0,
+      20,
+    )).toBe(false)
+  })
+
+  it('with jitter, element starting well above breaker bottom is still crossing', () => {
+    expect(elementCrossesBreaker(
+      { top: 400, bottom: 700 },
+      { top: 500, bottom: 632 },
+      0,
+      20,
+    )).toBe(true)
+  })
 })
 
 describe('findCrossingPositions', () => {

@@ -39,15 +39,7 @@ export function buildSplitTransaction(
   const { doc, tr, schema } = state
   const $pos = doc.resolve(crossPos)
 
-  // Fallback: depth=1 means we can insert padding at doc level
-  if ($pos.depth < 2) {
-    if ($pos.depth < 1) return null
-    const insertPos = $pos.before(1)
-    log(`depth=${$pos.depth}, inserting doc-level <p> at pos=${insertPos}`)
-    tr.insert(insertPos, schema.nodes.paragraph.create())
-    tr.setMeta('skipTrailingNode', true)
-    return tr
-  }
+  if ($pos.depth < 2) return null
 
   const parentDepth = $pos.depth - 1
   if (parentDepth < 1) return null

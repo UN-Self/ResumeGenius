@@ -55,7 +55,7 @@ function performDetectionAndSplit(
   log('breakers:', breakers.length, breakers)
   if (breakers.length === 0) return
 
-  const crossings = findCrossingPositions(view, editorDom, breakers, options.threshold)
+  const crossings = findCrossingPositions(view, editorDom, breakers, options.threshold, options.jitter)
   log('crossings:', crossings.length,
     crossings.map(c => ({ pos: c.pos, breaker: c.breakerIndex })))
   if (crossings.length === 0) return
@@ -74,19 +74,8 @@ function performDetectionAndSplit(
       crossPos = c.pos
     }
   }
-  // Fallback: pad at doc level if all crossings are first children (index=0)
   if (crossPos < 0) {
-    for (const c of crossings) {
-      const $pos = state.doc.resolve(c.pos)
-      const crossIndex = $pos.index($pos.depth - 1)
-      if ($pos.depth >= 1 && crossIndex > 0 && crossPos < 0) {
-        crossPos = c.pos
-        log(`falling back to doc-level pad at pos=${c.pos}`)
-      }
-    }
-  }
-  if (crossPos < 0) {
-    log('no splittable crossing (depth>=1, index>0), skipping')
+    log('no splittable crossing (depth>=2, index>0), skipping')
     return
   }
   log('selected crossPos:', crossPos)

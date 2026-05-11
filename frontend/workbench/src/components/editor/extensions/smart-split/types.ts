@@ -17,6 +17,8 @@ export interface SmartSplitOptions {
   debounce: number
   /** Pixel threshold for crossing detection */
   threshold: number
+  /** Shrink detection zone from breaker bottom (avoids false positives on new-page content) */
+  jitter: number
   /** Attribute name for tracing split siblings */
   parentAttr: string
   /** Enable debug logging */
@@ -26,6 +28,7 @@ export interface SmartSplitOptions {
 export const DEFAULT_OPTIONS: SmartSplitOptions = {
   debounce: 300,
   threshold: 0,
+  jitter: 0,
   parentAttr: 'data-ss-parent',
   debug: false,
 }

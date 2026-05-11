@@ -15,8 +15,9 @@ export function elementCrossesBreaker(
   rect: { top: number; bottom: number },
   breaker: BreakerPosition,
   threshold: number,
+  jitter: number = 0,
 ): boolean {
-  return rect.top < breaker.bottom && rect.bottom > breaker.top - threshold
+  return rect.top < breaker.bottom - jitter && rect.bottom > breaker.top - threshold
 }
 
 /**
@@ -28,6 +29,7 @@ export function findCrossingPositions(
   editorDom: Element,
   breakers: BreakerPosition[],
   threshold: number,
+  jitter: number = 0,
 ): CrossingInfo[] {
   if (breakers.length === 0) return []
 
@@ -53,7 +55,7 @@ export function findCrossingPositions(
     }
 
     for (let i = 0; i < breakers.length; i++) {
-      if (elementCrossesBreaker(rect, breakers[i], threshold)) {
+      if (elementCrossesBreaker(rect, breakers[i], threshold, jitter)) {
         try {
           results.push({ pos: view.posAtDOM(el, 0), breakerIndex: i })
         } catch { /* element outside ProseMirror view */ }
