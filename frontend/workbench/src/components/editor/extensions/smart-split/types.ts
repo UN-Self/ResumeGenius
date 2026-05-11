@@ -34,8 +34,15 @@ export const DEFAULT_OPTIONS: SmartSplitOptions = {
 }
 
 /** Block-level HTML tags that can cross page boundaries */
-export const BLOCK_TAGS = new Set([
-  'DIV', 'SECTION', 'HEADER', 'FOOTER', 'MAIN', 'ARTICLE',
-  'NAV', 'ASIDE', 'UL', 'OL', 'TABLE', 'BLOCKQUOTE', 'FIGURE',
+const EXTRA_BLOCK_TAGS = [
+  'UL', 'OL', 'TABLE', 'BLOCKQUOTE', 'FIGURE',
   'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TR',
+] as const
+
+/** Container tags from Div extension (must stay in sync) */
+const CONTAINER_TAGS = ['div', 'section', 'header', 'footer', 'main', 'article', 'nav', 'aside'] as const
+
+export const BLOCK_TAGS = new Set([
+  ...CONTAINER_TAGS.map(t => t.toUpperCase()),
+  ...EXTRA_BLOCK_TAGS,
 ])

@@ -58,7 +58,9 @@ export function findCrossingPositions(
       if (elementCrossesBreaker(rect, breakers[i], threshold, jitter)) {
         try {
           results.push({ pos: view.posAtDOM(el, 0), breakerIndex: i })
-        } catch { /* element outside ProseMirror view */ }
+        } catch (e) {
+          console.debug('[SmartSplit] posAtDOM failed for', el.tagName, e)
+        }
         break
       }
     }

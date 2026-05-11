@@ -25,7 +25,7 @@ export function WatermarkOverlay({ visible = true }: WatermarkOverlayProps) {
         inset: 0,
         overflow: 'hidden',
         pointerEvents: 'none',
-        zIndex: -1,
+        zIndex: 5,
       }}
     >
       <div

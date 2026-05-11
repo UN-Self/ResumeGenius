@@ -8,7 +8,7 @@ describe('WatermarkOverlay', () => {
     const overlay = container.firstElementChild as HTMLElement
     expect(overlay).toBeInTheDocument()
     expect(overlay.style.position).toBe('absolute')
-    expect(overlay.style.zIndex).toBe('-1')
+    expect(overlay.style.zIndex).toBe('5')
   })
 
   it('does not render when visible=false', () => {

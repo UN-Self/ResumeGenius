@@ -33,6 +33,7 @@ import { ToastContainer } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/ui/modal'
 import { extractStyles } from '@/lib/extract-styles'
+import { A4_LAYOUT } from '@/lib/pagination-plus/layout'
 
 export default function EditorPage() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -65,14 +66,12 @@ export default function EditorPage() {
       Div,
       Span,
       PaginationPlus.configure({
-        // A4 at 96dpi: 210×297mm ≈ 794×1123px
-        pageHeight: 1123,
-        pageWidth: 794,
-        // Margins: 18mm top/bottom ≈ 68px, 20mm left/right ≈ 76px
-        marginTop: 68,
-        marginBottom: 68,
-        marginLeft: 76,
-        marginRight: 76,
+        pageHeight: A4_LAYOUT.pageHeight,
+        pageWidth: A4_LAYOUT.pageWidth,
+        marginTop: A4_LAYOUT.marginTop,
+        marginBottom: A4_LAYOUT.marginBottom,
+        marginLeft: A4_LAYOUT.marginLeft,
+        marginRight: A4_LAYOUT.marginRight,
         pageGap: 32,
         contentMarginTop: 0,
         contentMarginBottom: 0,
@@ -92,34 +91,34 @@ export default function EditorPage() {
         class: 'resume-content outline-none',
       },
       handleDOMEvents: {
-        copy(_view, event) {
-          const { from, to } = _view.state.selection
-          const { text, json } = captureCopy(_view.state, from, to)
+        copy(view, event) {
+          const { from, to } = view.state.selection
+          const { text, json } = captureCopy(view.state, from, to)
           event.preventDefault()
           event.clipboardData?.setData('text/plain', text)
           event.clipboardData?.setData(getMimeType(), json)
           return true
         },
-        cut(_view, event) {
-          const { from, to } = _view.state.selection
-          const { text, json } = captureCopy(_view.state, from, to)
+        cut(view, event) {
+          const { from, to } = view.state.selection
+          const { text, json } = captureCopy(view.state, from, to)
           event.preventDefault()
           event.clipboardData?.setData('text/plain', text)
           event.clipboardData?.setData(getMimeType(), json)
-          _view.dispatch(_view.state.tr.deleteSelection())
+          view.dispatch(view.state.tr.deleteSelection())
           return true
         },
-        paste(_view, event) {
+        paste(view, event) {
           event.preventDefault()
           const raw = event.clipboardData?.getData(getMimeType())
           if (raw) {
-            const slice = sliceFromJson(_view.state.schema, raw)
-            _view.dispatch(_view.state.tr.replaceSelection(slice))
+            const slice = sliceFromJson(view.state.schema, raw)
+            view.dispatch(view.state.tr.replaceSelection(slice))
             return true
           }
           const text = event.clipboardData?.getData('text/plain') || ''
           if (text) {
-            _view.dispatch(_view.state.tr.insertText(text))
+            view.dispatch(view.state.tr.insertText(text))
           }
           return true
         },

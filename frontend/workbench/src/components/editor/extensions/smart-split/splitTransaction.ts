@@ -1,26 +1,36 @@
 import type { Transaction, EditorState } from '@tiptap/pm/state'
-import { Fragment } from '@tiptap/pm/model'
-import { Step, StepResult } from '@tiptap/pm/transform'
+import { Node as PmNode, Fragment } from '@tiptap/pm/model'
+import { Step, StepResult, type Mapping } from '@tiptap/pm/transform'
 
 class ReplaceDocStep extends Step {
-  private newDoc: any
-  constructor(newDoc: any) { super(); this.newDoc = newDoc }
-  apply(_doc: any) { return StepResult.ok(this.newDoc) }
-  invert(doc: any) { return new ReplaceDocStep(doc) }
-  map(_mapping: any) { return this }
-  merge(_other: any) { return null }
-  toJSON() { return { stepType: 'replaceDoc' } }
+  private newDoc: PmNode
+  constructor(newDoc: PmNode) { super(); this.newDoc = newDoc }
+  apply(_doc: PmNode) { return StepResult.ok(this.newDoc) }
+  invert(doc: PmNode) { return new ReplaceDocStep(doc) }
+  map(_mapping: Mapping) { return this }
+  merge(_other: Step) { return null }
+  toJSON() { return { stepType: 'replaceDoc', doc: this.newDoc.toJSON() } }
 }
 
+// NOTE: Step.jsonID registration deferred — @tiptap/pm/transform's bundled Step
+// may not expose jsonID reliably in all environments. The improved toJSON above
+// is sufficient for inspection/logging; full Step.fromJSON round-trip can be
+// added when collaborative editing or state persistence is implemented.
+
 function rebuildAncestors(
-  doc: any, $pos: any, parentDepth: number, frontNode: any, padNode: any, backNode: any,
-): any {
-  let replacement: any[] = [frontNode, padNode, backNode]
+  doc: PmNode,
+  $pos: ReturnType<PmNode['resolve']>,
+  parentDepth: number,
+  frontNode: PmNode,
+  padNode: PmNode,
+  backNode: PmNode,
+): PmNode {
+  let replacement: PmNode[] = [frontNode, padNode, backNode]
   for (let d = parentDepth; d >= 1; d--) {
     const ancestor = $pos.node(d - 1)
     const idx = $pos.index(d - 1)
-    const children: any[] = []
-    ancestor.forEach((child: any, _o: number, i: number) => {
+    const children: PmNode[] = []
+    ancestor.forEach((child: PmNode, _o: number, i: number) => {
       if (i === idx) children.push(...replacement)
       else children.push(child)
     })
@@ -34,7 +44,7 @@ export function buildSplitTransaction(
   state: EditorState,
   crossPos: number,
   parentAttr: string,
-  log: (...args: any[]) => void = () => {},
+  log: (...args: unknown[]) => void = () => {},
 ): Transaction | null {
   const { doc, tr, schema } = state
   const $pos = doc.resolve(crossPos)
@@ -52,21 +62,21 @@ export function buildSplitTransaction(
   if (crossIndex === 0) return null
   if (parent.childCount < 2) return null
 
-  const front: any[] = []
-  const back: any[] = []
-  parent.forEach((child: any, _o: number, i: number) => {
+  const front: PmNode[] = []
+  const back: PmNode[] = []
+  parent.forEach((child: PmNode, _o: number, i: number) => {
     if (i < crossIndex) front.push(child)
     else back.push(child)
   })
   log(`front=${front.length} back=${back.length}`,
-    `frontClasses=${front.map((c: any) => c.attrs.class)}`,
-    `backClasses=${back.map((c: any) => c.attrs.class)}`)
+    `frontClasses=${front.map((c) => c.attrs.class)}`,
+    `backClasses=${back.map((c) => c.attrs.class)}`)
   if (front.length === 0 || back.length === 0) return null
 
   let parentId: string = parent.attrs[parentAttr]
   if (!parentId) parentId = Math.random().toString(36).slice(2, 10)
 
-  const attrs: Record<string, any> = { ...parent.attrs, [parentAttr]: parentId }
+  const attrs: Record<string, unknown> = { ...parent.attrs, [parentAttr]: parentId }
   delete attrs.id
 
   const frontNode = parent.type.create(attrs, Fragment.fromArray(front))
@@ -78,6 +88,8 @@ export function buildSplitTransaction(
   log(`splitting into front(${front.length}) + <p> + back(${back.length})`)
   const newDoc = rebuildAncestors(doc, $pos, parentDepth, frontNode, padNode, backNode)
   tr.step(new ReplaceDocStep(newDoc))
+  // TipTap's trailing-node plugin auto-appends a paragraph when the doc ends
+  // with a non-textblock node (like our back section). This meta prevents it.
   tr.setMeta('skipTrailingNode', true)
   return tr
 }

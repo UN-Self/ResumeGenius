@@ -142,7 +142,7 @@ export function ContextMenu({ editor, isOpen, x, y, onClose }: ContextMenuProps)
             }
           }
           const text = await navigator.clipboard.readText()
-          editor.chain().focus().insertContent(text).run()
+          editor.view.dispatch(editor.view.state.tr.insertText(text))
           onClose()
         } catch (err) {
           console.error('Clipboard read failed:', err)

@@ -84,6 +84,7 @@ function performDetectionAndSplit(
   if (tr) {
     log('dispatching transaction ✓')
     tr.setMeta(pluginKey, { ownDispatch: true })
+    tr.setMeta('addToHistory', false)
     view.dispatch(tr)
   } else {
     log('buildSplitTransaction returned null ✗')

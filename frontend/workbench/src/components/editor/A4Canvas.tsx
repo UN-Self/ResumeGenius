@@ -3,6 +3,7 @@ import type { Editor } from '@tiptap/react'
 import { TipTapEditor } from './TipTapEditor'
 import { WatermarkOverlay } from './WatermarkOverlay'
 import { RESUME_DOCUMENT_CLASS } from '@/lib/extract-styles'
+import { CANVAS_TOTAL_WIDTH_PX } from '@/lib/pagination-plus/layout'
 
 interface A4CanvasProps {
   editor?: Editor | null
@@ -13,9 +14,6 @@ interface A4CanvasProps {
 const CANVAS_PADDING_PX = 48 // 24px * 2 container padding
 const MIN_ZOOM = 0.5
 const MAX_ZOOM = 1.0
-
-// Total canvas width in px: page (794px) + margins (76px * 2) at 96dpi
-const CANVAS_TOTAL_WIDTH_PX = 794 + 76 + 76
 
 function computeZoom(containerWidth: number): number {
   const availableWidth = containerWidth - CANVAS_PADDING_PX
