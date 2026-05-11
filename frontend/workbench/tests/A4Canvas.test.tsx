@@ -39,7 +39,7 @@ describe('A4Canvas', () => {
 
   it('renders watermark overlay on the canvas', async () => {
     await screen.findByTestId('a4-canvas')
-    expect(screen.getByTestId('watermark-overlay')).toBeInTheDocument()
+    expect(screen.getByTestId('watermark-anchor')).toBeInTheDocument()
   })
 
   it('prevents context menu on the canvas area', async () => {
