@@ -310,8 +310,11 @@ func TestHandler_CreateGitRepo(t *testing.T) {
 	resp := parseResponse(t, w)
 	assert.Equal(t, 0, resp.Code)
 
-	data := parseDataMap(t, resp.Data)
-	assert.Equal(t, "git_repo", data["type"])
+	data := parseDataArray(t, resp.Data)
+	require.Len(t, data, 1)
+	var asset map[string]interface{}
+	require.NoError(t, json.Unmarshal(data[0], &asset))
+	assert.Equal(t, "git_repo", asset["type"])
 }
 
 func TestHandler_ListAssets(t *testing.T) {

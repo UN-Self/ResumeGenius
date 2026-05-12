@@ -692,11 +692,11 @@ func (s *AssetService) loadReplaceableAsset(userID string, projectID uint, filen
 	return &asset, nil
 }
 
-func (s *AssetService) findDeletedAssetByFileHash(userID, fileHash string) (*models.Asset, error) {
+func (s *AssetService) findDeletedAssetByFileHash(userID string, projectID uint, fileHash string) (*models.Asset, error) {
 	var asset models.Asset
 	err := s.db.Unscoped().
 		Joins("JOIN projects ON projects.id = assets.project_id").
-		Where("projects.user_id = ? AND assets.file_hash = ? AND assets.deleted_at IS NOT NULL", userID, fileHash).
+		Where("projects.user_id = ? AND assets.project_id = ? AND assets.file_hash = ? AND assets.deleted_at IS NOT NULL", userID, projectID, fileHash).
 		Order("assets.deleted_at DESC").
 		First(&asset).Error
 	if err != nil {
@@ -716,7 +716,7 @@ func (s *AssetService) restoreDeletedAssetByFileHash(
 	replaceAsset *models.Asset,
 	folderID *uint,
 ) (*models.Asset, error) {
-	deletedAsset, err := s.findDeletedAssetByFileHash(userID, fileHash)
+	deletedAsset, err := s.findDeletedAssetByFileHash(userID, projectID, fileHash)
 	if err != nil || deletedAsset == nil {
 		return deletedAsset, err
 	}
@@ -741,6 +741,7 @@ func (s *AssetService) restoreDeletedAssetByFileHash(
 			"type":       assetType,
 			"uri":        restoredURI,
 			"label":      nil,
+			"content":    nil,
 			"file_hash":  fileHash,
 			"metadata":   restoredMetadata,
 			"deleted_at": nil,

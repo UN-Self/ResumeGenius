@@ -328,8 +328,6 @@ func TestAssetService_UploadFile_RestoresSoftDeletedSameFileAndDerivedAssets(t *
 	projSvc := NewProjectService(db)
 	projA, err := projSvc.Create("user-1", "Project A")
 	require.NoError(t, err)
-	projB, err := projSvc.Create("user-1", "Project B")
-	require.NoError(t, err)
 
 	originalBytes := []byte("%PDF restore me")
 	oldAsset, err := svc.UploadFile("user-1", projA.ID, "resume.pdf", originalBytes, int64(len(originalBytes)))
@@ -355,46 +353,71 @@ func TestAssetService_UploadFile_RestoresSoftDeletedSameFileAndDerivedAssets(t *
 	}
 	require.NoError(t, db.Create(&derivedAsset).Error)
 
-	parsedContent := "Persisted parsed text"
-	require.NoError(t, db.Model(&models.Asset{}).Where("id = ?", oldAsset.ID).Updates(map[string]interface{}{
-		"content": parsedContent,
-		"metadata": models.JSONB{
-			"parsing": map[string]interface{}{
-				"original_filename":       "resume.pdf",
-				"source_deleted":          true,
-				"derived_image_asset_ids": []interface{}{derivedAsset.ID},
-			},
+	require.NoError(t, db.Model(&models.Asset{}).Where("id = ?", oldAsset.ID).Update("metadata", models.JSONB{
+		"parsing": map[string]interface{}{
+			"original_filename":       "resume.pdf",
+			"derived_image_asset_ids": []interface{}{derivedAsset.ID},
 		},
-		"uri": nil,
 	}).Error)
 
 	require.NoError(t, svc.DeleteAsset("user-1", oldAsset.ID))
 	requireSoftDeletedAsset(t, db, oldAsset.ID)
 	requireSoftDeletedAsset(t, db, derivedAsset.ID)
 
-	restoredAsset, err := svc.UploadFile("user-1", projB.ID, "resume.pdf", originalBytes, int64(len(originalBytes)))
+	restoredAsset, err := svc.UploadFile("user-1", projA.ID, "resume.pdf", originalBytes, int64(len(originalBytes)))
 	require.NoError(t, err)
 	require.NotNil(t, restoredAsset)
 	assert.Equal(t, oldAsset.ID, restoredAsset.ID)
-	assert.Equal(t, projB.ID, restoredAsset.ProjectID)
+	assert.Equal(t, projA.ID, restoredAsset.ProjectID)
 	require.NotNil(t, restoredAsset.FileHash)
 	require.NotNil(t, oldAsset.FileHash)
 	assert.Equal(t, *oldAsset.FileHash, *restoredAsset.FileHash)
-	require.NotNil(t, restoredAsset.Content)
-	assert.Equal(t, parsedContent, *restoredAsset.Content)
+	assert.Nil(t, restoredAsset.Content, "content should be cleared to force re-parse")
 	require.NotNil(t, restoredAsset.URI)
 	assert.True(t, storage.Exists(*restoredAsset.URI))
 
 	var activeAssets []models.Asset
-	require.NoError(t, db.Where("project_id = ?", projB.ID).Order("id asc").Find(&activeAssets).Error)
+	require.NoError(t, db.Where("project_id = ?", projA.ID).Order("id asc").Find(&activeAssets).Error)
 	require.Len(t, activeAssets, 2)
 	assert.Equal(t, restoredAsset.ID, activeAssets[0].ID)
 	assert.Equal(t, derivedAsset.ID, activeAssets[1].ID)
 
 	var restoredDerived models.Asset
 	require.NoError(t, db.First(&restoredDerived, derivedAsset.ID).Error)
-	assert.Equal(t, projB.ID, restoredDerived.ProjectID)
+	assert.Equal(t, projA.ID, restoredDerived.ProjectID)
 	assert.True(t, storage.Exists(derivedKey))
+}
+
+func TestAssetService_UploadFile_DoesNotRestoreSoftDeletedAssetFromOtherProject(t *testing.T) {
+	db := SetupTestDB(t)
+	storage := NewLocalStorage(t.TempDir())
+	svc := NewAssetService(db, storage)
+
+	projSvc := NewProjectService(db)
+	projA, err := projSvc.Create("user-1", "Project A")
+	require.NoError(t, err)
+	projB, err := projSvc.Create("user-1", "Project B")
+	require.NoError(t, err)
+
+	fileBytes := []byte("%PDF test content")
+	assetA, err := svc.UploadFile("user-1", projA.ID, "resume.pdf", fileBytes, int64(len(fileBytes)))
+	require.NoError(t, err)
+
+	parsedContent := "Old parsed text from project A"
+	require.NoError(t, db.Model(&models.Asset{}).Where("id = ?", assetA.ID).Updates(map[string]interface{}{
+		"content": parsedContent,
+	}).Error)
+
+	require.NoError(t, svc.DeleteAsset("user-1", assetA.ID))
+	requireSoftDeletedAsset(t, db, assetA.ID)
+
+	restoredAsset, err := svc.UploadFile("user-1", projB.ID, "resume.pdf", fileBytes, int64(len(fileBytes)))
+	require.NoError(t, err)
+	require.NotNil(t, restoredAsset)
+
+	assert.NotEqual(t, assetA.ID, restoredAsset.ID, "should create new asset, not restore from another project")
+	assert.Equal(t, projB.ID, restoredAsset.ProjectID)
+	assert.Nil(t, restoredAsset.Content, "new asset should have no content until parsed")
 }
 
 func TestAssetService_UploadFileWithReplacement_RejectsCrossProjectReplace(t *testing.T) {
