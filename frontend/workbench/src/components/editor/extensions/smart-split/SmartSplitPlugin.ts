@@ -1,7 +1,6 @@
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorState } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
-import { undo } from 'prosemirror-history'
 import { getBreakerPositions, findCrossingPositions } from './detectCrossings'
 import { buildSplitTransaction } from './splitTransaction'
 import type { SmartSplitOptions } from './types'
@@ -10,8 +9,6 @@ const pluginKey = new PluginKey('smartSplit')
 
 interface SmartSplitState {
   isOwnDispatch: boolean
-  /** Document snapshot from before the last user edit */
-  preEditDoc: EditorState['doc'] | null
 }
 
 export function smartSplitPlugin(options: SmartSplitOptions) {
@@ -25,17 +22,14 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
 
     state: {
       init(): SmartSplitState {
-        return { isOwnDispatch: false, preEditDoc: null }
+        return { isOwnDispatch: false }
       },
-      apply(tr, value: SmartSplitState, oldState: EditorState): SmartSplitState {
+      apply(tr, value: SmartSplitState): SmartSplitState {
         const isOwnDispatch = !!tr.getMeta(pluginKey)?.ownDispatch
-        if (isOwnDispatch) {
+        if (isOwnDispatch !== value.isOwnDispatch) {
           return { ...value, isOwnDispatch }
         }
-        if (tr.docChanged) {
-          return { isOwnDispatch, preEditDoc: oldState.doc }
-        }
-        return { ...value, isOwnDispatch }
+        return value
       },
     },
 
@@ -97,19 +91,17 @@ function performDetectionAndSplit(
   }
   log('selected crossPos:', crossPos)
 
+  // Snapshot the doc before splitting, so we can detect no-op results.
+  const preSplitDoc = state.doc
   const tr = buildSplitTransaction(state, crossPos, options.parentAttr, log)
   if (!tr) {
     log('buildSplitTransaction returned null ✗')
     return
   }
 
-  // If edit + split produces the same doc as before the edit, it's a no-op.
-  // Undo the user's edit to roll back to the pre-edit state and skip the split.
-  const { preEditDoc } = pluginKey.getState(state) as SmartSplitState
   const resultState = state.apply(tr)
-  if (preEditDoc && resultState.doc.eq(preEditDoc)) {
-    log('split result identical to pre-edit state → undoing user edit')
-    undo(view.state, (t) => view.dispatch(t))
+  if (resultState.doc.eq(preSplitDoc)) {
+    log('split result identical to pre-split state, skipping')
     return
   }
 

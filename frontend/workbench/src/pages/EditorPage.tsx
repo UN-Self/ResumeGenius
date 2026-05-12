@@ -112,9 +112,13 @@ export default function EditorPage() {
           event.preventDefault()
           const raw = event.clipboardData?.getData(getMimeType())
           if (raw) {
-            const slice = sliceFromJson(view.state.schema, raw)
-            view.dispatch(view.state.tr.replaceSelection(slice))
-            return true
+            try {
+              const slice = sliceFromJson(view.state.schema, raw)
+              view.dispatch(view.state.tr.replaceSelection(slice))
+              return true
+            } catch {
+              // corrupted clipboard data — fall through to plain text
+            }
           }
           const text = event.clipboardData?.getData('text/plain') || ''
           if (text) {

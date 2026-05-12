@@ -84,7 +84,7 @@ describe('smartSplitPlugin', () => {
     const ownDispatchTr = { getMeta: vi.fn().mockReturnValue({ ownDispatch: true }) }
     const result = plugin.spec.state!.apply(
       ownDispatchTr as any,
-      { isOwnDispatch: false, preEditDoc: null } as any,
+      { isOwnDispatch: false } as any,
       {} as any, {} as any,
     )
     expect(result.isOwnDispatch).toBe(true)
