@@ -113,4 +113,14 @@ describe('smartSplitPlugin', () => {
 
     vi.useRealTimers()
   })
+
+  it('accepts insertPageBreaks option', () => {
+    const plugin = smartSplitPlugin({ ...DEFAULT_OPTIONS, insertPageBreaks: true })
+    expect(plugin).toBeDefined()
+  })
+
+  it('accepts insertPageBreaks: false option', () => {
+    const plugin = smartSplitPlugin({ ...DEFAULT_OPTIONS, insertPageBreaks: false })
+    expect(plugin).toBeDefined()
+  })
 })

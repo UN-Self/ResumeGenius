@@ -3,6 +3,7 @@ import {
   getBreakerPositions,
   elementCrossesBreaker,
   findCrossingPositions,
+  findPageStartPositions,
 } from '@/components/editor/extensions/smart-split/detectCrossings'
 import type { BreakerPosition } from '@/components/editor/extensions/smart-split/types'
 
@@ -159,6 +160,119 @@ describe('findCrossingPositions', () => {
     const results = findCrossingPositions(mockView as any, wrapper, breakers, 4)
     // SPAN is not in BLOCK_TAGS, should be skipped
     expect(results).toHaveLength(0)
+
+    document.body.removeChild(wrapper)
+  })
+})
+
+describe('findPageStartPositions', () => {
+  it('returns empty when no breakers', () => {
+    const mockView = { posAtDOM: vi.fn() }
+    const wrapper = document.createElement('div')
+    const results = findPageStartPositions(mockView as any, wrapper, [])
+    expect(results).toEqual([])
+  })
+
+  it('finds first block element after each breaker', () => {
+    const wrapper = document.createElement('div')
+
+    const block1 = document.createElement('div')
+    block1.textContent = 'Page 1 content'
+    block1.getBoundingClientRect = () => ({ top: 0, bottom: 400, height: 400 } as DOMRect)
+
+    const block2 = document.createElement('div')
+    block2.textContent = 'Page 2 content'
+    block2.getBoundingClientRect = () => ({ top: 650, bottom: 1000, height: 350 } as DOMRect)
+
+    wrapper.appendChild(block1)
+    wrapper.appendChild(block2)
+    document.body.appendChild(wrapper)
+
+    const breakers: BreakerPosition[] = [{ top: 500, bottom: 600 }]
+    const mockView = { posAtDOM: vi.fn().mockReturnValue(10) }
+
+    const results = findPageStartPositions(mockView as any, wrapper, breakers)
+    expect(results).toHaveLength(1)
+    expect(results[0]).toBe(10)
+    expect(mockView.posAtDOM).toHaveBeenCalledWith(block2, 0)
+
+    document.body.removeChild(wrapper)
+  })
+
+  it('skips empty/zero-height elements', () => {
+    const wrapper = document.createElement('div')
+
+    const emptyBlock = document.createElement('div')
+    emptyBlock.getBoundingClientRect = () => ({ top: 0, bottom: 0, height: 0 } as DOMRect)
+
+    const realBlock = document.createElement('div')
+    realBlock.textContent = 'Content'
+    realBlock.getBoundingClientRect = () => ({ top: 650, bottom: 900, height: 250 } as DOMRect)
+
+    wrapper.appendChild(emptyBlock)
+    wrapper.appendChild(realBlock)
+    document.body.appendChild(wrapper)
+
+    const breakers: BreakerPosition[] = [{ top: 500, bottom: 600 }]
+    const mockView = { posAtDOM: vi.fn().mockReturnValue(5) }
+
+    const results = findPageStartPositions(mockView as any, wrapper, breakers)
+    expect(results).toHaveLength(1)
+    expect(results[0]).toBe(5)
+
+    document.body.removeChild(wrapper)
+  })
+
+  it('handles multiple breakers in single pass', () => {
+    const wrapper = document.createElement('div')
+
+    const block1 = document.createElement('div')
+    block1.textContent = 'Page 1'
+    block1.getBoundingClientRect = () => ({ top: 0, bottom: 400, height: 400 } as DOMRect)
+
+    const block2 = document.createElement('div')
+    block2.textContent = 'Page 2'
+    block2.getBoundingClientRect = () => ({ top: 650, bottom: 1000, height: 350 } as DOMRect)
+
+    const block3 = document.createElement('div')
+    block3.textContent = 'Page 3'
+    block3.getBoundingClientRect = () => ({ top: 1250, bottom: 1600, height: 350 } as DOMRect)
+
+    wrapper.appendChild(block1)
+    wrapper.appendChild(block2)
+    wrapper.appendChild(block3)
+    document.body.appendChild(wrapper)
+
+    const breakers: BreakerPosition[] = [
+      { top: 500, bottom: 600 },
+      { top: 1100, bottom: 1200 },
+    ]
+    const mockView = { posAtDOM: vi.fn().mockReturnValueOnce(10).mockReturnValueOnce(20) }
+
+    const results = findPageStartPositions(mockView as any, wrapper, breakers)
+    expect(results).toHaveLength(2)
+    expect(results[0]).toBe(10)
+    expect(results[1]).toBe(20)
+
+    document.body.removeChild(wrapper)
+  })
+
+  it('gracefully handles posAtDOM failure for decoration elements', () => {
+    const wrapper = document.createElement('div')
+
+    const decoBlock = document.createElement('div')
+    decoBlock.getBoundingClientRect = () => ({ top: 650, bottom: 900, height: 250 } as DOMRect)
+
+    wrapper.appendChild(decoBlock)
+    document.body.appendChild(wrapper)
+
+    const breakers: BreakerPosition[] = [{ top: 500, bottom: 600 }]
+    const mockView = {
+      posAtDOM: vi.fn().mockImplementation(() => { throw new Error('not in doc') }),
+    }
+
+    const results = findPageStartPositions(mockView as any, wrapper, breakers)
+    expect(results).toEqual([])
 
     document.body.removeChild(wrapper)
   })

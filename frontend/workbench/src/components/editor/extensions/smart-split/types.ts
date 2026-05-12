@@ -21,6 +21,8 @@ export interface SmartSplitOptions {
   jitter: number
   /** Attribute name for tracing split siblings */
   parentAttr: string
+  /** Auto-sync break-before: page after split so PDF export matches canvas pagination */
+  insertPageBreaks: boolean
   /** Enable debug logging */
   debug: boolean
 }
@@ -30,6 +32,7 @@ export const DEFAULT_OPTIONS: SmartSplitOptions = {
   threshold: 0,
   jitter: 0,
   parentAttr: 'data-ss-parent',
+  insertPageBreaks: true,
   debug: false,
 }
 
