@@ -15,6 +15,10 @@ interface SmartSplitState {
 
 export function smartSplitPlugin(options: SmartSplitOptions) {
   let timer: ReturnType<typeof setTimeout> | null = null
+  const suppress = {
+    untilDocEq: null as EditorState['doc'] | null,
+    preSplitDoc: null as EditorState['doc'] | null,
+  }
   const log = options.debug
     ? (...args: any[]) => console.log('[SmartSplit]', ...args)
     : () => {}
@@ -44,15 +48,33 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
             return
           }
 
+          if (suppress.preSplitDoc && _view.state.doc.eq(suppress.preSplitDoc)) {
+            suppress.preSplitDoc = null
+            log('split undone by user → undoing user edit')
+            undo(_view.state, (t) => {
+              t.setMeta(pluginKey, { ownDispatch: true })
+              _view.dispatch(t)
+            })
+            return
+          }
+
+          if (suppress.untilDocEq && _view.state.doc.eq(suppress.untilDocEq)) {
+            log('skipping: doc matches suppressed state (no-op undo)')
+            return
+          }
+          suppress.untilDocEq = null
+
           if (timer) clearTimeout(timer)
 
           timer = setTimeout(() => {
-            performDetectionAndSplit(_view, options, log)
+            performDetectionAndSplit(_view, options, log, suppress)
             timer = null
           }, options.debounce)
         },
         destroy() {
           if (timer) clearTimeout(timer)
+          suppress.untilDocEq = null
+          suppress.preSplitDoc = null
         },
       }
     },
@@ -62,6 +84,7 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
 function performDetectionAndSplit(
   view: EditorView, options: SmartSplitOptions,
   log: (...args: any[]) => void,
+  suppress: { untilDocEq: EditorState['doc'] | null; preSplitDoc: EditorState['doc'] | null },
 ) {
   const editorDom = view.dom
   const breakers = getBreakerPositions(editorDom)
@@ -103,10 +126,16 @@ function performDetectionAndSplit(
         const { preEditDoc } = pluginKey.getState(state) as SmartSplitState
         const resultState = state.apply(tr)
         if (preEditDoc && resultState.doc.eq(preEditDoc)) {
-          log('split result identical to pre-edit state → undoing user edit')
-          undo(view.state, (t) => view.dispatch(t))
+          log('split result identical to pre-edit state → undo user edit to history1')
+          suppress.untilDocEq = preEditDoc
+          undo(view.state, (t) => {
+            t.setMeta(pluginKey, { ownDispatch: true })
+            view.dispatch(t)
+          })
         } else {
+          if (!preEditDoc) log('warning: preEditDoc is null, cannot detect no-op')
           log('dispatching transaction ✓')
+          suppress.preSplitDoc = state.doc
           tr.setMeta(pluginKey, { ownDispatch: true })
           view.dispatch(tr)
           didSplit = true
