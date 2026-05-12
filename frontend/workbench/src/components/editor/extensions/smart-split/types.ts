@@ -38,8 +38,8 @@ export const DEFAULT_OPTIONS: SmartSplitOptions = {
 
 /** Block-level HTML tags that can cross page boundaries */
 const EXTRA_BLOCK_TAGS = [
-  'UL', 'OL', 'TABLE', 'BLOCKQUOTE', 'FIGURE',
-  'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'TR',
+  'TABLE', 'BLOCKQUOTE', 'FIGURE',
+  'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TR',
 ] as const
 
 /** Container tags from Div extension (must stay in sync) */
