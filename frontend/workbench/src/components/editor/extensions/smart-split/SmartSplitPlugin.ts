@@ -16,7 +16,6 @@ interface SmartSplitState {
 export function smartSplitPlugin(options: SmartSplitOptions) {
   let timer: ReturnType<typeof setTimeout> | null = null
   const suppress = {
-    untilDocEq: null as EditorState['doc'] | null,
     preSplitDoc: null as EditorState['doc'] | null,
   }
   const log = options.debug
@@ -58,12 +57,6 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
             return
           }
 
-          if (suppress.untilDocEq && _view.state.doc.eq(suppress.untilDocEq)) {
-            log('skipping: doc matches suppressed state (no-op undo)')
-            return
-          }
-          suppress.untilDocEq = null
-
           if (timer) clearTimeout(timer)
 
           timer = setTimeout(() => {
@@ -73,7 +66,6 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
         },
         destroy() {
           if (timer) clearTimeout(timer)
-          suppress.untilDocEq = null
           suppress.preSplitDoc = null
         },
       }
@@ -84,7 +76,7 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
 function performDetectionAndSplit(
   view: EditorView, options: SmartSplitOptions,
   log: (...args: any[]) => void,
-  suppress: { untilDocEq: EditorState['doc'] | null; preSplitDoc: EditorState['doc'] | null },
+  suppress: { preSplitDoc: EditorState['doc'] | null },
 ) {
   const editorDom = view.dom
   const breakers = getBreakerPositions(editorDom)
@@ -123,19 +115,13 @@ function performDetectionAndSplit(
       if (!tr) {
         log('buildSplitTransaction returned null ✗')
       } else {
-        const { preEditDoc } = pluginKey.getState(state) as SmartSplitState
+        const preSplitDoc = state.doc
         const resultState = state.apply(tr)
-        if (preEditDoc && resultState.doc.eq(preEditDoc)) {
-          log('split result identical to pre-edit state → undo user edit to history1')
-          suppress.untilDocEq = preEditDoc
-          undo(view.state, (t) => {
-            t.setMeta(pluginKey, { ownDispatch: true })
-            view.dispatch(t)
-          })
+        if (resultState.doc.eq(preSplitDoc)) {
+          log('split result identical to pre-split state, skipping')
         } else {
-          if (!preEditDoc) log('warning: preEditDoc is null, cannot detect no-op')
           log('dispatching transaction ✓')
-          suppress.preSplitDoc = state.doc
+          suppress.preSplitDoc = preSplitDoc
           tr.setMeta(pluginKey, { ownDispatch: true })
           view.dispatch(tr)
           didSplit = true
