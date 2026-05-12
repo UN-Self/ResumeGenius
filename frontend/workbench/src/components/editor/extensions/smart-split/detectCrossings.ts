@@ -10,6 +10,51 @@ export function getBreakerPositions(editorDom: Element): BreakerPosition[] {
   })
 }
 
+export function findPageStartPositions(
+  view: { posAtDOM: (node: Node, offset: number) => number },
+  editorDom: Element,
+  breakers: BreakerPosition[],
+): number[] {
+  if (breakers.length === 0) return []
+
+  const results: number[] = []
+  let breakerIdx = 0
+
+  const walker = document.createTreeWalker(
+    editorDom,
+    NodeFilter.SHOW_ELEMENT,
+    {
+      acceptNode: (node: Element) =>
+        BLOCK_TAGS.has(node.tagName) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP,
+    },
+  )
+
+  let el = walker.nextNode() as Element | null
+  if (el === editorDom) el = walker.nextNode() as Element | null
+
+  while (el && breakerIdx < breakers.length) {
+    const rect = el.getBoundingClientRect()
+    if (rect.height === 0 || (el.textContent ?? '').trim() === '') {
+      el = walker.nextNode() as Element | null
+      continue
+    }
+
+    if (rect.top >= breakers[breakerIdx].bottom - 1) {
+      try {
+        results.push(view.posAtDOM(el, 0))
+      } catch {
+        // decoration element — not in ProseMirror doc
+      }
+      breakerIdx++
+      continue
+    }
+
+    el = walker.nextNode() as Element | null
+  }
+
+  return results
+}
+
 /** Check if a single element crosses a breaker boundary */
 export function elementCrossesBreaker(
   rect: { top: number; bottom: number },
