@@ -114,6 +114,84 @@ describe('smartSplitPlugin', () => {
     vi.useRealTimers()
   })
 
+  it('captures preEditDoc when transaction changes document', () => {
+    const plugin = smartSplitPlugin(DEFAULT_OPTIONS)
+    const mockDoc = { eq: vi.fn().mockReturnValue(true) } as any
+    const tr = { getMeta: vi.fn().mockReturnValue({}), docChanged: true }
+    const oldState = { doc: mockDoc }
+
+    const result = plugin.spec.state!.apply(
+      tr as any,
+      { isOwnDispatch: false, preEditDoc: null } as any,
+      oldState as any,
+      {} as any,
+    )
+
+    expect(result.preEditDoc).toBe(mockDoc)
+    expect(result.isOwnDispatch).toBe(false)
+  })
+
+  it('preserves preEditDoc when transaction does not change document', () => {
+    const plugin = smartSplitPlugin(DEFAULT_OPTIONS)
+    const savedDoc = { eq: vi.fn() } as any
+    const tr = { getMeta: vi.fn().mockReturnValue({}), docChanged: false }
+
+    const result = plugin.spec.state!.apply(
+      tr as any,
+      { isOwnDispatch: false, preEditDoc: savedDoc } as any,
+      {} as any,
+      {} as any,
+    )
+
+    expect(result.preEditDoc).toBe(savedDoc)
+    expect(result.isOwnDispatch).toBe(false)
+  })
+
+  it('preserves preEditDoc through ownDispatch cycle', () => {
+    const plugin = smartSplitPlugin(DEFAULT_OPTIONS)
+    const savedDoc = { eq: vi.fn() } as any
+
+    // First: a docChanged tr captures preEditDoc
+    const captureTr = { getMeta: vi.fn().mockReturnValue({}), docChanged: true }
+    const afterCapture = plugin.spec.state!.apply(
+      captureTr as any,
+      { isOwnDispatch: false, preEditDoc: null } as any,
+      { doc: savedDoc } as any,
+      {} as any,
+    )
+    expect(afterCapture.preEditDoc).toBe(savedDoc)
+
+    // Then: an ownDispatch tr should preserve preEditDoc
+    const ownTr = { getMeta: vi.fn().mockReturnValue({ ownDispatch: true }) }
+    const afterOwn = plugin.spec.state!.apply(
+      ownTr as any,
+      afterCapture as any,
+      {} as any,
+      {} as any,
+    )
+    expect(afterOwn.isOwnDispatch).toBe(true)
+    expect(afterOwn.preEditDoc).toBe(savedDoc)
+  })
+
+  it('ownDispatch with docChanged preserves preEditDoc', () => {
+    // When programmatic undos carry ownDispatch, preEditDoc must survive
+    // prosemirror-history being imported — the module graph should be clean.
+    const plugin = smartSplitPlugin({ ...DEFAULT_OPTIONS, debug: false })
+    expect(plugin).toBeDefined()
+    // The revert path must use ownDispatch meta, not undo().
+    // We verify the state contract: ownDispatch transactions preserve preEditDoc.
+    const savedDoc = { eq: vi.fn() } as any
+    const revertTr = { getMeta: vi.fn().mockReturnValue({ ownDispatch: true }), docChanged: true }
+    const result = plugin.spec.state!.apply(
+      revertTr as any,
+      { isOwnDispatch: false, preEditDoc: savedDoc } as any,
+      {} as any, {} as any,
+    )
+    // Revert dispatches with ownDispatch:true → preEditDoc must survive
+    expect(result.isOwnDispatch).toBe(true)
+    expect(result.preEditDoc).toBe(savedDoc)
+  })
+
   it('accepts insertPageBreaks option', () => {
     const plugin = smartSplitPlugin({ ...DEFAULT_OPTIONS, insertPageBreaks: true })
     expect(plugin).toBeDefined()
