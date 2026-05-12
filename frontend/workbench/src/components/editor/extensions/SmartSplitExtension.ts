@@ -17,20 +17,24 @@ export const SmartSplitExtension = Extension.create<SmartSplitOptions>({
     const editor = this.editor
 
     // PaginationPlus may dispatch async updates (via rAF) during init.
-    // Retry until .breaker elements exist or max attempts exhausted,
-    // then trigger syncPageBreaks to ensure break-before: page is always
-    // present in exported HTML — even without user edits.
+    // Retry until .breaker elements exist or max attempts exhausted.
+    // Dispatch an empty transaction to trigger the plugin's view.update,
+    // which runs performDetectionAndSplit → syncPageBreaks.
+    // We use an empty tr (no doc steps) as the wake-up signal — the plugin's
+    // view.update fires on every dispatch, not just doc-changing ones.
     const trySync = (attempts: number) => {
       if (editor.isDestroyed) return
-      if (attempts <= 0) return
       const breakers = editor.view.dom.querySelectorAll('.breaker')
-      if (breakers.length === 0) {
-        setTimeout(() => trySync(attempts - 1), 100)
+      if (breakers.length > 0 || attempts <= 0) {
+        // Dispatch even when attempts exhausted (single-page doc) so
+        // syncPageBreaks can clean up stale break-before styles from a
+        // previous multi-page state.
+        editor.view.dispatch(
+          editor.state.tr.setMeta('addToHistory', false),
+        )
         return
       }
-      editor.view.dispatch(
-        editor.state.tr.setMeta('addToHistory', false),
-      )
+      setTimeout(() => trySync(attempts - 1), 100)
     }
     requestAnimationFrame(() => trySync(5))
   },

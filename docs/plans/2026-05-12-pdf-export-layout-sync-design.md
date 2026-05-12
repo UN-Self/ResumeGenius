@@ -17,7 +17,7 @@
 ### 改动 1：空白行保持高度
 
 ```css
-.resume-page p { min-height: 1em; }
+.resume-page p { min-height: 1.5em; }
 ```
 
 空 `<p></p>` 在 chromedp 中获得一行高度，不再被压缩为 0。
