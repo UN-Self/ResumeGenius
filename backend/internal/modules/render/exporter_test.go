@@ -256,6 +256,40 @@ func TestWrapWithTemplate_ReplacesPlaceholder(t *testing.T) {
 	assert.NotContains(t, result, "{{CONTENT}}")
 }
 
+func TestWrapWithTemplate_PageMarginInsteadOfDivPadding(t *testing.T) {
+	result := wrapWithTemplate("<h1>Hello</h1>")
+
+	// @page rule should carry the margin (not the .resume-page div)
+	assert.Contains(t, result, "@page { size: A4; margin: 18mm 20mm; }",
+		"@page should specify margin: 18mm 20mm so that every PDF page (including page 2+) gets top margin")
+	assert.NotContains(t, result, "padding: 18mm 20mm",
+		".resume-page should NOT have padding: 18mm 20mm; margin belongs on @page instead")
+	// .resume-page should NOT set explicit width/min-height that overflows @page content area
+	assert.NotContains(t, result, "width: 210mm",
+		".resume-page should not set width: 210mm — with @page margin the content area is only 170mm wide")
+	assert.NotContains(t, result, "min-height: 297mm",
+		".resume-page should not set min-height: 297mm — with @page margin the content area is only 261mm tall")
+}
+
+func TestWrapWithTemplate_ParagraphMinHeight(t *testing.T) {
+	result := wrapWithTemplate("<p></p>")
+
+	assert.Contains(t, result, "min-height: 1.5em",
+		".resume-page p should have min-height matching line-height so empty paragraphs match editor canvas height")
+}
+
+func TestWrapWithTemplate_MarginResetMatchesTailwindPreflight(t *testing.T) {
+	result := wrapWithTemplate("<h1>Hello</h1><p>World</p>")
+
+	// Editor uses Tailwind Preflight which resets margins; PDF template must match
+	assert.Contains(t, result, ".resume-page h1,",
+		"margin reset rule should include h1")
+	assert.Contains(t, result, ".resume-page p,",
+		"margin reset rule should include p")
+	assert.Contains(t, result, "{ margin: 0; }",
+		"block element margins must be reset to 0 to match Tailwind Preflight")
+}
+
 func TestWrapWithTemplate_EmptyContent(t *testing.T) {
 	result := wrapWithTemplate("")
 
