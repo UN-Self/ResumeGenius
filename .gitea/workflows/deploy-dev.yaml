@@ -30,4 +30,5 @@ jobs:
             set -euo pipefail
             cd ${{ vars.DEV_PATH }}
             git pull
+            docker compose down
             docker compose up -d --build
