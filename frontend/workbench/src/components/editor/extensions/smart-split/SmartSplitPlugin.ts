@@ -1,10 +1,18 @@
 import { Plugin, PluginKey } from '@tiptap/pm/state'
+import type { EditorState } from '@tiptap/pm/state'
 import type { EditorView } from '@tiptap/pm/view'
+import { undo } from 'prosemirror-history'
 import { getBreakerPositions, findCrossingPositions } from './detectCrossings'
 import { buildSplitTransaction } from './splitTransaction'
 import type { SmartSplitOptions } from './types'
 
 const pluginKey = new PluginKey('smartSplit')
+
+interface SmartSplitState {
+  isOwnDispatch: boolean
+  /** Document snapshot from before the last user edit */
+  preEditDoc: EditorState['doc'] | null
+}
 
 export function smartSplitPlugin(options: SmartSplitOptions) {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -16,17 +24,26 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
     key: pluginKey,
 
     state: {
-      init() { return false },
-      apply(tr) {
-        return !!tr.getMeta(pluginKey)?.ownDispatch
+      init(): SmartSplitState {
+        return { isOwnDispatch: false, preEditDoc: null }
+      },
+      apply(tr, value: SmartSplitState, oldState: EditorState): SmartSplitState {
+        const isOwnDispatch = !!tr.getMeta(pluginKey)?.ownDispatch
+        if (isOwnDispatch) {
+          return { ...value, isOwnDispatch }
+        }
+        if (tr.docChanged) {
+          return { isOwnDispatch, preEditDoc: oldState.doc }
+        }
+        return { ...value, isOwnDispatch }
       },
     },
 
     view(_editorView: EditorView) {
       return {
         update(_view: EditorView) {
-          const isOwnDispatch = pluginKey.getState(_view.state)
-          if (isOwnDispatch) {
+          const pluginState = pluginKey.getState(_view.state) as SmartSplitState | undefined
+          if (pluginState?.isOwnDispatch) {
             log('skipping re-detection after own dispatch')
             return
           }
@@ -81,12 +98,22 @@ function performDetectionAndSplit(
   log('selected crossPos:', crossPos)
 
   const tr = buildSplitTransaction(state, crossPos, options.parentAttr, log)
-  if (tr) {
-    log('dispatching transaction ✓')
-    tr.setMeta(pluginKey, { ownDispatch: true })
-    tr.setMeta('addToHistory', false)
-    view.dispatch(tr)
-  } else {
+  if (!tr) {
     log('buildSplitTransaction returned null ✗')
+    return
   }
+
+  // If edit + split produces the same doc as before the edit, it's a no-op.
+  // Undo the user's edit to roll back to the pre-edit state and skip the split.
+  const { preEditDoc } = pluginKey.getState(state) as SmartSplitState
+  const resultState = state.apply(tr)
+  if (preEditDoc && resultState.doc.eq(preEditDoc)) {
+    log('split result identical to pre-edit state → undoing user edit')
+    undo(view.state, (t) => view.dispatch(t))
+    return
+  }
+
+  log('dispatching transaction ✓')
+  tr.setMeta(pluginKey, { ownDispatch: true })
+  view.dispatch(tr)
 }

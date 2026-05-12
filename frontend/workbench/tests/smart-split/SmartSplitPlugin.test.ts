@@ -82,8 +82,12 @@ describe('smartSplitPlugin', () => {
 
     // Simulate own dispatch: apply(tr, value, oldState, newState)
     const ownDispatchTr = { getMeta: vi.fn().mockReturnValue({ ownDispatch: true }) }
-    const isOwn = plugin.spec.state!.apply(ownDispatchTr as any, false, {} as any, {} as any)
-    expect(isOwn).toBe(true)
+    const result = plugin.spec.state!.apply(
+      ownDispatchTr as any,
+      { isOwnDispatch: false, preEditDoc: null } as any,
+      {} as any, {} as any,
+    )
+    expect(result.isOwnDispatch).toBe(true)
 
     viewObj.destroy()
     vi.useRealTimers()
