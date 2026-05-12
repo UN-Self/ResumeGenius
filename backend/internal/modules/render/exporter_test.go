@@ -307,6 +307,10 @@ func TestWrapWithTemplate_ExtractsFullDocumentBodyAndStyles(t *testing.T) {
 	assert.NotContains(t, result, "<body><section")
 	assert.NotContains(t, result, "<html><head>")
 	assert.NotContains(t, result, `<div class="resume-page resume-document"><!DOCTYPE html>`)
+
+	// Verify user CSS appears after template </style> (takes priority over template defaults)
+	assert.Regexp(t, `</style>\s*<style>\.resume-document \.name\{font-size:22px\}</style>`, result,
+		"user CSS must appear after template </style> to take priority")
 }
 
 func TestExtractRenderableHTML_RemovesStyleFromBody(t *testing.T) {

@@ -29,7 +29,7 @@ export interface SmartSplitOptions {
 
 export const DEFAULT_OPTIONS: SmartSplitOptions = {
   debounce: 300,
-  threshold: 0,
+  threshold: 4,
   jitter: 0,
   parentAttr: 'data-ss-parent',
   insertPageBreaks: true,

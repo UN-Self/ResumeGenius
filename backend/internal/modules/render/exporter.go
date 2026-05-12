@@ -306,7 +306,7 @@ func wrapWithTemplate(htmlFragment string) string {
 	if strings.TrimSpace(styleHTML) == "" {
 		return html
 	}
-	return strings.Replace(html, "<style>", styleHTML+"<style>", 1)
+	return strings.Replace(html, "</style>", "</style>"+styleHTML, 1)
 }
 
 func extractRenderableHTML(htmlContent string) (string, string) {
