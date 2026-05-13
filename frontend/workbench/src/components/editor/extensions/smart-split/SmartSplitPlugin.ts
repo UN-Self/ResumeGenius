@@ -15,6 +15,10 @@ interface SmartSplitState {
 
 export function smartSplitPlugin(options: SmartSplitOptions) {
   let timer: ReturnType<typeof setTimeout> | null = null
+  // Suppression counter: incremented before each SmartSplit dispatch, decremented
+  // in view.update. Prevents cascade loops from PaginationPlus (meta-only rAF),
+  // trailing-node (paragraph append), or any other reactive plugin.
+  let suppressCount = 0
   const suppress = {
     preSplitDoc: null as EditorState['doc'] | null,
   }
@@ -32,14 +36,6 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
       apply(tr, value: SmartSplitState): SmartSplitState {
         const isOwnDispatch = !!tr.getMeta(pluginKey)?.ownDispatch
         if (isOwnDispatch !== value.isOwnDispatch) {
-          // Preserve ownDispatch for meta-only transactions (e.g. PaginationPlus
-          // page-count updates via rAF). These don't change the document and
-          // must NOT re-trigger detection, otherwise a feedback loop forms:
-          // split → layout change → page count change → meta dispatch →
-          // isOwnDispatch reset → re-detection → split again.
-          if (value.isOwnDispatch && !isOwnDispatch && !tr.docChanged) {
-            return value
-          }
           return { ...value, isOwnDispatch }
         }
         return value
@@ -49,6 +45,15 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
     view(_editorView: EditorView) {
       return {
         update(_view: EditorView) {
+          // Drain one suppress slot per view.update. When suppressCount > 0,
+          // the update was triggered (directly or indirectly) by our own
+          // dispatches — skip re-detection.
+          if (suppressCount > 0) {
+            suppressCount--
+            log('skipping re-detection (suppressCount)', suppressCount)
+            return
+          }
+
           const pluginState = pluginKey.getState(_view.state) as SmartSplitState | undefined
           if (pluginState?.isOwnDispatch) {
             log('skipping re-detection after own dispatch')
@@ -58,6 +63,7 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
           if (suppress.preSplitDoc && _view.state.doc.eq(suppress.preSplitDoc)) {
             suppress.preSplitDoc = null
             log('split undone by user → undoing user edit')
+            suppressCount++
             undo(_view.state, (t) => {
               t.setMeta(pluginKey, { ownDispatch: true })
               _view.dispatch(t)
@@ -68,13 +74,23 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
           if (timer) clearTimeout(timer)
 
           timer = setTimeout(() => {
-            performDetectionAndSplit(_view, options, log, suppress)
+            // Final guard: re-check suppression in case a late-arriving
+            // plugin dispatch (e.g. trailing-node via appendTransaction)
+            // set isOwnDispatch after the view.update that started this timer.
+            const current = pluginKey.getState(_view.state) as SmartSplitState | undefined
+            if (current?.isOwnDispatch || suppressCount > 0) {
+              log('timer fired but suppressed, skipping')
+              timer = null
+              return
+            }
+            performDetectionAndSplit(_view, options, log, suppress, () => { suppressCount++ })
             timer = null
           }, options.debounce)
         },
         destroy() {
           if (timer) clearTimeout(timer)
           suppress.preSplitDoc = null
+          suppressCount = 0
         },
       }
     },
@@ -85,13 +101,14 @@ function performDetectionAndSplit(
   view: EditorView, options: SmartSplitOptions,
   log: (...args: any[]) => void,
   suppress: { preSplitDoc: EditorState['doc'] | null },
+  onDispatch: () => void,
 ) {
   const editorDom = view.dom
   const breakers = getBreakerPositions(editorDom)
   log('breakers:', breakers.length, breakers)
   if (breakers.length === 0) {
     if (options.insertPageBreaks) {
-      syncPageBreaks(view, breakers, log)
+      syncPageBreaks(view, breakers, log, onDispatch)
     }
     return
   }
@@ -131,6 +148,7 @@ function performDetectionAndSplit(
           log('dispatching transaction ✓')
           suppress.preSplitDoc = preSplitDoc
           tr.setMeta(pluginKey, { ownDispatch: true })
+          onDispatch()
           view.dispatch(tr)
           didSplit = true
         }
@@ -142,7 +160,7 @@ function performDetectionAndSplit(
 
   if (options.insertPageBreaks) {
     const currentBreakers = didSplit ? getBreakerPositions(editorDom) : breakers
-    syncPageBreaks(view, currentBreakers, log)
+    syncPageBreaks(view, currentBreakers, log, onDispatch)
   }
 }
 
@@ -150,6 +168,7 @@ function syncPageBreaks(
   view: EditorView,
   breakers: BreakerPosition[],
   log: (...args: any[]) => void,
+  onDispatch: () => void,
 ) {
   const { state } = view
   const { tr, doc } = state
@@ -187,6 +206,8 @@ function syncPageBreaks(
     log('syncPageBreaks dispatching ✓')
     tr.setMeta(pluginKey, { ownDispatch: true })
     tr.setMeta('addToHistory', false)
+    tr.setMeta('skipTrailingNode', true)
+    onDispatch()
     view.dispatch(tr)
   }
 }
