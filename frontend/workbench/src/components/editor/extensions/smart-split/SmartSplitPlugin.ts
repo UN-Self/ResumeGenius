@@ -4,7 +4,7 @@ import type { EditorView } from '@tiptap/pm/view'
 import { undo } from 'prosemirror-history'
 import { getBreakerPositions, findCrossingPositions, findPageStartPositions } from './detectCrossings'
 import { buildSplitTransaction } from './splitTransaction'
-import { appendBreakBefore, removeBreakBefore } from './styleUtils'
+import { appendBreakBefore, removeBreakBefore, resolveToBlockPos } from './styleUtils'
 import type { SmartSplitOptions, BreakerPosition } from './types'
 
 const pluginKey = new PluginKey('smartSplit')
@@ -164,11 +164,12 @@ function syncPageBreaks(
 
   // Add break-before: page to page-start nodes
   for (const pos of pageStarts) {
-    const node = tr.doc.nodeAt(pos)
-    if (!node || !node.isBlock) continue
+    const blockPos = resolveToBlockPos(tr.doc, pos)
+    const node = tr.doc.nodeAt(blockPos)
+    if (!node) continue
     const currentStyle = (node.attrs.style as string) || ''
     const newStyle = appendBreakBefore(currentStyle)
-    tr.setNodeMarkup(pos, undefined, { ...node.attrs, style: newStyle })
+    tr.setNodeMarkup(blockPos, undefined, { ...node.attrs, style: newStyle })
   }
 
   if (tr.docChanged) {
