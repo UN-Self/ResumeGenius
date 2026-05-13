@@ -14,11 +14,16 @@
 | 2 | `min-height` 单边存在 | 低 | 仅 PDF 有 `min-height: 1.5em`，编辑器靠 ProseMirror `<br>` 占位 |
 | 7 | 颜色变量 vs 硬编码 | 低 | 编辑器用 CSS 变量，PDF 硬编码 `#333333` |
 
-## 方案：共享常量 + 精准修复
+## 方案：文档约束同步 + 精准修复
 
-### 改动 1：共享排版常量（解决 #1 #2 #3 #5）
+### 改动 1：排版值文档约束同步（解决 #1 #2 #3 #5）
 
-新建 `shared/typography.ts`，作为排版值的 single source of truth：
+> **设计决策：** 原方案新建 `shared/typography.ts` 作为 single source of truth，
+> 但 `editor.css` 是纯 CSS（无法 import TS），`render-template.html` 是 Go embed
+> 的 HTML（无法引用 TS）。排版值实际上在两处独立维护，通过本文档约束手动同步。
+> `typography.ts` 已删除。
+
+**排版值定义（本文件为唯一参考）：**
 
 ```ts
 export const TYPOGRAPHY = {
@@ -37,8 +42,9 @@ export const TYPOGRAPHY = {
 
 **消费方式：**
 
-- **前端**：`editor.css` 中 `.ProseMirror` 排版块引用 CSS 自定义属性（`var(--typo-h1-size, 24px)`），`index.css` 的 `@theme` 块定义这些变量。`typography.ts` 作为 JS 端常量源供 `layout.ts` 等模块引用。
-- **后端**：`render-template.html` 中 `.resume-page` 排版块的值对齐到 `typography.ts`。通过文档约束 + 脚本校验（或后续引入构建步骤）保持同步。
+- **前端**：`editor.css` 中 `.ProseMirror` 排版块直接硬编码值。
+- **后端**：`render-template.html` 中 `.resume-page` 排版块直接硬编码值。
+- 两端值对齐由本文档约束，修改时需同步更新 `editor.css`、`render-template.html` 和本文件。
 
 **具体修复：**
 
@@ -83,9 +89,8 @@ threshold: 4,
 
 | 文件 | 改动 |
 |------|------|
-| `shared/typography.ts` | **新增** — 排版常量 |
 | `frontend/workbench/src/styles/editor.css` | `.ProseMirror p` 添加 `min-height: 1.5em` |
 | `backend/internal/modules/render/render-template.html` | 移除 `"Open Sans"`、`"•"` 改 `disc`、对齐常量 |
 | `backend/internal/modules/render/exporter.go` | 用户 CSS 插入点改为 `</style>` 之后 |
-| `frontend/workbench/src/components/editor/extensions/smart-split/types.ts` | `threshold` 默认值改为 2 |
+| `frontend/workbench/src/components/editor/extensions/smart-split/types.ts` | `threshold` 默认值改为 4 |
 | `backend/internal/modules/render/exporter_test.go` | 更新相关测试断言 |

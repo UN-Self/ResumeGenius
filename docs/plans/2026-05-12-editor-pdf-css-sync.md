@@ -252,5 +252,5 @@ git commit -m "fix: 修复编辑器与 PDF 导出 CSS 排版差异（6项）"
 | `frontend/workbench/src/styles/editor.css` | `.ProseMirror p` 添加 `min-height: 1.5em` |
 | `backend/internal/modules/render/render-template.html` | 移除 `"Open Sans"`、`"•"` 改为 `disc` |
 | `backend/internal/modules/render/exporter.go` | 用户 CSS 插入点改为 `</style>` 之后 |
-| `frontend/workbench/src/components/editor/extensions/smart-split/types.ts` | `threshold` 默认值 0 → 2 |
+| `frontend/workbench/src/components/editor/extensions/smart-split/types.ts` | `threshold` 默认值 0 → 4 |
 | `backend/internal/modules/render/exporter_test.go` | 添加 CSS 顺序断言 |
