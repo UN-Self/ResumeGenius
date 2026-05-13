@@ -32,7 +32,7 @@ import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/ui/modal'
-import { extractStyles } from '@/lib/extract-styles'
+import { extractStyles, stripTrailingEditorEmptyParagraphs } from '@/lib/extract-styles'
 import { A4_LAYOUT } from '@/lib/pagination-plus/layout'
 
 export default function EditorPage() {
@@ -192,7 +192,7 @@ export default function EditorPage() {
   const getPersistableHTML = useCallback(() => {
     if (!editor) return ''
 
-    const bodyHtml = editor.getHTML()
+    const bodyHtml = stripTrailingEditorEmptyParagraphs(editor.getHTML())
     if (!scopedCSS.trim()) return bodyHtml
 
     return [

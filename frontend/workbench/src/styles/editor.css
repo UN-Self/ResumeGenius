@@ -971,6 +971,15 @@
   font-feature-settings: "liga" 0, "palt" 0, "pwid" 0, "halt" 0, "hkna" 0, "nalt" 0, "fwid" 0;
 }
 
+.ProseMirror > .page + p:last-child:empty,
+.ProseMirror > .resume + p:last-child:empty,
+.ProseMirror > .resume-document + p:last-child:empty,
+.ProseMirror > .page + p:last-child:has(> br.ProseMirror-trailingBreak:only-child),
+.ProseMirror > .resume + p:last-child:has(> br.ProseMirror-trailingBreak:only-child),
+.ProseMirror > .resume-document + p:last-child:has(> br.ProseMirror-trailingBreak:only-child) {
+  display: none;
+}
+
 .ProseMirror h1 {
   font-size: 24px;
   font-weight: 600;

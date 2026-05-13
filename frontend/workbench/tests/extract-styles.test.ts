@@ -8,6 +8,8 @@ import {
   RESUME_DOCUMENT_CLASS,
   SCOPE_PREFIX,
   processScopedCSS,
+  reconstructHtml,
+  stripTrailingEditorEmptyParagraphs,
 } from '@/lib/extract-styles'
 
 // ─── Test helpers ──────────────────────────────────────────────────
@@ -429,6 +431,34 @@ describe('extractStyles', () => {
     expect(result.rawCSS).toContain('.section {')
     expect(result.rawCSS).toContain('.tag {')
     expect(result.bodyHtml).toContain('<div class="resume">')
+  })
+
+  it('strips trailing empty editor paragraphs from extracted body HTML', () => {
+    const html = '<div class="page"><p>内容</p></div><p></p>'
+
+    const { bodyHtml } = extractStyles(html)
+
+    expect(bodyHtml).toBe('<div class="page"><p>内容</p></div>')
+  })
+})
+
+describe('stripTrailingEditorEmptyParagraphs', () => {
+  it('removes empty paragraphs at the end only', () => {
+    const html = '<p></p><div class="page"><p>内容</p></div><p></p><p><br></p>'
+
+    expect(stripTrailingEditorEmptyParagraphs(html)).toBe('<p></p><div class="page"><p>内容</p></div>')
+  })
+
+  it('keeps trailing paragraphs with attributes', () => {
+    const html = '<div class="page"><p>内容</p></div><p style="break-before: page"></p>'
+
+    expect(stripTrailingEditorEmptyParagraphs(html)).toBe(html)
+  })
+
+  it('is applied when reconstructing full HTML', () => {
+    const html = reconstructHtml('<div class="page">内容</div><p></p>', '.page { color: red; }')
+
+    expect(html).toContain('<body><div class="page">内容</div></body>')
   })
 })
 
