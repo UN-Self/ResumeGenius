@@ -419,4 +419,38 @@ describe('findPageStartPositions', () => {
 
     document.body.removeChild(wrapper)
   })
+
+  it('skips parent container and matches crossing child paragraph', () => {
+    const wrapper = document.createElement('div')
+
+    const parent = document.createElement('div')
+    parent.getBoundingClientRect = () => ({ top: 0, bottom: 900, height: 900 } as DOMRect)
+
+    const p1 = document.createElement('p')
+    p1.textContent = 'Before breaker'
+    p1.getBoundingClientRect = () => ({ top: 100, bottom: 200, height: 100 } as DOMRect)
+
+    const crossingChild = document.createElement('p')
+    crossingChild.textContent = 'I cross'
+    crossingChild.getBoundingClientRect = () => ({ top: 450, bottom: 700, height: 250 } as DOMRect)
+
+    const p3 = document.createElement('p')
+    p3.textContent = 'After breaker'
+    p3.getBoundingClientRect = () => ({ top: 750, bottom: 850, height: 100 } as DOMRect)
+
+    parent.appendChild(p1)
+    parent.appendChild(crossingChild)
+    parent.appendChild(p3)
+    wrapper.appendChild(parent)
+    document.body.appendChild(wrapper)
+
+    const breakers: BreakerPosition[] = [{ top: 500, bottom: 600 }]
+    const mockView = { posAtDOM: vi.fn().mockReturnValue(20) }
+
+    const results = findPageStartPositions(mockView as any, wrapper, breakers)
+    expect(results).toHaveLength(1)
+    expect(mockView.posAtDOM).toHaveBeenCalledWith(crossingChild, 0)
+
+    document.body.removeChild(wrapper)
+  })
 })
