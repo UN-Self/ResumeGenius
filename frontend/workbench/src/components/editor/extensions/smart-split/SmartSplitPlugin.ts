@@ -165,8 +165,11 @@ function performDetectionAndSplit(
   }
 
   if (options.insertPageBreaks) {
-    const currentBreakers = didSplit ? getBreakerPositions(editorDom) : breakers
-    syncPageBreaks(view, currentBreakers, log, onDispatch)
+    if (didSplit) {
+      log('split dispatched, defer page-break sync until pagination stabilizes')
+      return
+    }
+    syncPageBreaks(view, breakers, log, onDispatch)
   }
 }
 
@@ -180,30 +183,36 @@ function syncPageBreaks(
   const { tr, doc } = state
   if (!doc?.descendants) return
 
-  // Clean up all existing break-before styles
+  const targetPositions = new Set<number>()
+  for (const pos of findPageStartPositions(view, view.dom, breakers)) {
+    const blockPos = resolveToBlockPos(doc, pos)
+    // Promote past list wrappers — break-before on a paragraph child
+    // of listItem is ignored by Chrome's PDF renderer.
+    const targetPos = promotePastList(doc, blockPos)
+    if (doc.nodeAt(targetPos)) {
+      targetPositions.add(targetPos)
+    }
+  }
+  log('pageStarts:', targetPositions.size, [...targetPositions])
+
+  // Clean up stale break-before styles only when they are no longer targets.
   doc.descendants((node, pos) => {
     if (!node.isBlock) return false
     const style = node.attrs.style as string | null
     if (style && style.includes('break-before')) {
+      if (targetPositions.has(pos)) return true
       const cleaned = removeBreakBefore(style)
       tr.setNodeMarkup(pos, undefined, { ...node.attrs, style: cleaned })
     }
     return true
   })
 
-  // Find page-start nodes
-  const pageStarts = findPageStartPositions(view, view.dom, breakers)
-  log('pageStarts:', pageStarts.length, pageStarts)
-
-  // Add break-before: page to page-start nodes
-  for (const pos of pageStarts) {
-    const blockPos = resolveToBlockPos(tr.doc, pos)
-    // Promote past list wrappers — break-before on a paragraph child
-    // of listItem is ignored by Chrome's PDF renderer.
-    const targetPos = promotePastList(tr.doc, blockPos)
+  // Add missing break-before styles without rewriting unchanged nodes.
+  for (const targetPos of targetPositions) {
     const node = tr.doc.nodeAt(targetPos)
     if (!node) continue
     const currentStyle = (node.attrs.style as string) || ''
+    if (currentStyle.includes('break-before: page')) continue
     const newStyle = appendBreakBefore(currentStyle)
     tr.setNodeMarkup(targetPos, undefined, { ...node.attrs, style: newStyle })
   }

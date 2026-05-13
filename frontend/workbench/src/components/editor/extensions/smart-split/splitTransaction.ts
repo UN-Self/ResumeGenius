@@ -40,6 +40,12 @@ function rebuildAncestors(
   return doc
 }
 
+function isProtectedRootContainer(node: PmNode, depth: number): boolean {
+  if (depth !== 1) return false
+  const className = typeof node.attrs.class === 'string' ? node.attrs.class : ''
+  return className.split(/\s+/).some((cls) => cls === 'resume' || cls === 'resume-document')
+}
+
 export function buildSplitTransaction(
   state: EditorState,
   crossPos: number,
@@ -59,6 +65,10 @@ export function buildSplitTransaction(
   log(`depth=${$pos.depth} parentDepth=${parentDepth}`,
     `parentType=${parent.type.name} parentClass=${parent.attrs.class}`,
     `crossIndex=${crossIndex} childCount=${parent.childCount}`)
+  if (isProtectedRootContainer(parent, parentDepth)) {
+    log('skip split: protected root resume container')
+    return null
+  }
   if (crossIndex === 0) return null
   if (parent.childCount < 2) return null
 

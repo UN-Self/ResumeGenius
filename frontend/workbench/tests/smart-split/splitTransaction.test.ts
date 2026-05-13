@@ -176,4 +176,21 @@ describe('buildSplitTransaction', () => {
 
     editor.destroy()
   })
+
+  it('does not split the top-level resume root container', () => {
+    const editor = createEditor(
+      '<div class="resume">' +
+        '<section class="education"><p>A</p></section>' +
+        '<section class="projects"><p>B</p></section>' +
+      '</div>',
+    )
+
+    const doc = editor.state.doc
+    const positions = findAllPositions(doc, (n: any) => n.attrs.class === 'projects')
+    expect(positions.length).toBe(1)
+
+    const tr = buildSplitTransaction(editor.state, positions[0], 'data-ss-parent')
+    expect(tr).toBeNull()
+    editor.destroy()
+  })
 })
