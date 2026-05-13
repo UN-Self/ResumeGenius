@@ -1,9 +1,11 @@
 package render
 
 import (
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -359,6 +361,19 @@ func TestInjectFontCSS_InsertsBeforeHeadClose(t *testing.T) {
 	// Font style should be inserted before </head>
 	assert.Contains(t, result, "<style>")
 	assert.Contains(t, result, "</style></head>")
+}
+
+func TestInterFontFaceCSS_EmbedsDecodableWOFF2(t *testing.T) {
+	css := interFontFaceCSS()
+	matches := regexp.MustCompile(`base64,([^)]*)\)`).FindAllStringSubmatch(css, -1)
+
+	require.Len(t, matches, 3)
+	for _, match := range matches {
+		decoded, err := base64.StdEncoding.DecodeString(match[1])
+		require.NoError(t, err)
+		require.Greater(t, len(decoded), 4)
+		assert.Equal(t, []byte("wOF2"), decoded[:4])
+	}
 }
 
 func TestInjectFontCSS_PreservesOriginalContent(t *testing.T) {

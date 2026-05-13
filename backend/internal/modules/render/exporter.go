@@ -3,6 +3,7 @@ package render
 import (
 	"context"
 	_ "embed"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -286,10 +287,13 @@ var interSemiBold []byte
 
 // interFontFaceCSS generates @font-face declarations with embedded base64 WOFF2 data.
 func interFontFaceCSS() string {
+	regular := base64.StdEncoding.EncodeToString(interRegular)
+	medium := base64.StdEncoding.EncodeToString(interMedium)
+	semiBold := base64.StdEncoding.EncodeToString(interSemiBold)
 	return fmt.Sprintf(`@font-face { font-family: "Inter"; font-style: normal; font-weight: 400; font-display: swap; src: url(data:font/woff2;base64,%s) format("woff2"); }
 @font-face { font-family: "Inter"; font-style: normal; font-weight: 500; font-display: swap; src: url(data:font/woff2;base64,%s) format("woff2"); }
 @font-face { font-family: "Inter"; font-style: normal; font-weight: 600; font-display: swap; src: url(data:font/woff2;base64,%s) format("woff2"); }`,
-		interRegular, interMedium, interSemiBold)
+		regular, medium, semiBold)
 }
 
 // injectFontCSS inserts the embedded Inter font @font-face CSS into the HTML document.
