@@ -260,8 +260,8 @@ func TestWrapWithTemplate_PageMarginInsteadOfDivPadding(t *testing.T) {
 	result := wrapWithTemplate("<h1>Hello</h1>")
 
 	// @page rule should carry the margin (not the .resume-page div)
-	assert.Contains(t, result, "@page { size: A4; margin: 18mm 20mm; }",
-		"@page should specify margin: 18mm 20mm so that every PDF page (including page 2+) gets top margin")
+	assert.Contains(t, result, "@page { size: A4; margin: 18mm 20mm 14mm 20mm; }",
+		"@page should specify margin: 18mm 20mm 14mm 20mm so that every PDF page (including page 2+) gets top margin with reduced bottom for editor/PDF sync")
 	assert.NotContains(t, result, "padding: 18mm 20mm",
 		".resume-page should NOT have padding: 18mm 20mm; margin belongs on @page instead")
 	// .resume-page should NOT set explicit width/min-height that overflows @page content area
