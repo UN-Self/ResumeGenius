@@ -10,9 +10,61 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
+
+// retryWithBackoff executes fn with exponential backoff on server errors (5xx).
+// Does NOT retry on 429 (rate limit) or 4xx errors.
+func retryWithBackoff(maxRetries int, baseDelay time.Duration, fn func() error) error {
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		if isNonRetryable(err) {
+			return err
+		}
+		if attempt < maxRetries {
+			delay := baseDelay * time.Duration(1<<uint(attempt))
+			time.Sleep(delay)
+		}
+	}
+	return fmt.Errorf("重试 %d 次后仍失败: %w", maxRetries, lastErr)
+}
+
+var httpStatusRe = regexp.MustCompile(`status["':\s]+(\d{3})`)
+
+func isNonRetryable(err error) bool {
+	errStr := err.Error()
+	matches := httpStatusRe.FindAllStringSubmatch(errStr, -1)
+	for _, m := range matches {
+		if len(m) > 1 && strings.HasPrefix(m[1], "4") {
+			return true
+		}
+	}
+	return false
+}
+
+func wrapTimeoutError(err error, start time.Time) error {
+	var netErr net.Error
+	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &netErr) && netErr.Timeout()) {
+		debugLog("provider", "模型调用超时，耗时 %v: %v", time.Since(start), err)
+		return fmt.Errorf("%w: %w", ErrModelTimeout, err)
+	}
+	return nil
+}
+
+func checkHTTPResponse(resp *http.Response) error {
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	}
+	return nil
+}
 
 // ToolCallMessage represents a tool call in an assistant message (for OpenAI API format).
 type ToolCallMessage struct {
@@ -85,6 +137,12 @@ func NewOpenAIAdapterWithTimeout(apiURL, apiKey, model string, timeout time.Dura
 }
 
 func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []Message, sendChunk func(string) error) error {
+	return retryWithBackoff(3, 1*time.Second, func() error {
+		return a.streamChatOnce(ctx, messages, sendChunk)
+	})
+}
+
+func (a *OpenAIAdapter) streamChatOnce(ctx context.Context, messages []Message, sendChunk func(string) error) error {
 	apiMessages := make([]map[string]string, len(messages))
 	for i, m := range messages {
 		apiMessages[i] = map[string]string{"role": m.Role, "content": m.Content}
@@ -111,23 +169,16 @@ func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []Message, send
 
 	resp, err := a.client.Do(req)
 	if err != nil {
-		var netErr net.Error
-		if ok := errors.Is(err, context.DeadlineExceeded); ok {
-			debugLog("provider", "模型调用超时，耗时 %v: %v", time.Since(start), err)
-			return fmt.Errorf("%w: %w", ErrModelTimeout, err)
-		}
-		if errors.As(err, &netErr) && netErr.Timeout() {
-			debugLog("provider", "模型调用超时，耗时 %v: %v", time.Since(start), err)
-			return fmt.Errorf("%w: %w", ErrModelTimeout, err)
+		if timeoutErr := wrapTimeoutError(err, start); timeoutErr != nil {
+			return timeoutErr
 		}
 		return fmt.Errorf("model call failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	debugLog("provider", "模型响应，状态码 %d，耗时 %v", resp.StatusCode, time.Since(start))
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	if err := checkHTTPResponse(resp); err != nil {
+		return err
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -187,23 +238,69 @@ func (a *OpenAIAdapter) StreamChatReAct(
 	onToolCall func(call ToolCallRequest) error,
 	onText func(chunk string) error,
 ) error {
+	return retryWithBackoff(3, 1*time.Second, func() error {
+		return a.streamChatReActOnce(ctx, messages, tools, onReasoning, onToolCall, onText)
+	})
+}
+
+func (a *OpenAIAdapter) streamChatReActOnce(
+	ctx context.Context,
+	messages []Message,
+	tools []ToolDef,
+	onReasoning func(chunk string) error,
+	onToolCall func(call ToolCallRequest) error,
+	onText func(chunk string) error,
+) error {
 	apiMessages := make([]map[string]interface{}, len(messages))
 	for i, m := range messages {
 		msg := map[string]interface{}{"role": m.Role}
-		if m.Content != "" {
+
+		// tool-role: always carry tool_call_id and name
+		if m.Role == "tool" {
 			msg["content"] = m.Content
+			msg["tool_call_id"] = m.ToolCallID
+			if m.Name != "" {
+				msg["name"] = m.Name
+			}
+			apiMessages[i] = msg
+			continue
 		}
+
+		// assistant with tool_calls: serialize tool_calls array, content can be empty
+		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
+			if m.Content != "" {
+				msg["content"] = m.Content
+			}
+			if m.ReasoningContent != "" {
+				msg["reasoning_content"] = m.ReasoningContent
+			}
+			tcs := make([]map[string]interface{}, len(m.ToolCalls))
+			for j, tc := range m.ToolCalls {
+				tcs[j] = map[string]interface{}{
+					"id":   tc.ID,
+					"type": tc.Type,
+					"function": map[string]interface{}{
+						"name":      tc.Function.Name,
+						"arguments": tc.Function.Arguments,
+					},
+				}
+			}
+			msg["tool_calls"] = tcs
+			apiMessages[i] = msg
+			continue
+		}
+
+		// user, system, or assistant without tool_calls
+		content := m.Content
+		if content == "" {
+			content = " "
+		}
+		msg["content"] = content
 		if m.ReasoningContent != "" {
 			msg["reasoning_content"] = m.ReasoningContent
 		}
 		if m.ToolCallID != "" {
 			msg["tool_call_id"] = m.ToolCallID
-		}
-		if m.Name != "" {
-			msg["name"] = m.Name
-		}
-		if len(m.ToolCalls) > 0 {
-			msg["tool_calls"] = m.ToolCalls
 		}
 		apiMessages[i] = msg
 	}
@@ -231,6 +328,28 @@ func (a *OpenAIAdapter) StreamChatReAct(
 		reqBodyMap["tool_choice"] = "auto"
 	}
 
+	// Debug: log the last 2 messages (assistant tool_calls + tool result) for debugging 400 errors
+	if len(tools) > 0 && len(apiMessages) > 2 {
+		for i := len(apiMessages) - 2; i < len(apiMessages); i++ {
+			if b, err := json.Marshal(apiMessages[i]); err == nil {
+				preview := string(b)
+				if len(preview) > 1000 {
+					preview = preview[:1000] + "...(truncated)"
+				}
+				debugLog("provider", "消息[%d] 完整结构: %s", i, preview)
+			}
+		}
+	}
+
+	// Debug: verify total content size being sent
+	totalChars := 0
+	for _, m := range apiMessages {
+		if c, ok := m["content"].(string); ok {
+			totalChars += len(c)
+		}
+	}
+	debugLog("provider", "发送消息总数 %d，总内容字符数 %d", len(apiMessages), totalChars)
+
 	reqBody, err := json.Marshal(reqBodyMap)
 	if err != nil {
 		return fmt.Errorf("marshal request: %w", err)
@@ -247,23 +366,16 @@ func (a *OpenAIAdapter) StreamChatReAct(
 
 	resp, err := a.client.Do(req)
 	if err != nil {
-		var netErr net.Error
-		if ok := errors.Is(err, context.DeadlineExceeded); ok {
-			debugLog("provider", "模型调用超时，耗时 %v: %v", time.Since(start), err)
-			return fmt.Errorf("%w: %w", ErrModelTimeout, err)
-		}
-		if errors.As(err, &netErr) && netErr.Timeout() {
-			debugLog("provider", "模型调用超时，耗时 %v: %v", time.Since(start), err)
-			return fmt.Errorf("%w: %w", ErrModelTimeout, err)
+		if timeoutErr := wrapTimeoutError(err, start); timeoutErr != nil {
+			return timeoutErr
 		}
 		return fmt.Errorf("model call failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	debugLog("provider", "模型响应，状态码 %d，耗时 %v", resp.StatusCode, time.Since(start))
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(bodyBytes))
+	if err := checkHTTPResponse(resp); err != nil {
+		return err
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -443,16 +555,8 @@ func (a *MockAdapter) StreamChatReAct(
 		})
 		_ = onToolCall(ToolCallRequest{
 			ID:     "call_mock_2",
-			Name:   "resume-design",
-			Params: map[string]interface{}{},
-		})
-		_ = onToolCall(ToolCallRequest{
-			ID:   "call_mock_3",
-			Name: "get_skill_reference",
-			Params: map[string]interface{}{
-				"skill_name":     "resume-design",
-				"reference_name": "a4-guidelines",
-			},
+			Name:   "load_skill",
+			Params: map[string]interface{}{"skill_name": "resume-design"},
 		})
 		return nil
 	}

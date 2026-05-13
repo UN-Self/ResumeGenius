@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/middleware"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/response"
 	"github.com/gin-gonic/gin"
@@ -126,6 +127,9 @@ func (h *Handler) Chat(c *gin.Context) {
 		return
 	}
 
+	logger := middleware.LoggerFromContext(c)
+	logger.Info("chat_started", "sessionID", sessionID, "messageLen", len(req.Message))
+
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
 	c.Writer.Header().Set("Connection", "keep-alive")
@@ -141,7 +145,7 @@ func (h *Handler) Chat(c *gin.Context) {
 		flusher.Flush()
 	}
 
-	if err := h.chatSvc.StreamChatReAct(uint(sessionID), req.Message, sendEvent); err != nil {
+	if err := h.chatSvc.StreamChatReAct(c.Request.Context(), uint(sessionID), req.Message, sendEvent); err != nil {
 		errJSON, _ := json.Marshal(map[string]interface{}{
 			"type":    "error",
 			"code":    errorCode(err),

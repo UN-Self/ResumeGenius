@@ -165,3 +165,44 @@ func (l *SkillLoader) GetReference(skillName, refName string) (*ReferenceContent
 
 	return ref, nil
 }
+
+// SkillWithReferences is a skill descriptor with all reference content inlined.
+type SkillWithReferences struct {
+	Name        string              `json:"name"`
+	Description string              `json:"description"`
+	Trigger     string              `json:"trigger,omitempty"`
+	Usage       string              `json:"usage"`
+	References  []ReferenceWithName  `json:"references"`
+}
+
+// ReferenceWithName pairs a reference name with its full content.
+type ReferenceWithName struct {
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+
+// LoadSkillWithReferences returns the skill descriptor with all reference content inlined.
+func (l *SkillLoader) LoadSkillWithReferences(name string) (*SkillWithReferences, error) {
+	desc, ok := l.skills[name]
+	if !ok {
+		return nil, fmt.Errorf("skill not found: %s", name)
+	}
+
+	refs := make([]ReferenceWithName, 0, len(desc.References))
+	for _, refMeta := range desc.References {
+		if refContent, ok := l.references[name][refMeta.Name]; ok {
+			refs = append(refs, ReferenceWithName{
+				Name:    refMeta.Name,
+				Content: refContent.Content,
+			})
+		}
+	}
+
+	return &SkillWithReferences{
+		Name:        desc.Name,
+		Description: desc.Description,
+		Trigger:     desc.Trigger,
+		Usage:       desc.Usage,
+		References:  refs,
+	}, nil
+}

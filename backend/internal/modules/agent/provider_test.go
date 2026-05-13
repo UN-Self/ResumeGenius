@@ -96,10 +96,9 @@ func TestMockAdapter_StreamChatReAct(t *testing.T) {
 
 	require.Len(t, reasoningChunks1, 1)
 	assert.Contains(t, reasoningChunks1[0], "current draft")
-	require.Len(t, toolCalls1, 3)
+	require.Len(t, toolCalls1, 2)
 	assert.Equal(t, "get_draft", toolCalls1[0].Name)
-	assert.Equal(t, "resume-design", toolCalls1[1].Name)
-	assert.Equal(t, "get_skill_reference", toolCalls1[2].Name)
+	assert.Equal(t, "load_skill", toolCalls1[1].Name)
 	assert.Empty(t, textChunks1, "first call should not have text")
 
 	// Call 2: apply a safe edit using the get_draft tool result
@@ -413,4 +412,74 @@ func TestOpenAIAdapter_StreamChatReAct_HttpError(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "API returned status 400")
 	assert.Contains(t, err.Error(), "invalid model")
+}
+
+// ---------------------------------------------------------------------------
+// Retry tests
+// ---------------------------------------------------------------------------
+
+func TestOpenAIAdapter_RetryOnServerError(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		if callCount <= 2 {
+			w.WriteHeader(500)
+			_, _ = w.Write([]byte(`{"error":"internal server error"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n")
+		fmt.Fprintf(w, "data: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	adapter := NewOpenAIAdapter(server.URL, "test-key", "test-model")
+
+	var result string
+	err := adapter.StreamChat(context.Background(), []Message{
+		{Role: "user", Content: "test"},
+	}, func(chunk string) error {
+		result += chunk
+		return nil
+	})
+
+	assert.NoError(t, err)
+	assert.Equal(t, "ok", result)
+	assert.Equal(t, 3, callCount)
+}
+
+func TestOpenAIAdapter_NoRetryOn429(t *testing.T) {
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(429)
+		_, _ = w.Write([]byte(`{"error":"rate limited"}`))
+	}))
+	defer server.Close()
+
+	adapter := NewOpenAIAdapter(server.URL, "test-key", "test-model")
+
+	err := adapter.StreamChat(context.Background(), []Message{
+		{Role: "user", Content: "test"},
+	}, func(chunk string) error { return nil })
+
+	assert.Error(t, err)
+	assert.Equal(t, 1, callCount)
+}
+
+func TestOpenAIAdapter_MaxRetriesExceeded(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(500)
+		_, _ = w.Write([]byte(`{"error":"always fail"}`))
+	}))
+	defer server.Close()
+
+	adapter := NewOpenAIAdapter(server.URL, "test-key", "test-model")
+
+	err := adapter.StreamChat(context.Background(), []Message{
+		{Role: "user", Content: "test"},
+	}, func(chunk string) error { return nil })
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "重试")
 }

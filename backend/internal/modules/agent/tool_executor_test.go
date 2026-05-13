@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -39,7 +40,7 @@ func TestToolExecutor_Tools_Definitions(t *testing.T) {
 	require.NoError(t, err)
 	executorWithSkills := NewAgentToolExecutor(nil, loader)
 	toolsWithSkills := executorWithSkills.Tools(context.Background())
-	require.Len(t, toolsWithSkills, 5, "with skillLoader should have 3 base + 2 skill tools")
+	require.Len(t, toolsWithSkills, 4, "with skillLoader should have 3 base + 1 load_skill")
 }
 
 func TestToolExecutor_Tools_NamesAreCorrect(t *testing.T) {
@@ -56,10 +57,10 @@ func TestToolExecutor_Tools_NamesAreCorrect(t *testing.T) {
 	assert.Contains(t, names, "get_draft")
 	assert.Contains(t, names, "apply_edits")
 	assert.Contains(t, names, "search_assets")
-	assert.Contains(t, names, "resume-design")
-	assert.Contains(t, names, "resume-interview")
-	assert.NotContains(t, names, "load_skill", "load_skill should be removed")
-	assert.NotContains(t, names, "get_skill_reference", "get_skill_reference should only appear after skill loaded")
+	assert.Contains(t, names, "load_skill")
+	assert.NotContains(t, names, "resume-design")
+	assert.NotContains(t, names, "resume-interview")
+	assert.NotContains(t, names, "get_skill_reference")
 }
 
 func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
@@ -72,11 +73,13 @@ func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
 		toolByName[tool.Name] = tool
 	}
 
-	// get_draft: selector is optional, required = []
+	// get_draft: mode, selector, query are optional, required = []
 	{
 		tool := toolByName["get_draft"]
 		props := tool.Parameters["properties"].(map[string]interface{})
 		assert.Contains(t, props, "selector")
+		assert.Contains(t, props, "mode")
+		assert.Contains(t, props, "query")
 		p := props["selector"].(map[string]interface{})
 		assert.Equal(t, "string", p["type"])
 		req := tool.Parameters["required"].([]string)
@@ -110,137 +113,15 @@ func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
 		assert.Empty(t, req)
 	}
 
-	// resume-design: skill tool, no parameters
+	// load_skill: required = ["skill_name"]
 	{
-		tool := toolByName["resume-design"]
+		tool := toolByName["load_skill"]
 		assert.NotEmpty(t, tool.Description)
 		props := tool.Parameters["properties"].(map[string]interface{})
-		assert.Empty(t, props)
+		assert.Contains(t, props, "skill_name")
+		req := tool.Parameters["required"].([]string)
+		assert.Equal(t, []string{"skill_name"}, req)
 	}
-}
-
-// ---------------------------------------------------------------------------
-// Skill tools in Tools()
-// ---------------------------------------------------------------------------
-
-func TestTools_ContainsSkillTools(t *testing.T) {
-	loader, err := NewSkillLoader()
-	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
-
-	tools := executor.Tools(context.Background())
-	names := make([]string, len(tools))
-	for i, tool := range tools {
-		names[i] = tool.Name
-	}
-
-	assert.Contains(t, names, "resume-design")
-	assert.Contains(t, names, "resume-interview")
-}
-
-func TestTools_SkillToolHasNoParameters(t *testing.T) {
-	loader, err := NewSkillLoader()
-	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
-
-	tools := executor.Tools(context.Background())
-	toolByName := make(map[string]ToolDef)
-	for _, tool := range tools {
-		toolByName[tool.Name] = tool
-	}
-
-	designTool := toolByName["resume-design"]
-	assert.NotEmpty(t, designTool.Description)
-	props := designTool.Parameters["properties"].(map[string]interface{})
-	assert.Empty(t, props, "skill tool should have no parameters")
-}
-
-// ---------------------------------------------------------------------------
-// Skill tool execution
-// ---------------------------------------------------------------------------
-
-func TestExecute_SkillAsTool(t *testing.T) {
-	loader, err := NewSkillLoader()
-	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
-
-	ctx := WithSessionID(context.Background(), 200)
-	result, err := executor.Execute(ctx, "resume-design", nil)
-	require.NoError(t, err)
-
-	var data map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(result), &data))
-	assert.Equal(t, "resume-design", data["name"])
-	assert.NotEmpty(t, data["description"])
-	assert.NotEmpty(t, data["usage"])
-}
-
-func TestSkillTool_ResumeDesign_DescriptionIsConcise(t *testing.T) {
-	loader, err := NewSkillLoader()
-	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
-
-	ctx := WithSessionID(context.Background(), 300)
-	result, err := executor.Execute(ctx, "resume-design", nil)
-	require.NoError(t, err)
-
-	var data map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(result), &data))
-	desc, ok := data["description"].(string)
-	require.True(t, ok)
-
-	// description 应该是简短触发条件，不包含 CSS 摘要
-	assert.NotContains(t, desc, "linear-gradient", "description should not contain CSS guidelines")
-	assert.NotContains(t, desc, "backdrop-filter", "description should not contain CSS guidelines")
-	assert.NotContains(t, desc, "Noto Sans CJK SC", "description should not contain CSS guidelines")
-	assert.Less(t, len(desc), 100, "description should be concise (< 100 chars)")
-
-	// CSS 内容应在 reference 中（a4-guidelines 是中文设计规范，包含样式限制）
-	ref, err := loader.GetReference("resume-design", "a4-guidelines")
-	require.NoError(t, err)
-	assert.Contains(t, ref.Content, "复杂渐变", "reference should contain gradient ban")
-	assert.Contains(t, ref.Content, "glassmorphism", "reference should contain style ban")
-	assert.Contains(t, ref.Content, "position fixed/absolute", "reference should contain layout ban")
-}
-
-func TestExecute_SkillAsTool_NotFound(t *testing.T) {
-	loader, err := NewSkillLoader()
-	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
-
-	_, err = executor.Execute(context.Background(), "nonexistent-skill", nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown tool")
-}
-
-func TestExecute_SkillAsTool_MarksLoaded(t *testing.T) {
-	loader, err := NewSkillLoader()
-	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
-
-	sessionID := uint(201)
-	ctx := WithSessionID(context.Background(), sessionID)
-
-	// Before calling skill tool, get_skill_reference should not be in tools
-	toolsBefore := executor.Tools(ctx)
-	for _, tool := range toolsBefore {
-		assert.NotEqual(t, "get_skill_reference", tool.Name)
-	}
-
-	// Call skill tool
-	_, err = executor.Execute(ctx, "resume-design", nil)
-	require.NoError(t, err)
-
-	// After calling skill tool, get_skill_reference should appear
-	toolsAfter := executor.Tools(ctx)
-	found := false
-	for _, tool := range toolsAfter {
-		if tool.Name == "get_skill_reference" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "get_skill_reference should appear after loading a skill")
 }
 
 // ---------------------------------------------------------------------------
@@ -389,9 +270,9 @@ func TestApplyEdits_OldStringNotFound(t *testing.T) {
 		},
 	})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "old_string not found")
+	assert.Contains(t, err.Error(), "匹配失败")
 	assert.Contains(t, err.Error(), "NonExistent")
-	assert.Contains(t, err.Error(), "<html><body><h1>Title")
+	assert.Contains(t, err.Error(), "未找到匹配内容")
 
 	// Verify DB state unchanged
 	var unchanged models.Draft
@@ -399,10 +280,13 @@ func TestApplyEdits_OldStringNotFound(t *testing.T) {
 	assert.Equal(t, html, unchanged.HTMLContent)
 	assert.Equal(t, 0, unchanged.CurrentEditSequence)
 
-	// No DraftEdit records created
+	// No successful edits, but base snapshot may have been created
 	var edits []models.DraftEdit
 	require.NoError(t, db.Where("draft_id = ?", draft.ID).Find(&edits).Error)
-	assert.Empty(t, edits)
+	// Only the base snapshot should exist (if created), no replace edits
+	for _, edit := range edits {
+		assert.Equal(t, "base_snapshot", edit.OpType, "should only have base_snapshot, not replace")
+	}
 }
 
 
@@ -504,100 +388,6 @@ func TestSearchAssets_Empty(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// get_skill_reference
-// ---------------------------------------------------------------------------
-
-func TestGetReference_Valid(t *testing.T) {
-	loader, err := NewSkillLoader()
-	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
-
-	ctx := WithSessionID(context.Background(), 2)
-	// First load the skill via skill tool (not load_skill)
-	_, err = executor.Execute(ctx, "resume-interview", nil)
-	require.NoError(t, err)
-
-	// Then get the reference
-	result, err := executor.Execute(ctx, "get_skill_reference", map[string]interface{}{
-		"skill_name":     "resume-interview",
-		"reference_name": "test-engineer",
-	})
-	require.NoError(t, err)
-
-	var data map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(result), &data))
-	assert.Equal(t, "test-engineer", data["name"])
-	assert.NotEmpty(t, data["content"])
-}
-
-func TestGetReference_SkillNotLoaded(t *testing.T) {
-	loader, err := NewSkillLoader()
-	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
-
-	ctx := WithSessionID(context.Background(), 3)
-	// Try to get reference without loading skill first
-	result, err := executor.Execute(ctx, "get_skill_reference", map[string]interface{}{
-		"skill_name":     "resume-interview",
-		"reference_name": "test-engineer",
-	})
-	require.NoError(t, err)
-	assert.Contains(t, result, "not loaded")
-	assert.Contains(t, result, "call 'resume-interview' tool first")
-}
-
-func TestGetReference_ReferenceNotFound(t *testing.T) {
-	loader, err := NewSkillLoader()
-	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
-
-	ctx := WithSessionID(context.Background(), 4)
-	// Load the skill via skill tool
-	_, err = executor.Execute(ctx, "resume-interview", nil)
-	require.NoError(t, err)
-
-	// Try to get a nonexistent reference
-	result, err := executor.Execute(ctx, "get_skill_reference", map[string]interface{}{
-		"skill_name":     "resume-interview",
-		"reference_name": "nonexistent-ref",
-	})
-	require.NoError(t, err)
-	assert.Contains(t, result, "not found")
-	assert.Contains(t, result, "test-engineer") // should list available
-}
-
-func TestGetReference_MissingParams(t *testing.T) {
-	loader, err := NewSkillLoader()
-	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
-
-	// Missing skill_name
-	result, err := executor.Execute(context.Background(), "get_skill_reference", map[string]interface{}{
-		"reference_name": "test-engineer",
-	})
-	require.NoError(t, err)
-	assert.Contains(t, result, "skill_name is required")
-
-	// Missing reference_name
-	result, err = executor.Execute(context.Background(), "get_skill_reference", map[string]interface{}{
-		"skill_name": "resume-interview",
-	})
-	require.NoError(t, err)
-	assert.Contains(t, result, "reference_name is required")
-}
-
-func TestGetReference_NilLoader(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, nil)
-
-	result, err := executor.Execute(context.Background(), "get_skill_reference", map[string]interface{}{
-		"skill_name":     "resume-interview",
-		"reference_name": "test-engineer",
-	})
-	require.NoError(t, err)
-	assert.Contains(t, result, "技能库未加载")
-}
-
-// ---------------------------------------------------------------------------
 // Complete flow integration test
 // ---------------------------------------------------------------------------
 
@@ -608,25 +398,34 @@ func TestToolExecutor_CompleteFlow(t *testing.T) {
 
 	ctx := WithSessionID(context.Background(), 100)
 
-	// Step 1: Call skill tool (not load_skill)
-	loadResult, err := executor.Execute(ctx, "resume-interview", nil)
+	// Step 1: Load skill via load_skill
+	loadResult, err := executor.Execute(ctx, "load_skill", map[string]interface{}{
+		"skill_name": "resume-interview",
+	})
 	require.NoError(t, err)
 
 	var loadDesc map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(loadResult), &loadDesc))
 	assert.Equal(t, "resume-interview", loadDesc["name"])
+	assert.NotEmpty(t, loadDesc["description"])
+	assert.NotEmpty(t, loadDesc["usage"])
 
-	// Step 2: Get reference
-	refResult, err := executor.Execute(ctx, "get_skill_reference", map[string]interface{}{
-		"skill_name":     "resume-interview",
-		"reference_name": "test-engineer",
-	})
-	require.NoError(t, err)
+	// Step 2: Verify references are included
+	refs, ok := loadDesc["references"].([]interface{})
+	require.True(t, ok, "should have references array")
+	assert.NotEmpty(t, refs, "references should not be empty")
 
-	var refData map[string]interface{}
-	require.NoError(t, json.Unmarshal([]byte(refResult), &refData))
-	assert.Equal(t, "test-engineer", refData["name"])
-	assert.NotEmpty(t, refData["content"])
+	// Verify test-engineer reference is in the references
+	found := false
+	for _, r := range refs {
+		ref := r.(map[string]interface{})
+		if ref["name"] == "test-engineer" {
+			found = true
+			assert.NotEmpty(t, ref["content"])
+			break
+		}
+	}
+	assert.True(t, found, "test-engineer should be in references")
 }
 
 // ---------------------------------------------------------------------------
@@ -663,6 +462,280 @@ func TestToolExecutor_GetIntParam_String(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Structured error feedback tests
+// ---------------------------------------------------------------------------
+
+func TestApplyEdits_StructuredErrorFeedback(t *testing.T) {
+	db := SetupTestDB(t)
+
+	draft := models.Draft{
+		ProjectID:   1,
+		HTMLContent: `<html><body><div class="experience"><h3>Google</h3><p>Senior Engineer</p></div></body></html>`,
+	}
+	require.NoError(t, db.Create(&draft).Error)
+
+	executor := NewAgentToolExecutor(db, nil)
+	ctx := WithDraftID(context.Background(), draft.ID)
+
+	params := map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string": "Sr. Engineer at Google",
+				"new_string": "Staff Engineer at Google",
+			},
+		},
+	}
+
+	_, err := executor.Execute(ctx, "apply_edits", params)
+	require.Error(t, err)
+
+	errMsg := err.Error()
+	assert.Contains(t, errMsg, "未找到匹配")
+	assert.Contains(t, errMsg, "搜索内容")
+	assert.Contains(t, errMsg, "建议")
+}
+
+func TestApplyEdits_ErrorIncludesNearbyHTML(t *testing.T) {
+	db := SetupTestDB(t)
+
+	longHTML := `<html><body>` + strings.Repeat("<p>filler content</p>", 50) +
+		`<div class="target"><span>Unique Target Text Here</span></div>` +
+		strings.Repeat("<p>more filler</p>", 50) + `</body></html>`
+
+	draft := models.Draft{ProjectID: 1, HTMLContent: longHTML}
+	require.NoError(t, db.Create(&draft).Error)
+
+	executor := NewAgentToolExecutor(db, nil)
+	ctx := WithDraftID(context.Background(), draft.ID)
+
+	params := map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string": "Unique Target Txt Here",
+				"new_string": "New Text",
+			},
+		},
+	}
+
+	_, err := executor.Execute(ctx, "apply_edits", params)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "附近")
+}
+
+// ---------------------------------------------------------------------------
+// get_draft multi-mode tests
+// ---------------------------------------------------------------------------
+
+func TestGetDraft_ModeStructure(t *testing.T) {
+	db := SetupTestDB(t)
+
+	html := `<html>
+	<head><style>body{font-size:14px}.header{color:red}</style></head>
+	<body>
+		<div class="header"><h1>John Doe</h1><p>Engineer</p></div>
+		<div class="experience"><h2>Experience</h2><div class="item"><h3>Google</h3></div></div>
+		<div class="education"><h2>Education</h2><div class="item"><h3>MIT</h3></div></div>
+	</body></html>`
+
+	draft := models.Draft{ProjectID: 1, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	executor := NewAgentToolExecutor(db, nil)
+	ctx := WithDraftID(context.Background(), draft.ID)
+
+	result, err := executor.Execute(ctx, "get_draft", map[string]interface{}{
+		"mode": "structure",
+	})
+	require.NoError(t, err)
+
+	assert.Contains(t, result, "<html>")
+	assert.Contains(t, result, "header")
+	assert.Contains(t, result, "experience")
+	assert.NotContains(t, result, "John Doe")
+	assert.NotContains(t, result, "Google")
+}
+
+func TestGetDraft_ModeSearch(t *testing.T) {
+	db := SetupTestDB(t)
+
+	html := `<html><body>
+		<div class="experience">
+			<h3>Google</h3>
+			<p>Senior Engineer 2020-2024, worked on search infrastructure and ML pipelines</p>
+		</div>
+		<div class="education">
+			<h3>MIT</h3>
+			<p>Computer Science, GPA 3.9</p>
+		</div>
+	</body></html>`
+
+	draft := models.Draft{ProjectID: 1, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	executor := NewAgentToolExecutor(db, nil)
+	ctx := WithDraftID(context.Background(), draft.ID)
+
+	result, err := executor.Execute(ctx, "get_draft", map[string]interface{}{
+		"mode":  "search",
+		"query": "Engineer",
+	})
+	require.NoError(t, err)
+
+	assert.Contains(t, result, "Senior Engineer")
+	assert.Contains(t, result, "Google")
+}
+
+func TestGetDraft_ModeSearch_MultipleResults(t *testing.T) {
+	db := SetupTestDB(t)
+
+	html := "<html><body>" + strings.Repeat("<p>section with keyword</p>\n", 10) + "</body></html>"
+
+	draft := models.Draft{ProjectID: 1, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	executor := NewAgentToolExecutor(db, nil)
+	ctx := WithDraftID(context.Background(), draft.ID)
+
+	result, err := executor.Execute(ctx, "get_draft", map[string]interface{}{
+		"mode":  "search",
+		"query": "keyword",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "keyword")
+	assert.Contains(t, result, "找到")
+}
+
+func TestGetDraft_ModeSection_BackwardCompatible(t *testing.T) {
+	db := SetupTestDB(t)
+
+	html := `<html><body>
+		<div class="experience"><h3>Google</h3><p>Engineer</p></div>
+		<div class="education"><h3>MIT</h3></div>
+	</body></html>`
+
+	draft := models.Draft{ProjectID: 1, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	executor := NewAgentToolExecutor(db, nil)
+	ctx := WithDraftID(context.Background(), draft.ID)
+
+	// Old selector param still works
+	result, err := executor.Execute(ctx, "get_draft", map[string]interface{}{
+		"selector": ".experience",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "Google")
+	assert.NotContains(t, result, "MIT")
+
+	// New mode=section + selector also works
+	result2, err := executor.Execute(ctx, "get_draft", map[string]interface{}{
+		"mode":     "section",
+		"selector": ".education",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result2, "MIT")
+	assert.NotContains(t, result2, "Google")
+}
+
+func TestGetDraft_ModeFull(t *testing.T) {
+	db := SetupTestDB(t)
+
+	html := `<html><body><h1>Test</h1></body></html>`
+	draft := models.Draft{ProjectID: 1, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	executor := NewAgentToolExecutor(db, nil)
+	ctx := WithDraftID(context.Background(), draft.ID)
+
+	result, err := executor.Execute(ctx, "get_draft", map[string]interface{}{
+		"mode": "full",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, html, result)
+}
+
+// ---------------------------------------------------------------------------
+// apply_edits step-by-step execution tests
+// ---------------------------------------------------------------------------
+
+func TestApplyEdits_StepByStep_PartialSuccess(t *testing.T) {
+	db := SetupTestDB(t)
+
+	html := `<html><body>
+		<p>Apple</p>
+		<p>Banana</p>
+		<p>Cherry</p>
+	</body></html>`
+
+	draft := models.Draft{ProjectID: 1, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	executor := NewAgentToolExecutor(db, nil)
+	ctx := WithDraftID(context.Background(), draft.ID)
+
+	params := map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string": "Apple",
+				"new_string": "Apricot",
+			},
+			map[string]interface{}{
+				"old_string": "NonExistent",
+				"new_string": "Something",
+			},
+		},
+	}
+
+	_, err := executor.Execute(ctx, "apply_edits", params)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "op #2")
+	assert.Contains(t, err.Error(), "部分成功")
+
+	// First op should have been applied
+	var updatedDraft models.Draft
+	require.NoError(t, db.Where("id = ?", draft.ID).First(&updatedDraft).Error)
+	assert.Contains(t, updatedDraft.HTMLContent, "Apricot")
+	assert.NotContains(t, updatedDraft.HTMLContent, "Apple")
+	assert.Contains(t, updatedDraft.HTMLContent, "Cherry")
+}
+
+func TestApplyEdits_StepByStep_ResultDetails(t *testing.T) {
+	db := SetupTestDB(t)
+
+	html := `<html><body><p>Hello World</p></body></html>`
+	draft := models.Draft{ProjectID: 1, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	executor := NewAgentToolExecutor(db, nil)
+	ctx := WithDraftID(context.Background(), draft.ID)
+
+	params := map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string": "Hello",
+				"new_string": "Hi",
+			},
+			map[string]interface{}{
+				"old_string": "World",
+				"new_string": "Earth",
+			},
+		},
+	}
+
+	result, err := executor.Execute(ctx, "apply_edits", params)
+	require.NoError(t, err)
+
+	var parsed struct {
+		Applied     int `json:"applied"`
+		NewSequence int `json:"new_sequence"`
+		Failed      int `json:"failed"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(result), &parsed))
+	assert.Equal(t, 2, parsed.Applied)
+	assert.Equal(t, 0, parsed.Failed)
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -672,3 +745,243 @@ func strPtr(s string) *string {
 
 // Ensure DraftEdit model is properly used in tests
 var _ time.Time
+
+// ---------------------------------------------------------------------------
+// get_draft call counting tests
+// ---------------------------------------------------------------------------
+
+func TestGetDraft_CallCounting_RejectsAfterLimit(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db, nil)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	html := `<html><body><h1>Test</h1></body></html>`
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	sessionID := uint(999)
+	ctx := WithDraftID(WithSessionID(context.Background(), sessionID), draft.ID)
+
+	// Call 1: should succeed
+	result1, err := executor.Execute(ctx, "get_draft", map[string]interface{}{"mode": "structure"})
+	require.NoError(t, err)
+	assert.NotEmpty(t, result1)
+
+	// Call 2: should succeed
+	result2, err := executor.Execute(ctx, "get_draft", map[string]interface{}{"mode": "full"})
+	require.NoError(t, err)
+	assert.Equal(t, html, result2)
+
+	// Call 3: should be rejected
+	result3, err := executor.Execute(ctx, "get_draft", map[string]interface{}{"mode": "full"})
+	require.NoError(t, err, "should not return error, just rejection message")
+	assert.Contains(t, result3, "已经读取")
+	assert.Contains(t, result3, "apply_edits")
+	assert.NotContains(t, result3, "<html>", "should not return HTML content after limit")
+}
+
+func TestGetDraft_CallCounting_ResetsAfterClearSessionState(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db, nil)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	html := `<html><body><h1>Test</h1></body></html>`
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	sessionID := uint(998)
+	ctx := WithDraftID(WithSessionID(context.Background(), sessionID), draft.ID)
+
+	// Exhaust the limit
+	executor.Execute(ctx, "get_draft", nil)
+	executor.Execute(ctx, "get_draft", nil)
+	result3, _ := executor.Execute(ctx, "get_draft", nil)
+	assert.Contains(t, result3, "已经读取")
+
+	// Clear session state
+	executor.ClearSessionState(sessionID)
+
+	// Should work again after clear
+	result4, err := executor.Execute(ctx, "get_draft", map[string]interface{}{"mode": "structure"})
+	require.NoError(t, err)
+	assert.NotContains(t, result4, "已经读取")
+	assert.NotEmpty(t, result4)
+}
+
+func TestGetDraft_CallCounting_IndependentPerSession(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db, nil)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	html := `<html><body><h1>Test</h1></body></html>`
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	ctx1 := WithDraftID(WithSessionID(context.Background(), 501), draft.ID)
+	ctx2 := WithDraftID(WithSessionID(context.Background(), 502), draft.ID)
+
+	// Session 1 exhausts limit
+	executor.Execute(ctx1, "get_draft", nil)
+	executor.Execute(ctx1, "get_draft", nil)
+	executor.Execute(ctx1, "get_draft", nil)
+
+	// Session 2 should still work
+	result, err := executor.Execute(ctx2, "get_draft", map[string]interface{}{"mode": "structure"})
+	require.NoError(t, err)
+	assert.NotContains(t, result, "已经读取")
+}
+
+func TestGetDraft_ToolDescription_IncludesCallLimit(t *testing.T) {
+	executor := NewAgentToolExecutor(nil, nil)
+	tools := executor.Tools(context.Background())
+
+	var getDraft ToolDef
+	for _, tool := range tools {
+		if tool.Name == "get_draft" {
+			getDraft = tool
+			break
+		}
+	}
+
+	assert.Contains(t, getDraft.Description, "最多调用 2 次",
+		"description should mention call limit")
+	assert.NotContains(t, getDraft.Description, "首次调用请使用 structure",
+		"description should not encourage specific first-call behavior")
+}
+
+func TestApplyEdits_FailureIncludesRecoveryHint(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db, nil)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	html := `<html><body><h1>Title</h1></body></html>`
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	ctx := WithDraftID(context.Background(), draft.ID)
+	_, err := executor.Execute(ctx, "apply_edits", map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string": "NonExistent",
+				"new_string": "Something",
+			},
+		},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "更短的唯一片段",
+		"error should include recovery hint about using shorter fragments")
+}
+
+func TestSkillLoader_LoadSkillWithReferences(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+
+	result, err := loader.LoadSkillWithReferences("resume-design")
+	require.NoError(t, err)
+
+	assert.Equal(t, "resume-design", result.Name)
+	assert.NotEmpty(t, result.Description)
+	assert.NotEmpty(t, result.Usage)
+	assert.NotEmpty(t, result.References, "should include all reference content")
+
+	// Verify a4-guidelines reference is included
+	found := false
+	for _, ref := range result.References {
+		if ref.Name == "a4-guidelines" {
+			found = true
+			assert.NotEmpty(t, ref.Content)
+			break
+		}
+	}
+	assert.True(t, found, "a4-guidelines reference should be included")
+}
+
+func TestSkillLoader_LoadSkillWithReferences_NotFound(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+
+	_, err = loader.LoadSkillWithReferences("nonexistent")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "skill not found")
+}
+
+func TestTools_ContainsLoadSkill(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+	tools := executor.Tools(context.Background())
+
+	names := make([]string, len(tools))
+	for i, tool := range tools {
+		names[i] = tool.Name
+	}
+
+	assert.Contains(t, names, "load_skill", "should have load_skill tool")
+	assert.NotContains(t, names, "resume-design", "should not have individual skill tools")
+	assert.NotContains(t, names, "resume-interview", "should not have individual skill tools")
+	assert.NotContains(t, names, "get_skill_reference", "should not have get_skill_reference")
+}
+
+func TestLoadSkill_ExecutesAndReturnsFullContent(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+
+	ctx := WithSessionID(context.Background(), 600)
+	result, err := executor.Execute(ctx, "load_skill", map[string]interface{}{
+		"skill_name": "resume-design",
+	})
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &data))
+	assert.Equal(t, "resume-design", data["name"])
+	assert.NotEmpty(t, data["description"])
+	assert.NotEmpty(t, data["usage"])
+
+	refs, ok := data["references"].([]interface{})
+	require.True(t, ok, "should have references array")
+	assert.NotEmpty(t, refs, "references should not be empty")
+
+	// Verify a4-guidelines is in the references
+	found := false
+	for _, r := range refs {
+		ref := r.(map[string]interface{})
+		if ref["name"] == "a4-guidelines" {
+			found = true
+			assert.NotEmpty(t, ref["content"])
+			break
+		}
+	}
+	assert.True(t, found, "a4-guidelines should be in references")
+}
+
+func TestLoadSkill_NotFound(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+
+	result, err := executor.Execute(context.Background(), "load_skill", map[string]interface{}{
+		"skill_name": "nonexistent",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result, "skill not found")
+}
+
+func TestLoadSkill_MissingParam(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+	executor := NewAgentToolExecutor(nil, loader)
+
+	result, err := executor.Execute(context.Background(), "load_skill", nil)
+	require.NoError(t, err)
+	assert.Contains(t, result, "skill_name")
+}

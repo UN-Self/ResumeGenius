@@ -64,31 +64,83 @@ type ToolExecutor interface {
 	ClearSessionState(sessionID uint)
 }
 
+// HTMLRepository abstracts draft HTML operations for testability.
+type HTMLRepository interface {
+	GetDraft(ctx context.Context, draftID uint) (string, error)
+	GetDraftStructure(ctx context.Context, draftID uint) (string, error)
+	SearchInDraft(ctx context.Context, draftID uint, query string) (string, error)
+	GetDraftSection(ctx context.Context, draftID uint, selector string) (string, error)
+	ApplyEdits(ctx context.Context, draftID uint, ops []EditOp) (*ApplyEditsResult, error)
+}
+
+// AssetRepository abstracts asset search operations.
+type AssetRepository interface {
+	SearchAssets(ctx context.Context, projectID uint, query, assetType string, limit int) ([]AssetResult, error)
+}
+
+// EditOp represents a single edit operation.
+type EditOp struct {
+	OldString   string `json:"old_string"`
+	NewString   string `json:"new_string"`
+	Description string `json:"description,omitempty"`
+}
+
+// ApplyEditsResult is the result of applying edits.
+type ApplyEditsResult struct {
+	Applied     int `json:"applied"`
+	Failed      int `json:"failed"`
+	NewSequence int `json:"new_sequence"`
+}
+
+// AssetResult is a search result from assets.
+type AssetResult struct {
+	ID        uint   `json:"id"`
+	Type      string `json:"type"`
+	Label     string `json:"label"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"created_at"`
+}
+
 // AgentToolExecutor implements ToolExecutor using database queries.
 type AgentToolExecutor struct {
-	db           *gorm.DB
-	skillLoader  *SkillLoader
-	loadedSkills sync.Map // sessionID -> map[string]bool (loaded skill names)
+	db               *gorm.DB
+	skillLoader      *SkillLoader
+	getDraftCallCount sync.Map // sessionID -> int
+	cachedTools      []ToolDef
 }
 
 // NewAgentToolExecutor creates a new AgentToolExecutor.
 func NewAgentToolExecutor(db *gorm.DB, skillLoader *SkillLoader) *AgentToolExecutor {
-	return &AgentToolExecutor{db: db, skillLoader: skillLoader}
+	e := &AgentToolExecutor{db: db, skillLoader: skillLoader}
+	e.cachedTools = e.buildTools()
+	return e
 }
 
-// Tools returns the AI-callable tool definitions.
-func (e *AgentToolExecutor) Tools(ctx context.Context) []ToolDef {
-	// 1. Base tools (fixed)
+// Tools returns the AI-callable tool definitions (cached).
+func (e *AgentToolExecutor) Tools(_ context.Context) []ToolDef {
+	return e.cachedTools
+}
+
+func (e *AgentToolExecutor) buildTools() []ToolDef {
 	tools := []ToolDef{
 		{
 			Name:        "get_draft",
-			Description: "读取当前简历 HTML。不带参数返回完整 HTML，带 selector 参数只返回匹配的片段（CSS 选择器）。",
+			Description: "获取简历 HTML 内容。支持 4 种模式：structure（结构概览，不含文本）、section（按 CSS selector 获取指定区域）、search（搜索包含关键词的片段）、full（完整 HTML）。最多调用 2 次（structure + full），之后必须用 apply_edits 编辑。",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
+					"mode": map[string]interface{}{
+						"type":        "string",
+						"description": "查询模式：structure（结构概览）、section（指定区域）、search（关键词搜索）、full（完整内容）。默认 full。",
+						"enum":        []string{"structure", "section", "search", "full"},
+					},
 					"selector": map[string]interface{}{
 						"type":        "string",
-						"description": "CSS 选择器，例如 '#experience'、'.skill-item'。不传则返回完整 HTML。",
+						"description": "CSS 选择器，mode=section 时使用。例如 .experience、#education",
+					},
+					"query": map[string]interface{}{
+						"type":        "string",
+						"description": "搜索关键词，mode=search 时使用。返回包含关键词的 HTML 片段（±200 字符上下文）。",
 					},
 				},
 				"required": []string{},
@@ -132,39 +184,19 @@ func (e *AgentToolExecutor) Tools(ctx context.Context) []ToolDef {
 		},
 	}
 
-	// 2. Skill tools (auto-generated from SkillLoader, no parameters)
 	if e.skillLoader != nil {
-		for _, skill := range e.skillLoader.Skills() {
-			tools = append(tools, ToolDef{
-				Name:        skill.Name,
-				Description: skill.Description,
-				Parameters: map[string]interface{}{
-					"type":       "object",
-					"properties": map[string]interface{}{},
-				},
-			})
-		}
-	}
-
-	// 3. Sub-tools (dynamically injected based on loaded skills)
-	sessionID, _ := ctx.Value(sessionIDKey).(uint)
-	if e.hasLoadedSkills(sessionID) {
 		tools = append(tools, ToolDef{
-			Name:        "get_skill_reference",
-			Description: "获取技能库中指定岗位的面经内容或设计规范。必须先调用对应技能工具。",
+			Name:        "load_skill",
+			Description: "加载技能参考内容。返回技能描述和全部参考文档。调用后按返回的 usage 指引操作。",
 			Parameters: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"skill_name": map[string]interface{}{
 						"type":        "string",
-						"description": "技能名称，如 'resume-interview'、'resume-design'",
-					},
-					"reference_name": map[string]interface{}{
-						"type":        "string",
-						"description": "reference 名称，如 'test-engineer'、'a4-guidelines'",
+						"description": "技能名称，如 'resume-design'、'resume-interview'",
 					},
 				},
-				"required": []string{"skill_name", "reference_name"},
+				"required": []string{"skill_name"},
 			},
 		})
 	}
@@ -189,15 +221,10 @@ func (e *AgentToolExecutor) Execute(ctx context.Context, toolName string, params
 		result, err = e.applyEdits(ctx, params)
 	case "search_assets":
 		result, err = e.searchAssets(ctx, params)
-	case "get_skill_reference":
-		result, err = e.getSkillReference(ctx, params)
+	case "load_skill":
+		result, err = e.loadSkill(ctx, params)
 	default:
-		// Check if it's a skill tool
-		if e.skillLoader != nil && e.skillLoader.HasSkill(toolName) {
-			result, err = e.executeSkillTool(ctx, toolName)
-		} else {
-			return "", fmt.Errorf("unknown tool: %s", toolName)
-		}
+		return "", fmt.Errorf("unknown tool: %s", toolName)
 	}
 
 	if err != nil {
@@ -209,109 +236,35 @@ func (e *AgentToolExecutor) Execute(ctx context.Context, toolName string, params
 }
 
 // ---------------------------------------------------------------------------
-// skill tool execution
+// load_skill
 // ---------------------------------------------------------------------------
 
-func (e *AgentToolExecutor) executeSkillTool(ctx context.Context, skillName string) (string, error) {
-	if e.skillLoader == nil {
-		return `{"error":"技能库未加载"}`, nil
-	}
-
-	debugLog("tools", "加载技能 %s", skillName)
-
-	desc, err := e.skillLoader.LoadSkill(skillName)
-	if err != nil {
-		return fmt.Sprintf(`{"error":"%s"}`, err.Error()), nil
-	}
-
-	// Mark skill as loaded for this session.
-	if sessionID, ok := ctx.Value(sessionIDKey).(uint); ok {
-		e.markSkillLoaded(sessionID, skillName)
-	}
-
-	b, err := json.Marshal(desc)
-	if err != nil {
-		return "", fmt.Errorf("marshal skill descriptor: %w", err)
-	}
-	return string(b), nil
-}
-
-// ---------------------------------------------------------------------------
-// get_skill_reference
-// ---------------------------------------------------------------------------
-
-func (e *AgentToolExecutor) getSkillReference(ctx context.Context, params map[string]interface{}) (string, error) {
+func (e *AgentToolExecutor) loadSkill(ctx context.Context, params map[string]interface{}) (string, error) {
 	if e.skillLoader == nil {
 		return `{"error":"技能库未加载"}`, nil
 	}
 
 	skillName, _ := params["skill_name"].(string)
-	refName, _ := params["reference_name"].(string)
-
 	if skillName == "" {
 		return `{"error":"skill_name is required"}`, nil
 	}
-	if refName == "" {
-		return `{"error":"reference_name is required"}`, nil
-	}
 
-	// Check that the skill has been loaded first (order enforcement).
-	if sessionID, ok := ctx.Value(sessionIDKey).(uint); ok {
-		if !e.isSkillLoaded(sessionID, skillName) {
-			return fmt.Sprintf(`{"error":"skill '%s' not loaded: call '%s' tool first"}`, skillName, skillName), nil
-		}
-	}
+	debugLog("tools", "加载技能 %s（含全部参考文档）", skillName)
 
-	debugLog("tools", "获取技能参考文档 %s/%s", skillName, refName)
-
-	ref, err := e.skillLoader.GetReference(skillName, refName)
+	result, err := e.skillLoader.LoadSkillWithReferences(skillName)
 	if err != nil {
 		return fmt.Sprintf(`{"error":"%s"}`, err.Error()), nil
 	}
 
-	b, err := json.Marshal(ref)
+	b, err := json.Marshal(result)
 	if err != nil {
-		return "", fmt.Errorf("marshal reference: %w", err)
+		return "", fmt.Errorf("marshal skill: %w", err)
 	}
 	return string(b), nil
 }
 
-// ---------------------------------------------------------------------------
-// session skill tracking helpers
-// ---------------------------------------------------------------------------
-
-func (e *AgentToolExecutor) markSkillLoaded(sessionID uint, skillName string) {
-	val, _ := e.loadedSkills.LoadOrStore(sessionID, &sync.Map{})
-	m := val.(*sync.Map)
-	m.Store(skillName, true)
-}
-
-func (e *AgentToolExecutor) isSkillLoaded(sessionID uint, skillName string) bool {
-	val, ok := e.loadedSkills.Load(sessionID)
-	if !ok {
-		return false
-	}
-	m := val.(*sync.Map)
-	_, loaded := m.Load(skillName)
-	return loaded
-}
-
 func (e *AgentToolExecutor) ClearSessionState(sessionID uint) {
-	e.loadedSkills.Delete(sessionID)
-}
-
-func (e *AgentToolExecutor) hasLoadedSkills(sessionID uint) bool {
-	val, ok := e.loadedSkills.Load(sessionID)
-	if !ok {
-		return false
-	}
-	m := val.(*sync.Map)
-	has := false
-	m.Range(func(_, _ interface{}) bool {
-		has = true
-		return false
-	})
-	return has
+	e.getDraftCallCount.Delete(sessionID)
 }
 
 // ---------------------------------------------------------------------------
@@ -324,37 +277,128 @@ func (e *AgentToolExecutor) getDraft(ctx context.Context, params map[string]inte
 		return "", errors.New("draft_id not found in context")
 	}
 
+	// Track and limit get_draft calls per session
+	sessionID, _ := ctx.Value(sessionIDKey).(uint)
+	const maxGetDraftCalls = 2
+	if sessionID > 0 {
+		countVal, _ := e.getDraftCallCount.LoadOrStore(sessionID, new(int))
+		count := countVal.(*int)
+		*count++
+		if *count > maxGetDraftCalls {
+			debugLog("tools", "get_draft 调用被拒绝，session=%d 已调用 %d 次", sessionID, *count)
+			return fmt.Sprintf("你已经读取了简历 %d 次，内容没有变化。请直接使用 apply_edits 编辑简历，不要再调用 get_draft。", *count), nil
+		}
+	}
+
 	var draft models.Draft
-	if err := e.db.WithContext(ctx).Select("html_content").First(&draft, draftID).Error; err != nil {
+	if err := e.db.WithContext(ctx).Select("id", "html_content").First(&draft, draftID).Error; err != nil {
 		return "", fmt.Errorf("get draft: %w", err)
 	}
 
-	selector, _ := params["selector"].(string)
-	if selector == "" {
-		debugLog("tools", "get_draft，返回完整 HTML 长度 %d", len(draft.HTMLContent))
-		return draft.HTMLContent, nil
+	// Parse mode parameter, default "full" (backward compatible)
+	mode := "full"
+	if m, ok := params["mode"].(string); ok && m != "" {
+		mode = m
 	}
 
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(draft.HTMLContent))
-	if err != nil {
-		return "", fmt.Errorf("parse HTML: %w", err)
+	// Backward compatible: selector without mode → section
+	selector, _ := params["selector"].(string)
+	if selector != "" && mode == "full" {
+		mode = "section"
 	}
-	html, err := doc.Find(selector).Html()
-	if err != nil {
-		return "", fmt.Errorf("extract selector: %w", err)
+
+	switch mode {
+	case "structure":
+		debugLog("tools", "get_draft mode=structure")
+		structure := BuildStructureOverview(draft.HTMLContent)
+		if structure == "" {
+			return "当前简历 HTML 为空，请直接使用 apply_edits 创建完整简历内容。", nil
+		}
+		return structure, nil
+
+	case "section":
+		if selector == "" {
+			return "", fmt.Errorf("mode=section 需要 selector 参数")
+		}
+		doc, err := goquery.NewDocumentFromReader(strings.NewReader(draft.HTMLContent))
+		if err != nil {
+			return "", fmt.Errorf("parse HTML: %w", err)
+		}
+		selection := doc.Find(selector)
+		if selection.Length() == 0 {
+			return "", fmt.Errorf("selector %q 未匹配到任何元素", selector)
+		}
+		html, err := selection.Html()
+		if err != nil {
+			return "", fmt.Errorf("extract selector: %w", err)
+		}
+		debugLog("tools", "get_draft mode=section selector=%s len=%d", selector, len(html))
+		return html, nil
+
+	case "search":
+		query, _ := params["query"].(string)
+		if query == "" {
+			return "", fmt.Errorf("mode=search 需要 query 参数")
+		}
+		debugLog("tools", "get_draft mode=search query=%s", query)
+		return searchInDraft(draft.HTMLContent, query), nil
+
+	case "full":
+		runes := []rune(draft.HTMLContent)
+		if len(runes) == 0 {
+			return "当前简历 HTML 为空，请直接使用 apply_edits 创建完整简历内容。", nil
+		}
+		debugLog("tools", "get_draft mode=full len=%d", len(draft.HTMLContent))
+		return draft.HTMLContent, nil
+
+	default:
+		return "", fmt.Errorf("未知 mode: %s，支持 structure/section/search/full", mode)
 	}
-	debugLog("tools", "get_draft，selector=%s，返回 HTML 长度 %d", selector, len(html))
-	return html, nil
 }
 
 // ---------------------------------------------------------------------------
 // apply_edits
 // ---------------------------------------------------------------------------
 
-type editOp struct {
-	OldString   string `json:"old_string"`
-	NewString   string `json:"new_string"`
-	Description string `json:"description"`
+// buildEditMatchError constructs a structured error when old_string is not found in HTML.
+func buildEditMatchError(oldString, html string) string {
+	var b strings.Builder
+	b.WriteString("未找到匹配内容\n\n")
+
+	b.WriteString("搜索内容: ")
+	b.WriteString(truncateString(oldString, 100))
+	b.WriteString("\n\n")
+
+	matchResult, score := FindBestMatchNode(html, oldString)
+
+	b.WriteString("可能原因: ")
+	if matchResult != nil && score > 0.3 {
+		b.WriteString("缩进/换行不一致或片段跨越标签边界")
+	} else if matchResult != nil && score > 0.1 {
+		b.WriteString("HTML 已被修改，内容部分匹配")
+	} else {
+		b.WriteString("HTML 中不存在相似内容，可能已被完全替换")
+	}
+	b.WriteString("\n\n")
+
+	b.WriteString("附近 HTML 片段:\n")
+	if matchResult != nil {
+		snippet := TruncateAroundMatch(html, oldString, 200)
+		b.WriteString(snippet)
+	} else {
+		overview := BuildStructureOverview(html)
+		if len(overview) > 0 {
+			b.WriteString("当前 HTML 结构:\n")
+			b.WriteString(truncateString(overview, 500))
+		} else {
+			b.WriteString(truncateString(html, 500))
+		}
+	}
+	b.WriteString("\n\n")
+
+	b.WriteString("建议: 使用更短的唯一片段重新搜索，确保文本精确匹配（包括空格和换行）。不要重新调用 get_draft，直接用更短的 old_string 重试 apply_edits。")
+
+	return b.String()
 }
 
 func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]interface{}) (string, error) {
@@ -374,7 +418,7 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 		return "", fmt.Errorf("ops must be an array, got %T", opsRaw)
 	}
 
-	var ops []editOp
+	var ops []EditOp
 	for i, opRaw := range opsSlice {
 		opMap, ok := opRaw.(map[string]interface{})
 		if !ok {
@@ -389,7 +433,7 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 			return "", fmt.Errorf("ops[%d].new_string must be a string", i)
 		}
 		desc, _ := opMap["description"].(string)
-		ops = append(ops, editOp{OldString: oldStr, NewString: newStr, Description: desc})
+		ops = append(ops, EditOp{OldString: oldStr, NewString: newStr, Description: desc})
 	}
 
 	if len(ops) == 0 {
@@ -399,8 +443,14 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 	debugLog("tools", "apply_edits 开始，共 %d 个操作", len(ops))
 	start := time.Now()
 
-	// Use a closure variable to capture the result from within the transaction.
-	var result string
+	// Step-by-step execution (non-atomic: successful ops preserved on partial failure)
+	var resultData struct {
+		Applied     int `json:"applied"`
+		Failed      int `json:"failed"`
+		NewSequence int `json:"new_sequence"`
+	}
+	var lastErr error
+
 	err := e.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 1. Get current draft
 		var draft models.Draft
@@ -425,25 +475,19 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 			}
 		}
 
-		// 3. Validate all ops first (dry run)
+		nextSeq := draft.CurrentEditSequence + 1
+
+		// 3. Apply ops step by step
 		for i, op := range ops {
 			if !strings.Contains(html, op.OldString) {
-				oldPreview := truncateDebug(op.OldString, 100)
-				htmlPreview := truncateDebug(html, 200)
-				debugLog("tools", "操作 %d 验证失败: old_string 未找到: %s", i, truncateHTML(op.OldString))
-				debugLogFull("tools", fmt.Sprintf("apply_edits 操作 %d 失败 - 完整 new_string", i), op.NewString)
-				return fmt.Errorf("old_string not found in current draft. old_string前100字符: %q | 当前HTML前200字符: %q", oldPreview, htmlPreview)
+				lastErr = fmt.Errorf("op #%d 匹配失败:\n%s", i+1, buildEditMatchError(op.OldString, html))
+				resultData.Failed++
+				continue
 			}
-		}
 
-		// 4. Apply all ops for real
-		nextSeq := draft.CurrentEditSequence + 1
-		applied := 0
-		for i, op := range ops {
 			debugLog("tools", "操作 %d/%d: old=%s → new=%s", i+1, len(ops), truncateHTML(op.OldString), truncateHTML(op.NewString))
 			html = strings.ReplaceAll(html, op.OldString, op.NewString)
 
-			// 5. Record each op as DraftEdit with HtmlSnapshot
 			edit := models.DraftEdit{
 				DraftID:      draftID,
 				Sequence:     nextSeq,
@@ -457,27 +501,20 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 				return fmt.Errorf("record edit: %w", err)
 			}
 			nextSeq++
-			applied++
+			resultData.Applied++
 		}
 
-		// 6. Update draft's HTMLContent and CurrentEditSequence
-		if err := tx.Model(&models.Draft{}).Where("id = ?", draftID).Updates(map[string]interface{}{
-			"html_content":          html,
-			"current_edit_sequence": nextSeq - 1,
-		}).Error; err != nil {
-			return fmt.Errorf("update draft: %w", err)
+		// 4. Update draft (even with partial failure, preserve successful ops)
+		if resultData.Applied > 0 {
+			if err := tx.Model(&models.Draft{}).Where("id = ?", draftID).Updates(map[string]interface{}{
+				"html_content":          html,
+				"current_edit_sequence": nextSeq - 1,
+			}).Error; err != nil {
+				return fmt.Errorf("update draft: %w", err)
+			}
 		}
 
-		// 7. Build result
-		resultData := map[string]interface{}{
-			"applied":      applied,
-			"new_sequence": nextSeq - 1,
-		}
-		b, err := json.Marshal(resultData)
-		if err != nil {
-			return fmt.Errorf("marshal result: %w", err)
-		}
-		result = string(b)
+		resultData.NewSequence = nextSeq - 1
 		return nil
 	})
 
@@ -485,10 +522,22 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 		debugLog("tools", "apply_edits 失败，耗时 %v: %v", time.Since(start), err)
 		opsJSON, _ := json.Marshal(ops)
 		debugLogFull("tools", "apply_edits 失败 - 完整 ops", string(opsJSON))
-	} else {
-		debugLog("tools", "apply_edits 完成，耗时 %v", time.Since(start))
+		return "", err
 	}
-	return result, err
+
+	b, _ := json.Marshal(resultData)
+	result := string(b)
+
+	if lastErr != nil {
+		debugLog("tools", "apply_edits 部分成功 (%d/%d applied, %d failed), 耗时 %v",
+			resultData.Applied, len(ops), resultData.Failed, time.Since(start))
+		return result, fmt.Errorf("部分成功 (%d/%d applied, %d failed): %w",
+			resultData.Applied, len(ops), resultData.Failed, lastErr)
+	}
+
+	debugLog("tools", "apply_edits 完成，applied=%d new_sequence=%d, 耗时 %v",
+		resultData.Applied, resultData.NewSequence, time.Since(start))
+	return result, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -551,9 +600,7 @@ func (e *AgentToolExecutor) searchAssets(ctx context.Context, params map[string]
 		}
 		if a.Content != nil {
 			content := *a.Content
-			if len(content) > 2000 {
-				content = content[:2000] + "...(truncated)"
-			}
+			content = truncateWithNotice(content, 2000, "...(truncated)")
 			ar.Content = content
 		}
 		results = append(results, ar)

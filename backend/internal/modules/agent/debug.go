@@ -26,14 +26,7 @@ func debugLogFull(component string, label string, content string) {
 
 // truncateDebug truncates s to maxLen runes, appending "..." if truncated.
 func truncateDebug(s string, maxLen int) string {
-	if maxLen <= 0 {
-		return s
-	}
-	runes := []rune(s)
-	if len(runes) <= maxLen {
-		return s
-	}
-	return string(runes[:maxLen]) + "..."
+	return truncateWithNotice(s, maxLen, "...")
 }
 
 // truncateHTML truncates HTML content to 200 runes.
