@@ -32,6 +32,14 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
       apply(tr, value: SmartSplitState): SmartSplitState {
         const isOwnDispatch = !!tr.getMeta(pluginKey)?.ownDispatch
         if (isOwnDispatch !== value.isOwnDispatch) {
+          // Preserve ownDispatch for meta-only transactions (e.g. PaginationPlus
+          // page-count updates via rAF). These don't change the document and
+          // must NOT re-trigger detection, otherwise a feedback loop forms:
+          // split → layout change → page count change → meta dispatch →
+          // isOwnDispatch reset → re-detection → split again.
+          if (value.isOwnDispatch && !isOwnDispatch && !tr.docChanged) {
+            return value
+          }
           return { ...value, isOwnDispatch }
         }
         return value
