@@ -266,7 +266,7 @@ func TestWrapWithTemplate_PageMarginInsteadOfDivPadding(t *testing.T) {
 	// Margins in px at 96dpi. All font rendering properties match editor.
 	assert.Contains(t, result, "padding: 0 76px 0 76px",
 		".resume-page should have symmetrical left/right padding")
-	assert.Contains(t, result, "@page { size: A4; margin: 56px 0 0 0; }",
+	assert.Contains(t, result, "@page { size: A4; margin: 42px 0 0 0; }",
 		"PDF top margin should match the editor A4 start position")
 	assert.Contains(t, result, "border: 1px solid transparent",
 		".resume-page should have transparent border to match PaginationPlus border")
