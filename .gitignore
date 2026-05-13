@@ -33,6 +33,7 @@ data
 .claude
 .superpowers
 .worktrees
+Claude-Code/
 
 # ===========================
 # Logs
