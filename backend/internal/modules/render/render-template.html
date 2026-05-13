@@ -1,17 +1,31 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <style>
 .resume-page {
   box-sizing: border-box;
-  padding: 0;
+  border: 1px solid transparent;
+  padding: 0 76px 0 76px;
   background: #ffffff;
   color: #333333;
   font-family: "Inter", "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif;
   font-size: 14px;
   line-height: 1.5;
-  white-space: pre-wrap;
+  white-space: break-spaces;
+  /* Match editor text rendering: disable ligatures so glyph widths are identical. */
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "palt" 0, "pwid" 0, "halt" 0, "hkna" 0, "nalt" 0, "fwid" 0;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: 0;
+  word-spacing: 0;
+  word-wrap: break-word;
+  font-kerning: normal;
+  font-synthesis: none;
+  tab-size: 4;
+  -webkit-text-size-adjust: 100%;
+  font-variant-east-asian: normal;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
@@ -38,9 +52,9 @@
 .resume-page ol { list-style-type: decimal; }
 .resume-page li { margin-bottom: 4px; }
 .resume-page li p { display: inline; }
-/* bottom margin 14mm < editor 18mm: PDF content area is intentionally larger
+/* bottom margin 0 < editor 18mm: PDF content area is intentionally larger
    so content that fits one page in the editor won't spill to two pages in PDF */
-@page { size: A4; margin: 18mm 20mm 14mm 20mm; }
+@page { size: A4; margin: 68px 0 0 0; }
 </style>
 </head>
 <body style="margin:0;padding:0;">

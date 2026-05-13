@@ -961,6 +961,14 @@
   color: var(--resume-document-text, #333333);
   outline: none;
   white-space: pre-wrap;
+  letter-spacing: 0;
+  word-spacing: 0;
+  word-wrap: break-word;
+  font-kerning: normal;
+  font-synthesis: none;
+  font-variant-east-asian: normal;
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "palt" 0, "pwid" 0, "halt" 0, "hkna" 0, "nalt" 0, "fwid" 0;
 }
 
 .ProseMirror h1 {

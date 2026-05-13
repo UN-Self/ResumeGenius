@@ -252,18 +252,28 @@ func TestWrapWithTemplate_ReplacesPlaceholder(t *testing.T) {
 	assert.Contains(t, result, ".resume-page h1")
 	assert.Contains(t, result, "@page")
 	assert.Contains(t, result, "box-sizing: border-box")
-	assert.Contains(t, result, "white-space: pre-wrap")
+	assert.Contains(t, result, "white-space: break-spaces")
 	assert.NotContains(t, result, "{{CONTENT}}")
 }
 
 func TestWrapWithTemplate_PageMarginInsteadOfDivPadding(t *testing.T) {
 	result := wrapWithTemplate("<h1>Hello</h1>")
 
-	// @page rule should carry the margin (not the .resume-page div)
-	assert.Contains(t, result, "@page { size: A4; margin: 18mm 20mm 14mm 20mm; }",
-		"@page should specify margin: 18mm 20mm 14mm 20mm so that every PDF page (including page 2+) gets top margin with reduced bottom for editor/PDF sync")
-	assert.NotContains(t, result, "padding: 18mm 20mm",
-		".resume-page should NOT have padding: 18mm 20mm; margin belongs on @page instead")
+	// Margins in px at 96dpi. All font rendering properties match editor.
+	assert.Contains(t, result, "padding: 0 76px 0 76px",
+		".resume-page should have symmetrical left/right padding")
+	assert.Contains(t, result, "border: 1px solid transparent",
+		".resume-page should have transparent border to match PaginationPlus border")
+	assert.Contains(t, result, "white-space: break-spaces",
+		".resume-page should use break-spaces to match ProseMirror")
+	assert.Contains(t, result, "font-variant-ligatures: none",
+		".resume-page should disable ligatures to match ProseMirror")
+	assert.Contains(t, result, "text-rendering: optimizeLegibility",
+		".resume-page should match editor text-rendering")
+	assert.NotContains(t, result, "width: 210mm",
+		".resume-page should not set explicit width: 210mm")
+	assert.NotContains(t, result, "min-height: 297mm",
+		".resume-page should not set explicit min-height: 297mm")
 	// .resume-page should NOT set explicit width/min-height that overflows @page content area
 	assert.NotContains(t, result, "width: 210mm",
 		".resume-page should not set width: 210mm — with @page margin the content area is only 170mm wide")
