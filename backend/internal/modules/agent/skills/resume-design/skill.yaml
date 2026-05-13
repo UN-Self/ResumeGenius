@@ -4,19 +4,17 @@ description: |
 trigger: 用户要求调整简历样式或需要设计参考时
 
 usage: |
-  1. 调用 get_skill_reference(skill_name="resume-design", reference_name="a4-guidelines") 获取完整规范
-  2. 基于规范中的推荐样式和禁止样式修改简历 CSS
+  1. 调用 load_skill(skill_name="resume-design") 获取完整规范和模板参考
+  2. 基于规范中的推荐样式、页面外壳禁区和禁止样式修改简历 CSS
+  3. 只生成系统 A4 画布内的正文内容，不要生成网页外壳、灰底预览卡片、整页边框或阴影
 
 tools:
-  - name: get_skill_reference
-    description: 获取 A4 简历设计规范
+  - name: load_skill
+    description: 获取 A4 简历设计规范和模板参考
     params:
       - name: skill_name
         type: string
         description: 固定传 "resume-design"
-      - name: reference_name
-        type: string
-        description: 固定传 "a4-guidelines"
 
 references:
   - name: a4-guidelines

@@ -85,6 +85,9 @@ const a4ConstraintsSection = `## A4 简历硬约束
 - 字体必须支持中文渲染；禁止使用仅含拉丁字符的字体（如 Inter、Roboto 单独指定）；中文内容必须落在含有 "Noto Sans CJK SC"、"Microsoft YaHei"、"PingFang SC" 或系统 sans-serif 回退的字体栈中
 - 技能列表必须可换行、可读，禁止做成长串不换行的技能胶囊或大块色卡
 - 禁止使用 landing page、hero、dashboard、bento/card grid、glassmorphism、aurora、3D、霓虹、复杂渐变、大面积紫蓝/粉色背景、纹理背景、动画、发光、厚重阴影、过度圆角和装饰图形
+- 系统已经提供 A4 纸张、页边距、分页和导出外壳；你只生成简历正文内容和正文样式，不要再生成网页外壳或预览卡片
+- 禁止用 html、body、.resume-page、.resume-document、顶层 .page、顶层 .resume 控制页面尺寸、居中、灰底、阴影、外框或 A4 宽高；不要写 width:210mm、min-height:297mm、margin:auto、box-shadow、页面级 background/border
+- 如需分区线，只能加在 section 标题、项目条目等正文元素上，不能给整页或根容器加约束边框
 - 如果用户说"太花"、"太炫"、"过头"、"不像简历"，优先移除视觉特效，恢复常规专业简历样式`
 
 const flowRulesSection = `## 循环控制规则
