@@ -280,7 +280,7 @@ func TestChatService_StreamChatReAct_ContinuesAfterTextAndToolCall(t *testing.T)
 	require.NoError(t, err)
 
 	var events []string
-	err = chatSvc.StreamChatReAct(context.Background(), session.ID, "看看我上传了什么", func(e string) { events = append(events, e) })
+	err = chatSvc.StreamChatReAct(context.Background(), session.ID, "看看我上传了什么", func(e string) error { events = append(events, e); return nil })
 	require.NoError(t, err)
 
 	// Provider should be called twice: first for text+tool, second for final text
@@ -320,7 +320,7 @@ func TestChatService_StreamChatReAct_FullSequence(t *testing.T) {
 	require.NoError(t, err)
 
 	var events []string
-	err = chatSvc.StreamChatReAct(context.Background(), session.ID, "帮我优化简历", func(e string) { events = append(events, e) })
+	err = chatSvc.StreamChatReAct(context.Background(), session.ID, "帮我优化简历", func(e string) error { events = append(events, e); return nil })
 	require.NoError(t, err)
 
 	// Verify all event types are present
@@ -375,7 +375,7 @@ func TestChatService_StreamChatReAct_SavesUserMessage(t *testing.T) {
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
 
-	err = chatSvc.StreamChatReAct(context.Background(), session.ID, "帮我优化简历", func(string) {})
+	err = chatSvc.StreamChatReAct(context.Background(), session.ID, "帮我优化简历", func(string) error { return nil })
 	require.NoError(t, err)
 
 	// Verify user message was saved
@@ -397,7 +397,7 @@ func TestChatService_StreamChatReAct_SavesAssistantWithThinking(t *testing.T) {
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
 
-	err = chatSvc.StreamChatReAct(context.Background(), session.ID, "帮我优化简历", func(string) {})
+	err = chatSvc.StreamChatReAct(context.Background(), session.ID, "帮我优化简历", func(string) error { return nil })
 	require.NoError(t, err)
 
 	// Verify assistant message was saved with thinking
@@ -423,7 +423,7 @@ func TestChatService_StreamChatReAct_SavesToolCalls(t *testing.T) {
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
 
-	err = chatSvc.StreamChatReAct(context.Background(), session.ID, "帮我优化简历", func(string) {})
+	err = chatSvc.StreamChatReAct(context.Background(), session.ID, "帮我优化简历", func(string) error { return nil })
 	require.NoError(t, err)
 
 	// Verify tool calls were saved
@@ -445,7 +445,7 @@ func TestChatService_StreamChatReAct_SessionNotFound(t *testing.T) {
 	db := SetupTestDB(t)
 	chatSvc := NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3)
 
-	err := chatSvc.StreamChatReAct(context.Background(), 9999, "hello", func(string) {})
+	err := chatSvc.StreamChatReAct(context.Background(), 9999, "hello", func(string) error { return nil })
 	assert.ErrorIs(t, err, ErrSessionNotFound)
 }
 
@@ -462,7 +462,7 @@ func TestChatService_StreamChatReAct_MaxIterationsExceeded(t *testing.T) {
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
 
-	err = chatSvc.StreamChatReAct(context.Background(), session.ID, "帮我优化简历", func(string) {})
+	err = chatSvc.StreamChatReAct(context.Background(), session.ID, "帮我优化简历", func(string) error { return nil })
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "max tool-calling iterations exceeded")
 }

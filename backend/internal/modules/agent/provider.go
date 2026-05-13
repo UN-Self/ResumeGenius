@@ -17,7 +17,8 @@ import (
 
 // retryWithBackoff executes fn with exponential backoff on server errors (5xx).
 // Does NOT retry on 429 (rate limit) or 4xx errors.
-func retryWithBackoff(maxRetries int, baseDelay time.Duration, fn func() error) error {
+// Checks ctx cancellation during retry delays.
+func retryWithBackoff(ctx context.Context, maxRetries int, baseDelay time.Duration, fn func() error) error {
 	var lastErr error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		err := fn()
@@ -30,7 +31,11 @@ func retryWithBackoff(maxRetries int, baseDelay time.Duration, fn func() error) 
 		}
 		if attempt < maxRetries {
 			delay := baseDelay * time.Duration(1<<uint(attempt))
-			time.Sleep(delay)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(delay):
+			}
 		}
 	}
 	return fmt.Errorf("重试 %d 次后仍失败: %w", maxRetries, lastErr)
@@ -137,7 +142,7 @@ func NewOpenAIAdapterWithTimeout(apiURL, apiKey, model string, timeout time.Dura
 }
 
 func (a *OpenAIAdapter) StreamChat(ctx context.Context, messages []Message, sendChunk func(string) error) error {
-	return retryWithBackoff(3, 1*time.Second, func() error {
+	return retryWithBackoff(ctx, 3, 1*time.Second, func() error {
 		return a.streamChatOnce(ctx, messages, sendChunk)
 	})
 }
@@ -238,7 +243,7 @@ func (a *OpenAIAdapter) StreamChatReAct(
 	onToolCall func(call ToolCallRequest) error,
 	onText func(chunk string) error,
 ) error {
-	return retryWithBackoff(3, 1*time.Second, func() error {
+	return retryWithBackoff(ctx, 3, 1*time.Second, func() error {
 		return a.streamChatReActOnce(ctx, messages, tools, onReasoning, onToolCall, onText)
 	})
 }

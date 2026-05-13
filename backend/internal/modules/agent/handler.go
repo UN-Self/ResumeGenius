@@ -133,6 +133,7 @@ func (h *Handler) Chat(c *gin.Context) {
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
 	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("X-Accel-Buffering", "no")
 
 	flusher, ok := c.Writer.(http.Flusher)
 	if !ok {
@@ -140,9 +141,12 @@ func (h *Handler) Chat(c *gin.Context) {
 		return
 	}
 
-	sendEvent := func(event string) {
-		fmt.Fprintf(c.Writer, "data: %s\n\n", event)
+	sendEvent := func(event string) error {
+		if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", event); err != nil {
+			return fmt.Errorf("write SSE event: %w", err)
+		}
 		flusher.Flush()
+		return nil
 	}
 
 	if err := h.chatSvc.StreamChatReAct(c.Request.Context(), uint(sessionID), req.Message, sendEvent); err != nil {
@@ -151,9 +155,11 @@ func (h *Handler) Chat(c *gin.Context) {
 			"code":    errorCode(err),
 			"message": err.Error(),
 		})
-		sendEvent(string(errJSON))
+		// 尝试发送错误事件，如果失败则忽略（连接可能已断开）
+		_ = sendEvent(string(errJSON))
 	}
-	sendEvent(`{"type":"done"}`)
+	// 尝试发送完成事件，如果失败则忽略（连接可能已断开）
+	_ = sendEvent(`{"type":"done"}`)
 }
 
 func (h *Handler) GetHistory(c *gin.Context) {

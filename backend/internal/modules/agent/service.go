@@ -206,7 +206,7 @@ func (s *ChatService) compactMessages(ctx context.Context, messages []models.AIM
 // It streams thinking events, tool calls, tool results, edit events, and the
 // final text response via the sendEvent callback. The loop runs for at most
 // s.maxIterations stall rounds (iterations with no tool calls or text).
-func (s *ChatService) StreamChatReAct(ctx context.Context, sessionID uint, userMessage string, sendEvent func(string)) error {
+func (s *ChatService) StreamChatReAct(ctx context.Context, sessionID uint, userMessage string, sendEvent func(string) error) error {
 	// 1. Load session, verify existence
 	var session models.AISession
 	if err := s.db.First(&session, sessionID).Error; err != nil {
@@ -224,7 +224,9 @@ func (s *ChatService) StreamChatReAct(ctx context.Context, sessionID uint, userM
 		"type":    "thinking",
 		"content": "已收到请求，正在加载简历上下文...\n",
 	})
-	sendEvent(string(startData))
+	if err := sendEvent(string(startData)); err != nil {
+		return fmt.Errorf("send start event: %w", err)
+	}
 
 	// 3. Load full message history for this session
 	history, err := s.loadMessages(sessionID)
@@ -308,7 +310,9 @@ func (s *ChatService) StreamChatReAct(ctx context.Context, sessionID uint, userM
 			"type":    "thinking",
 			"content": fmt.Sprintf("第 %d 步：正在请求模型生成下一步操作...\n", totalIter+1),
 		})
-		sendEvent(string(stepData))
+		if err := sendEvent(string(stepData)); err != nil {
+			return fmt.Errorf("send step event: %w", err)
+		}
 		debugLog("service", "第 %d 轮迭代，消息数 %d，token 估算 %d", totalIter+1, len(apiMessages), s.estimateTokens(apiMessages))
 		log.Printf("agent: iteration %d calling model with %d messages and %d tools", totalIter, len(apiMessages), len(s.toolExecutor.Tools(ctx)))
 		err := s.provider.StreamChatReAct(
@@ -319,7 +323,9 @@ func (s *ChatService) StreamChatReAct(ctx context.Context, sessionID uint, userM
 			func(chunk string) error {
 				thinkingAccum.WriteString(chunk)
 				data, _ := json.Marshal(map[string]string{"type": "thinking", "content": chunk})
-				sendEvent(string(data))
+				if err := sendEvent(string(data)); err != nil {
+					return fmt.Errorf("send thinking event: %w", err)
+				}
 				if s.recorder != nil {
 					s.recorder.Write(chunk)
 				}
@@ -343,7 +349,9 @@ func (s *ChatService) StreamChatReAct(ctx context.Context, sessionID uint, userM
 					"name":   call.Name,
 					"params": call.Params,
 				})
-				sendEvent(string(callData))
+				if err := sendEvent(string(callData)); err != nil {
+					return fmt.Errorf("send tool_call event: %w", err)
+				}
 				hadToolCalls = true
 				iterationToolCalls = append(iterationToolCalls, call)
 
@@ -366,7 +374,9 @@ func (s *ChatService) StreamChatReAct(ctx context.Context, sessionID uint, userM
 						"status": "failed",
 						"result": toolErrorForClient(errMsg),
 					})
-					sendEvent(string(failData))
+					if err := sendEvent(string(failData)); err != nil {
+						return fmt.Errorf("send tool_result (failed) event: %w", err)
+					}
 					// Add error result to pending messages for next iteration
 					iterToolResults = append(iterToolResults, Message{
 						Role:       "tool",
@@ -383,7 +393,9 @@ func (s *ChatService) StreamChatReAct(ctx context.Context, sessionID uint, userM
 							"params": call.Params,
 							"result": result,
 						})
-						sendEvent(string(editData))
+						if err := sendEvent(string(editData)); err != nil {
+							return fmt.Errorf("send edit event: %w", err)
+						}
 					}
 
 					// Save completed tool result
@@ -408,7 +420,9 @@ func (s *ChatService) StreamChatReAct(ctx context.Context, sessionID uint, userM
 						"status": "completed",
 						"result": toolResultForClient(call.Name, result),
 					})
-					sendEvent(string(okData))
+					if err := sendEvent(string(okData)); err != nil {
+						return fmt.Errorf("send tool_result (completed) event: %w", err)
+					}
 					// Add result to pending messages for next iteration
 					iterToolResults = append(iterToolResults, Message{
 						Role:       "tool",
@@ -424,7 +438,9 @@ func (s *ChatService) StreamChatReAct(ctx context.Context, sessionID uint, userM
 				hadText = true
 				fullText.WriteString(chunk)
 				data, _ := json.Marshal(map[string]string{"type": "text", "content": chunk})
-				sendEvent(string(data))
+				if err := sendEvent(string(data)); err != nil {
+					return fmt.Errorf("send text event: %w", err)
+				}
 				return nil
 			},
 		)
@@ -508,7 +524,9 @@ func (s *ChatService) StreamChatReAct(ctx context.Context, sessionID uint, userM
 			debugLog("service", "保存助手回复，长度 %d 字符", len(fullText.String()))
 			debugLog("service", "循环结束，共 %d 轮，总耗时 %v", totalIter+1, time.Since(loopStart))
 			s.toolExecutor.ClearSessionState(sessionID)
-			sendEvent(`{"type":"done"}`)
+			if err := sendEvent(`{"type":"done"}`); err != nil {
+				return fmt.Errorf("send done event: %w", err)
+			}
 			return nil
 		}
 
