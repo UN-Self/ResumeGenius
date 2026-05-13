@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { appendBreakBefore, removeBreakBefore, resolveToBlockPos } from '@/components/editor/extensions/smart-split/styleUtils'
+import { appendBreakBefore, removeBreakBefore, resolveToBlockPos, promotePastList } from '@/components/editor/extensions/smart-split/styleUtils'
 import { Schema } from '@tiptap/pm/model'
 import type { Node as PmNode } from '@tiptap/pm/model'
 
@@ -91,5 +91,95 @@ describe('resolveToBlockPos', () => {
     const resolved = resolveToBlockPos(doc, innerPos)
     expect(resolved).toBe(0)
     expect(doc.nodeAt(resolved)!.type.name).toBe('paragraph')
+  })
+})
+
+describe('promotePastList', () => {
+  const schema = new Schema({
+    nodes: {
+      doc: { content: 'block+' },
+      paragraph: {
+        content: 'inline*',
+        group: 'block',
+        attrs: { style: { default: null } },
+        toDOM: () => ['p', 0],
+      },
+      bulletList: {
+        content: 'listItem+',
+        group: 'block',
+        attrs: { style: { default: null } },
+        toDOM: () => ['ul', 0],
+      },
+      orderedList: {
+        content: 'listItem+',
+        group: 'block',
+        attrs: { style: { default: null } },
+        toDOM: () => ['ol', 0],
+      },
+      listItem: {
+        content: 'paragraph+',
+        attrs: { style: { default: null } },
+        toDOM: () => ['li', 0],
+      },
+      text: { inline: true, group: 'inline' },
+    },
+  })
+
+  function makeListDoc(listType: 'bulletList' | 'orderedList', texts: string[]): PmNode {
+    return schema.nodeFromJSON({
+      type: 'doc',
+      content: [{
+        type: listType,
+        content: texts.map(text => ({
+          type: 'listItem',
+          content: [{
+            type: 'paragraph',
+            content: [{ type: 'text', text }],
+          }],
+        })),
+      }],
+    })
+  }
+
+  it('returns original position for paragraph not inside a list', () => {
+    const doc = schema.nodeFromJSON({
+      type: 'doc',
+      content: [{
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'plain' }],
+      }],
+    })
+    // For a flat paragraph at doc start, resolveToBlockPos returns 0
+    // promotePastList stays at 0 (no list ancestor)
+    expect(promotePastList(doc, 0)).toBe(0)
+  })
+
+  it('promotes paragraph inside bulletList to listItem start', () => {
+    const doc = makeListDoc('bulletList', ['first', 'second'])
+    // 0: bulletList
+    //   1: listItem
+    //     2: paragraph
+    //       3-7: text "first" (5 chars)
+    //   ...
+    //   10: listItem
+    //     11: paragraph
+    //       12-17: text "second" (6 chars)
+
+    // resolveToBlockPos for second paragraph → 11
+    // promotePastList promotes to enclosing listItem's before() = 10
+    const result = promotePastList(doc, 11)
+    expect(result).toBe(10)
+    expect(doc.nodeAt(result)!.type.name).toBe('listItem')
+  })
+
+  it('promotes paragraph inside orderedList to listItem start', () => {
+    const doc = makeListDoc('orderedList', ['one'])
+    // 0: orderedList
+    //   1: listItem
+    //     2: paragraph
+    //       3-5: text "one" (3 chars)
+    const result = promotePastList(doc, 2)
+    expect(result).toBe(1)
+    expect(doc.nodeAt(result)!.type.name).toBe('listItem')
   })
 })

@@ -19,3 +19,20 @@ export function resolveToBlockPos(doc: PmNode, pos: number): number {
   const $pos = doc.resolve(pos)
   return $pos.pos - $pos.parentOffset - 1
 }
+
+/**
+ * Promotes position to the enclosing listItem if the block sits inside one.
+ * break-before on a paragraph child of a list-item does not trigger page
+ * breaks in Chrome's PDF renderer — the property must live on the list-item
+ * element itself (not the list container, which would push all items).
+ */
+export function promotePastList(doc: PmNode, blockPos: number): number {
+  const $pos = doc.resolve(blockPos)
+  for (let d = $pos.depth; d >= 1; d--) {
+    const type = $pos.node(d).type.name
+    if (type === 'listItem') {
+      return Math.max(0, $pos.before(d))
+    }
+  }
+  return blockPos
+}
