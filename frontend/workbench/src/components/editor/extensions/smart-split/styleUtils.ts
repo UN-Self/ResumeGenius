@@ -17,7 +17,7 @@ export function removeBreakBefore(style: string): string | null {
 
 export function resolveToBlockPos(doc: PmNode, pos: number): number {
   const $pos = doc.resolve(pos)
-  return $pos.pos - $pos.parentOffset - 1
+  return Math.max(0, $pos.pos - $pos.parentOffset - 1)
 }
 
 /**
