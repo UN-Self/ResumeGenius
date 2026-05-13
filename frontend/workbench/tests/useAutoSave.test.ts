@@ -137,6 +137,37 @@ describe('useAutoSave', () => {
     })
   })
 
+  it('flush waits for active save before saving latest pending html', async () => {
+    let firstSaveResolve!: () => void
+    const save = vi.fn().mockImplementation((html: string) => {
+      if (html === '<p>first</p>') {
+        return new Promise<void>((resolve) => { firstSaveResolve = resolve })
+      }
+      return Promise.resolve()
+    })
+    const { result } = renderHook(() => useAutoSave({ save }))
+
+    act(() => result.current.scheduleSave('<p>first</p>'))
+    await act(async () => {
+      vi.advanceTimersByTime(2000)
+      await Promise.resolve()
+    })
+    expect(save).toHaveBeenCalledTimes(1)
+
+    act(() => result.current.scheduleSave('<p>latest</p>'))
+    const flushPromise = result.current.flush()
+    expect(save).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      firstSaveResolve()
+      await flushPromise
+    })
+
+    expect(save).toHaveBeenCalledTimes(2)
+    expect(save).toHaveBeenNthCalledWith(1, '<p>first</p>')
+    expect(save).toHaveBeenNthCalledWith(2, '<p>latest</p>')
+  })
+
   it('applies reconstruct function before saving', async () => {
     const save = vi.fn().mockResolvedValue(undefined)
     const reconstruct = vi.fn((html: string) => `<full>${html}</full>`)
