@@ -248,7 +248,9 @@ func TestWrapWithTemplate_ReplacesPlaceholder(t *testing.T) {
 	result := wrapWithTemplate("<h1>Hello</h1><p>World</p>")
 
 	assert.Contains(t, result, "<h1>Hello</h1><p>World</p>")
-	assert.Contains(t, result, `<div class="resume-page resume-document">`)
+	assert.Contains(t, result, `<div class="resume-page"><div class="resume-document"><div class="resume-content ProseMirror">`)
+	assert.NotContains(t, result, `<div class="resume-page resume-document">`,
+		".resume-page must not share resume-document class, otherwise user CSS can rewrite the PDF page shell")
 	assert.Contains(t, result, ".resume-page h1")
 	assert.Contains(t, result, "@page")
 	assert.Contains(t, result, "box-sizing: border-box")
@@ -303,8 +305,18 @@ func TestWrapWithTemplate_MarginResetMatchesTailwindPreflight(t *testing.T) {
 func TestWrapWithTemplate_EmptyContent(t *testing.T) {
 	result := wrapWithTemplate("")
 
-	assert.Contains(t, result, `<div class="resume-page resume-document"></div>`)
+	assert.Contains(t, result, `<div class="resume-page"><div class="resume-document"><div class="resume-content ProseMirror"></div></div></div>`)
 	assert.Contains(t, result, ".resume-page")
+}
+
+func TestWrapWithTemplate_KeepsUserFlexOffPageShell(t *testing.T) {
+	input := `<!DOCTYPE html><html><head><style>.resume-document{display:flex}.resume{width:210mm}</style></head><body><h1>陈子俊</h1><div class="resume">A</div><div class="resume">B</div></body></html>`
+
+	result := wrapWithTemplate(input)
+
+	assert.Contains(t, result, `<div class="resume-page"><div class="resume-document"><div class="resume-content ProseMirror"><h1>陈子俊</h1><div class="resume">A</div><div class="resume">B</div></div></div></div>`)
+	assert.NotContains(t, result, `<div class="resume-page resume-document">`)
+	assert.Contains(t, result, `<style>.resume-document{display:flex}.resume{width:210mm}</style>`)
 }
 
 func TestWrapWithTemplate_ExtractsFullDocumentBodyAndStyles(t *testing.T) {
@@ -316,7 +328,7 @@ func TestWrapWithTemplate_ExtractsFullDocumentBodyAndStyles(t *testing.T) {
 	assert.Contains(t, result, `<section class="name">陈子俊</section>`)
 	assert.NotContains(t, result, "<body><section")
 	assert.NotContains(t, result, "<html><head>")
-	assert.NotContains(t, result, `<div class="resume-page resume-document"><!DOCTYPE html>`)
+	assert.NotContains(t, result, `<div class="resume-page"><!DOCTYPE html>`)
 
 	// Verify user CSS appears after template </style> (takes priority over template defaults)
 	assert.Regexp(t, `</style>\s*<style>\.resume-document \.name\{font-size:22px\}</style>`, result,
