@@ -960,7 +960,7 @@
   line-height: 1.5;
   color: var(--resume-document-text, #333333);
   outline: none;
-  white-space: pre-wrap;
+  white-space: break-spaces;
   letter-spacing: 0;
   word-spacing: 0;
   word-wrap: break-word;
