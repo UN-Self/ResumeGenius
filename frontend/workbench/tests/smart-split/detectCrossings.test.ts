@@ -388,4 +388,35 @@ describe('findPageStartPositions', () => {
 
     document.body.removeChild(wrapper)
   })
+
+  it('detects crossing element that straddles the breaker boundary', () => {
+    const wrapper = document.createElement('div')
+
+    const block1 = document.createElement('div')
+    block1.textContent = 'Page 1'
+    block1.getBoundingClientRect = () => ({ top: 0, bottom: 400, height: 400 } as DOMRect)
+
+    // Starts before breaker but extends past it
+    const crossing = document.createElement('div')
+    crossing.textContent = 'I cross the page boundary'
+    crossing.getBoundingClientRect = () => ({ top: 350, bottom: 700, height: 350 } as DOMRect)
+
+    const block3 = document.createElement('div')
+    block3.textContent = 'Page 2 after crossing'
+    block3.getBoundingClientRect = () => ({ top: 750, bottom: 900, height: 150 } as DOMRect)
+
+    wrapper.appendChild(block1)
+    wrapper.appendChild(crossing)
+    wrapper.appendChild(block3)
+    document.body.appendChild(wrapper)
+
+    const breakers: BreakerPosition[] = [{ top: 500, bottom: 600 }]
+    const mockView = { posAtDOM: vi.fn().mockReturnValue(15) }
+
+    const results = findPageStartPositions(mockView as any, wrapper, breakers)
+    expect(results).toHaveLength(1)
+    expect(mockView.posAtDOM).toHaveBeenCalledWith(crossing, 0)
+
+    document.body.removeChild(wrapper)
+  })
 })

@@ -39,7 +39,10 @@ export function findPageStartPositions(
       continue
     }
 
-    if (rect.top >= breakers[breakerIdx].bottom - 1) {
+    // Match the first element that extends past the breaker's top edge.
+    // This catches both: elements entirely after the breaker AND elements
+    // that cross the boundary (start before breaker, end after it).
+    if (rect.bottom > breakers[breakerIdx].top) {
       try {
         results.push(view.posAtDOM(el, 0))
       } catch {
