@@ -7,6 +7,7 @@ export interface Props {
   highlighted?: boolean
   ctaText?: string
   ctaHref?: string
+  action?: string
 }
 
 const {
@@ -17,6 +18,7 @@ const {
   highlighted = false,
   ctaText = '开始使用',
   ctaHref = '/app',
+  action = '',
 } = Astro.props
 ---
 
@@ -34,12 +36,13 @@ const {
       </li>
     ))}
   </ul>
-  <a href={ctaHref}
+  <a href={ctaHref} data-pricing-action={action || 'default'}
     class={`inline-flex items-center justify-center h-11 px-6 text-sm font-medium rounded-md no-underline text-center ${
       highlighted
-        ? 'btn-primary bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800'
+        ? 'btn-primary hover:brightness-110 active:brightness-90'
         : 'btn-secondary bg-card text-foreground border border-border hover:bg-muted'
-    }`}>
+    }`}
+    style={highlighted ? 'background:var(--color-primary);color:var(--color-primary-foreground);border:1px solid color-mix(in srgb,var(--color-primary),black 12%)' : ''}>
     {ctaText}
   </a>
 </div>

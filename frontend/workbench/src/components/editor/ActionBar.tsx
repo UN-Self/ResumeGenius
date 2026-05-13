@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { ThemeSwitcher } from '@/components/ui/theme-switcher'
+import { UserMenu } from '@/components/ui/user-menu'
 import type { ExportStatus } from '@/hooks/useExport'
 
 interface ActionBarProps {
@@ -52,6 +53,8 @@ export function ActionBar({
       </div>
 
       <ThemeSwitcher compact className="shrink-0" />
+
+      <UserMenu />
 
       {/* Version History */}
       {children}

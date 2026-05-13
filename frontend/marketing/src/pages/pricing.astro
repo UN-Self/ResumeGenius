@@ -15,7 +15,7 @@ const freeFeatures = [
 
 const proFeatures = [
   '所有功能开放',
-  '每月赠送 1,900 积分',
+  '每月赠送 2,000 积分',
   'AI 对话消耗积分',
   'AI 功能 / 导出渲染优先使用，无需排队',
   '无限次无水印导出 PDF',
@@ -27,7 +27,7 @@ const faqGroups = [
     title: '积分相关',
     items: [
       { q: '积分消耗怎么算？', a: 'Token 计算采用输入输出同价：1 积分 ≈ 1k token。一次简短的 AI 对话大约消耗 5-10 积分，一次完整的简历生成大约消耗 30-50 积分。' },
-      { q: 'Free 积分用完怎么办？', a: '可以随时购买积分充值（1 人民币 = 100 积分），或升级到 Pro 获得每月 1,900 积分 + 无限无水印 PDF 导出。' },
+      { q: 'Free 积分用完怎么办？', a: '可以随时购买积分充值（1 人民币 = 100 积分），或升级到 Pro 获得每月 2,000 积分 + 无限无水印 PDF 导出。' },
       { q: '积分会过期吗？', a: '充值积分和赠送积分（注册 / 开通会员）均有 2 年有效期，到期未使用的积分自动清零。' },
       { q: '积分有使用限制吗？', a: '积分不可兑换会员、不可转赠、不可提现。充值后不支持退款或反向兑换为人民币。' },
     ],
@@ -36,7 +36,7 @@ const faqGroups = [
     title: '升级与付费',
     items: [
       { q: '怎么升级到 Pro？', a: '在定价页选择 Pro 方案，点击"升级 Pro"即可。所有项目和数据无缝迁移。' },
-      { q: 'Pro 相比 Free 有什么额外权益？', a: 'Pro 用户享有：AI 功能与导出渲染优先使用（无需排队）、无限次无水印导出 PDF、每月 1,900 积分赠送、积分充值 9 折优惠。' },
+      { q: 'Pro 相比 Free 有什么额外权益？', a: 'Pro 用户享有：AI 功能与导出渲染优先使用（无需排队）、无限次无水印导出 PDF、每月 2,000 积分赠送、积分充值 9 折优惠。' },
       { q: '如何充值积分？', a: '在工作台中进入账号设置 → 积分充值，选择金额即可。Pro 用户自动享受 9 折。' },
       { q: '可以随时取消 Pro 订阅吗？', a: '可以。取消后当前月剩余时间仍可继续使用，下个周期不再续费。积分保留。' },
     ],
@@ -53,6 +53,7 @@ const faqGroups = [
         features={freeFeatures}
         ctaText="免费注册"
         ctaHref="/app"
+        action="free"
       />
       <PricingCard
         name="Pro"
@@ -62,15 +63,73 @@ const faqGroups = [
         highlighted={true}
         ctaText="升级 Pro"
         ctaHref="/app"
+        action="pro"
       />
     </div>
 
-    <div class="animate-on-scroll max-w-md mx-auto mt-12 p-6 bg-card border border-border rounded-lg text-center">
-      <h3 class="font-sans font-semibold text-foreground mb-2">积分充值</h3>
-      <p class="text-sm text-muted-foreground mb-4">
-        1 人民币 = 100 积分，随时充值，有效期 2 年。<br />
-        积分不可兑换会员、转赠或提现，充值后不支持退款。<br />
-        Pro 用户充值享 9 折优惠。
+    <div class="animate-on-scroll mt-16">
+      <h3 class="font-sans font-semibold text-xl text-foreground text-center mb-2">积分充值</h3>
+      <p class="text-sm text-muted-foreground text-center mb-8">
+        基准汇率 1 元 = 100 积分，大额套餐享额外赠送。购买后即时到账，有效期 2 年。
+      </p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-5xl mx-auto">
+        <div class="card-hover bg-card border border-border rounded-lg px-6 py-7 flex flex-col">
+          <h4 class="font-sans font-semibold text-base text-foreground mb-2">尝鲜包</h4>
+          <div class="flex items-baseline gap-1 mb-5">
+            <span class="font-serif font-semibold text-4xl text-foreground">¥1</span>
+          </div>
+          <ul class="flex-1 space-y-2.5 mb-7">
+            <li class="flex items-start gap-2 text-sm text-muted-foreground"><svg class="w-4 h-4 mt-0.5 shrink-0 text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>100 积分到账</li>
+            <li class="flex items-start gap-2 text-sm text-muted-foreground"><svg class="w-4 h-4 mt-0.5 shrink-0 text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>适合轻度体验</li>
+            <li class="flex items-start gap-2 text-sm text-muted-foreground"><svg class="w-4 h-4 mt-0.5 shrink-0 text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>有效期 2 年</li>
+          </ul>
+          <a href="/app" data-pricing-action="topup" class="inline-flex items-center justify-center h-11 rounded-lg text-sm font-medium no-underline border border-border bg-card text-foreground hover:bg-muted">立即购买</a>
+        </div>
+
+        <div class="card-hover bg-card border border-border rounded-lg px-6 py-7 flex flex-col relative">
+          <span class="absolute -top-2.5 right-4 rounded-full bg-amber-500 text-white px-3 py-0.5 text-xs font-semibold">省 ¥1</span>
+          <h4 class="font-sans font-semibold text-base text-foreground mb-2">进阶包</h4>
+          <div class="flex items-baseline gap-1 mb-5">
+            <span class="font-serif font-semibold text-4xl text-foreground">¥5</span>
+          </div>
+          <ul class="flex-1 space-y-2.5 mb-7">
+            <li class="flex items-start gap-2 text-sm text-muted-foreground"><svg class="w-4 h-4 mt-0.5 shrink-0 text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>600 积分到账</li>
+            <li class="flex items-start gap-2 text-sm text-muted-foreground"><svg class="w-4 h-4 mt-0.5 shrink-0 text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>送 100 积分 (省 ¥1)</li>
+            <li class="flex items-start gap-2 text-sm text-muted-foreground"><svg class="w-4 h-4 mt-0.5 shrink-0 text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>有效期 2 年</li>
+          </ul>
+          <a href="/app" data-pricing-action="topup" class="inline-flex items-center justify-center h-11 rounded-lg text-sm font-medium no-underline border border-border bg-card text-foreground hover:bg-muted">立即购买</a>
+        </div>
+
+        <div class="card-hover rounded-lg px-6 py-7 flex flex-col relative" style="background: color-mix(in srgb, var(--color-primary), transparent 96%); border: 2px solid color-mix(in srgb, var(--color-primary), transparent 50%); box-shadow: 0 0 32px color-mix(in srgb, var(--color-primary), transparent 85%), 0 0 64px color-mix(in srgb, var(--color-primary), transparent 94%)">
+          <span class="absolute -top-2.5 right-4 rounded-full px-3 py-0.5 text-xs font-semibold" style="background: var(--color-primary); color: var(--color-primary-foreground); border: 1px solid color-mix(in srgb, var(--color-primary), black 12%)">推荐 · 省 ¥2</span>
+          <h4 class="font-sans font-semibold text-base text-foreground mb-2">专业包</h4>
+          <div class="flex items-baseline gap-1 mb-5">
+            <span class="font-serif font-semibold text-4xl text-foreground">¥10</span>
+          </div>
+          <ul class="flex-1 space-y-2.5 mb-7">
+            <li class="flex items-start gap-2 text-sm text-muted-foreground"><svg class="w-4 h-4 mt-0.5 shrink-0 text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>1200 积分到账</li>
+            <li class="flex items-start gap-2 text-sm text-muted-foreground"><svg class="w-4 h-4 mt-0.5 shrink-0 text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>送 200 积分 (省 ¥2)</li>
+            <li class="flex items-start gap-2 text-sm text-muted-foreground"><svg class="w-4 h-4 mt-0.5 shrink-0 text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>有效期 2 年</li>
+          </ul>
+          <a href="/app" data-pricing-action="topup" class="inline-flex items-center justify-center h-11 rounded-lg text-sm font-medium no-underline hover:brightness-110" style="background: var(--color-primary); color: var(--color-primary-foreground); border: 1px solid color-mix(in srgb, var(--color-primary), black 15%)">立即购买</a>
+        </div>
+
+        <div class="card-hover bg-card rounded-lg px-6 py-7 flex flex-col relative" style="border: 1px solid color-mix(in srgb, #f59e0b, transparent 45%); box-shadow: 0 0 20px color-mix(in srgb, #f59e0b, transparent 90%)">
+          <span class="absolute -top-2.5 right-4 rounded-full bg-amber-500 text-white px-3 py-0.5 text-xs font-semibold">超值 · 省 ¥5</span>
+          <h4 class="font-sans font-semibold text-base text-foreground mb-2">旗舰包</h4>
+          <div class="flex items-baseline gap-1 mb-5">
+            <span class="font-serif font-semibold text-4xl text-foreground">¥29</span>
+          </div>
+          <ul class="flex-1 space-y-2.5 mb-7">
+            <li class="flex items-start gap-2 text-sm text-muted-foreground"><svg class="w-4 h-4 mt-0.5 shrink-0 text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>3400 积分到账</li>
+            <li class="flex items-start gap-2 text-sm text-muted-foreground"><svg class="w-4 h-4 mt-0.5 shrink-0 text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>送 500 积分 (省 ¥5)</li>
+            <li class="flex items-start gap-2 text-sm text-muted-foreground"><svg class="w-4 h-4 mt-0.5 shrink-0 text-primary" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>有效期 2 年</li>
+          </ul>
+          <a href="/app" data-pricing-action="topup" class="inline-flex items-center justify-center h-11 rounded-lg text-sm font-medium no-underline bg-card text-foreground hover:bg-muted" style="border: 1px solid color-mix(in srgb, #f59e0b, transparent 50%)">立即购买</a>
+        </div>
+      </div>
+      <p class="text-xs text-muted-foreground text-center mt-6">
+        积分不可兑换会员、转赠或提现，充值后不支持退款。Pro 会员充值享 9 折优惠。
       </p>
     </div>
   </Section>
@@ -90,3 +149,31 @@ const faqGroups = [
     buttonText="免费开始使用"
   />
 </BaseLayout>
+
+<script is:inline>
+  (function(){
+    document.querySelectorAll('[data-pricing-action]').forEach(function(el){
+      el.addEventListener('click', function(e){
+        e.preventDefault();
+        var action = this.getAttribute('data-pricing-action');
+        fetch('/api/v1/auth/me', { credentials: 'include' })
+          .then(function(r){ return r.json(); })
+          .then(function(json){
+            if (json.code === 0) {
+              if (action === 'free') {
+                window.location.href = '/app';
+              } else {
+                alert('支付功能即将上线，敬请期待！\n\n完成支付后即可使用该套餐。');
+              }
+            } else {
+              var redirect = action === 'free' ? '/app' : '/pricing';
+              window.location.href = '/app/login?redirect=' + encodeURIComponent(redirect);
+            }
+          })
+          .catch(function(){
+            window.location.href = '/app/login?redirect=/pricing';
+          });
+      });
+    });
+  })();
+</script>

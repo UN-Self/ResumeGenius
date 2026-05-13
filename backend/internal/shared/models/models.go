@@ -31,11 +31,30 @@ func (j *JSONB) Scan(value interface{}) error {
 }
 
 type User struct {
-	ID           string    `gorm:"type:char(36);primaryKey" json:"id"`
-	Username     string    `gorm:"size:64;not null;uniqueIndex" json:"username"`
-	PasswordHash string    `gorm:"size:255;not null" json:"-"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID               string     `gorm:"type:char(36);primaryKey" json:"id"`
+	Username         string     `gorm:"size:64;not null;uniqueIndex" json:"username"`
+	Email            *string    `gorm:"size:255" json:"email,omitempty"`
+	EmailVerified    bool       `gorm:"not null;default:false" json:"email_verified"`
+	VerificationCode string     `gorm:"size:6" json:"-"`
+	CodeExpiry       *time.Time `gorm:"index" json:"-"`
+	PasswordHash     string     `gorm:"size:255;not null" json:"-"`
+	AvatarURL        *string    `gorm:"size:512" json:"avatar_url,omitempty"`
+	Points           int        `gorm:"not null;default:0" json:"points"`
+	Plan             string     `gorm:"size:20;not null;default:'free'" json:"plan"`
+	PlanStartedAt    *time.Time `json:"plan_started_at,omitempty"`
+	PlanExpiresAt    *time.Time `json:"plan_expires_at,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+type PointsRecord struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    string    `gorm:"size:36;not null;index" json:"user_id"`
+	Amount    int       `gorm:"not null" json:"amount"`
+	Balance   int       `gorm:"not null" json:"balance"`
+	Type      string    `gorm:"size:50;not null" json:"type"`
+	Note      string    `gorm:"size:255" json:"note,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Project struct {

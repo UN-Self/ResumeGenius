@@ -67,6 +67,57 @@ export interface User {
   username: string
 }
 
+export interface AuthUser {
+  id: string
+  username: string
+  email?: string
+  email_verified?: boolean
+  avatar_url?: string
+  points: number
+  plan: string
+  plan_started_at?: string
+  plan_expires_at?: string
+}
+
+export interface PointsRecord {
+  id: number
+  user_id: string
+  amount: number
+  balance: number
+  type: string
+  note: string
+  created_at: string
+}
+
+export interface PointsStats {
+  balance: number
+  month_used: number
+  total_earned: number
+}
+
+export interface DailyUsage {
+  date: string
+  used: number
+  earned: number
+}
+
+export interface CategoryUsage {
+  type: string
+  total: number
+}
+
+export interface PointsDashboard {
+  balance: number
+  month_used: number
+  total_earned: number
+  daily_usage: DailyUsage[]
+  categories: CategoryUsage[]
+}
+
+export interface CheckAvailability {
+  available: boolean
+}
+
 export const authApi = {
   login: (username: string, password: string) =>
     request<User>('/auth/login', {
@@ -75,6 +126,46 @@ export const authApi = {
     }),
   me: () => request<User>('/auth/me'),
   logout: () => request<null>('/auth/logout', { method: 'POST' }),
+  register: (username: string, password: string, email: string) =>
+    request<AuthUser>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, email }),
+    }),
+  sendCode: (email: string) =>
+    request<{ dev_code?: string } | null>('/auth/send-code', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  verifyEmail: (email: string, code: string) =>
+    request<AuthUser>('/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify({ email, code }),
+    }),
+  checkUsername: (q: string) =>
+    request<CheckAvailability>(`/auth/check-username?q=${encodeURIComponent(q)}`),
+  checkEmail: (q: string) =>
+    request<CheckAvailability>(`/auth/check-email?q=${encodeURIComponent(q)}`),
+  updateProfile: (nickname: string) =>
+    request<AuthUser>('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify({ nickname }),
+    }),
+  changePassword: (old_password: string, new_password: string) =>
+    request<null>('/auth/password', {
+      method: 'PUT',
+      body: JSON.stringify({ old_password, new_password }),
+    }),
+  uploadAvatar: (file: File) => {
+    const fd = new FormData()
+    fd.append('avatar', file)
+    return upload<AuthUser>('/auth/avatar', fd)
+  },
+  getPointsRecords: () =>
+    request<{ items: PointsRecord[] }>('/auth/points/records'),
+  getPointsStats: () =>
+    request<PointsStats>('/auth/points/stats'),
+  getPointsDashboard: () =>
+    request<PointsDashboard>('/auth/points/dashboard'),
 }
 
 // --- Intake API ---

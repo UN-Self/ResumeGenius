@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { CSSProperties } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { LogOut, Search, Sparkles } from 'lucide-react'
-import { intakeApi, ApiError, authApi, type Project } from '@/lib/api-client'
+import { Search, Sparkles } from 'lucide-react'
+import { intakeApi, ApiError, type Project } from '@/lib/api-client'
+import { UserMenu } from '@/components/ui/user-menu'
 import ProjectCard, { NewResumeCard } from '@/components/intake/ProjectCard'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -98,20 +99,7 @@ export default function ProjectList() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ThemeSwitcher />
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={async () => {
-                try {
-                  await authApi.logout()
-                } finally {
-                  window.location.assign('/app/login')
-                }
-              }}
-            >
-              <LogOut size={14} className="mr-1.5" />
-              退出
-            </Button>
+            <UserMenu />
           </div>
         </header>
 

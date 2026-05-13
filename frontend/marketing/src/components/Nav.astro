@@ -14,10 +14,10 @@ const themePresets = [
 ]
 ---
 
-<nav class="nav-bar fixed top-0 left-0 right-0 z-50 border-b border-transparent bg-white/62 backdrop-blur-xl">
+<nav class="nav-bar fixed top-0 left-0 right-0 z-50 border-b border-border bg-[var(--color-surface-glass)] backdrop-blur-xl">
   <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
     <a href="/" class="flex items-center gap-2 no-underline">
-      <span class="text-xl font-semibold tracking-tight text-foreground">ResumeGenius</span>
+      <span class="text-xl font-semibold tracking-tight gradient-text">ResumeGenius</span>
     </a>
 
     <!-- Desktop nav -->
@@ -27,6 +27,11 @@ const themePresets = [
           {link.label}
         </a>
       ))}
+      <div id="user-menu-container" class="relative shrink-0">
+        <a href="/app/login?redirect=/" data-app-link="/app/login?redirect=/" class="btn-primary inline-flex h-10 items-center justify-center rounded-full px-5 text-sm font-medium text-white no-underline hover:brightness-110 active:brightness-90" style="background:var(--color-primary)">
+          登录
+        </a>
+      </div>
       <div class="theme-menu relative" data-theme-menu>
         <button type="button" class="theme-menu-trigger" data-theme-menu-button aria-expanded="false">
           <span class="theme-menu-dot"></span>
@@ -42,8 +47,8 @@ const themePresets = [
           ))}
         </div>
       </div>
-      <a href="/app"
-        class="btn-primary inline-flex h-10 items-center justify-center rounded-full bg-[#007aff] px-5 text-sm font-medium text-white no-underline hover:bg-[#0067d8] active:bg-[#005bbf]">
+      <a href="/app" data-app-link="/app"
+        class="btn-primary inline-flex h-10 items-center justify-center rounded-full px-5 text-sm font-medium text-white no-underline hover:brightness-110 active:brightness-90" style="background:var(--color-primary)">
         开始使用
       </a>
     </div>
@@ -78,7 +83,7 @@ const themePresets = [
         ))}
       </div>
     </div>
-    <a href="/app"
+    <a href="/app" data-app-link="/app"
       class="btn-primary mt-2 inline-flex h-10 items-center justify-center rounded-full bg-[#007aff] px-5 text-sm font-medium text-white no-underline hover:bg-[#0067d8]">
       开始使用
     </a>
@@ -88,7 +93,7 @@ const themePresets = [
 <!-- Spacer for fixed nav -->
 <div class="h-16"></div>
 
-<script>
+<script is:inline>
   const toggle = document.getElementById('menu-toggle');
   const menu = document.getElementById('mobile-menu');
   toggle?.addEventListener('click', () => {
