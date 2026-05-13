@@ -38,7 +38,9 @@
 .resume-page ol { list-style-type: decimal; }
 .resume-page li { margin-bottom: 4px; }
 .resume-page li p { display: inline; }
-@page { size: A4; margin: 18mm 20mm; }
+/* bottom margin 14mm < editor 18mm: PDF content area is intentionally larger
+   so content that fits one page in the editor won't spill to two pages in PDF */
+@page { size: A4; margin: 18mm 20mm 14mm 20mm; }
 </style>
 </head>
 <body style="margin:0;padding:0;">
