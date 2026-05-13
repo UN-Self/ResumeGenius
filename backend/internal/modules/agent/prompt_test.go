@@ -50,3 +50,13 @@ func TestBuildSystemPrompt_FlowRulesIncludeCallLimit(t *testing.T) {
 	assert.Contains(t, prompt, "最多调用 2 次")
 	assert.Contains(t, prompt, "apply_edits")
 }
+
+func TestBuildSystemPrompt_A4ConstraintsProtectSystemShell(t *testing.T) {
+	sections := DefaultPromptSections("", "")
+	prompt := BuildSystemPrompt(sections)
+
+	assert.Contains(t, prompt, "系统已经提供 A4 纸张")
+	assert.Contains(t, prompt, ".resume-document")
+	assert.Contains(t, prompt, "不要写 width:210mm")
+	assert.Contains(t, prompt, "不能给整页或根容器加约束边框")
+}

@@ -18,6 +18,8 @@ content: |
   生成简历时应遵循以下结构，确保内容自然适配 A4：
 
   ```html
+  <!-- 不要包一层 .page/.resume-document 来模拟 A4；系统外壳已经提供纸张尺寸和页边距 -->
+  <div class="resume-content-inner">
   <!-- 顶部联系信息区：不超过 60px 高度 -->
   <header style="padding-bottom: 8px; border-bottom: 1px solid #ddd;">
     <div style="font-size: 20px; font-weight: 600;">姓名</div>
@@ -34,7 +36,14 @@ content: |
       </ul>
     </div>
   </section>
+  </div>
   ```
+
+  ### 页面外壳禁区
+  - 不要生成 `html/body` 的页面布局样式，例如 `display:flex`、`justify-content:center`、`padding:40px`、灰色背景。
+  - 不要生成 `.resume-document`、`.resume-page`、顶层 `.page`、顶层 `.resume` 的 A4 尺寸、外框、阴影、灰底。
+  - 不要用 `.page { width:210mm; min-height:297mm; box-shadow:... }` 这类网页预览卡片写法。
+  - 需要分割线时放在 `header`、`h2`、`.section-title` 等正文元素上。
 
   ### 控制篇幅的具体操作
   1. 减少 bullet 条目（每个经历 2-3 条而非 4-5 条）
