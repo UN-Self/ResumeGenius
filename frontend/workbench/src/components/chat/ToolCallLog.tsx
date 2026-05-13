@@ -17,6 +17,7 @@ const TOOL_META: Record<string, { label: string; icon: ComponentType<{ className
   search_assets: { label: '搜索资料', icon: Search },
   'resume-design': { label: '加载设计技能', icon: Palette },
   'resume-interview': { label: '加载面试技能', icon: Search },
+  load_skill: { label: '加载技能', icon: Palette },
   get_skill_reference: { label: '获取参考内容', icon: FileText },
 }
 
