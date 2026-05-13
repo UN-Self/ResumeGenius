@@ -10,6 +10,7 @@ import {
   processScopedCSS,
   reconstructHtml,
   stripTrailingEditorEmptyParagraphs,
+  stripPageShellProperties,
 } from '@/lib/extract-styles'
 
 // ─── Test helpers ──────────────────────────────────────────────────
@@ -203,6 +204,52 @@ describe('stripContainerDimensions', () => {
   })
 })
 
+describe('stripPageShellProperties', () => {
+  it('keeps body typography but removes page shell layout and background from scope root', () => {
+    const css = `${SCOPE_PREFIX} { display: flex; justify-content: center; padding: 40px 0; background: #eee; color: #333; font-family: sans-serif; }`
+
+    const result = stripPageShellProperties(css, [])
+
+    expect(result).toContain(`${SCOPE_PREFIX} {`)
+    expect(result).toContain('color:')
+    expect(result).toContain('font-family: sans-serif')
+    expect(result).not.toContain('display:')
+    expect(result).not.toContain('justify-content')
+    expect(result).not.toContain('padding:')
+    expect(result).not.toContain('background')
+  })
+
+  it('removes generated page wrapper visuals without touching section dividers', () => {
+    const css = `
+      ${SCOPE_PREFIX} .page {
+        width: 210mm;
+        min-height: 297mm;
+        padding: 20mm;
+        margin: 0 auto;
+        background: #eee;
+        box-shadow: 0 2px 12px rgba(0,0,0,.12);
+        border: 1px solid #ddd;
+        color: #333;
+      }
+      ${SCOPE_PREFIX} .section-title { border-bottom: 1px solid #ddd; }
+    `
+
+    const result = stripPageShellProperties(css, ['.page'])
+
+    const pageRule = result.match(new RegExp(`\\${SCOPE_PREFIX}\\s+\\.page\\s*\\{([^}]*)\\}`))
+    expect(pageRule).not.toBeNull()
+    expect(pageRule![1]).toContain('color:')
+    expect(pageRule![1]).not.toContain('width')
+    expect(pageRule![1]).not.toContain('min-height')
+    expect(pageRule![1]).not.toContain('padding')
+    expect(pageRule![1]).not.toContain('margin')
+    expect(pageRule![1]).not.toContain('background')
+    expect(pageRule![1]).not.toContain('box-shadow')
+    expect(pageRule![1]).not.toContain('border')
+    expect(result).toMatch(new RegExp(`\\${SCOPE_PREFIX}\\s+\\.section-title[^{]*\\{[^}]*border-bottom`))
+  })
+})
+
 // ─── getRootContainerClasses ──────────────────────────────────────────
 
 describe('getRootContainerClasses', () => {
@@ -373,7 +420,7 @@ describe('extractStyles', () => {
     expect(bodyHtml).toContain('class="resume"')
   })
 
-  it('promotes root container background to .resume-document', () => {
+  it('strips root container background instead of promoting preview shell visuals', () => {
     const html = `<!DOCTYPE html>
 <html><head>
   <style>
@@ -391,8 +438,7 @@ describe('extractStyles', () => {
     expect(scopedCSS).not.toContain('width: 210mm')
     expect(scopedCSS).not.toContain('min-height: 297mm')
     expect(scopedCSS).not.toContain('padding: 18mm 20mm')
-    // Background should be promoted to .resume-document (full canvas coverage)
-    expect(SCOPE_PREFIX_BLOCK_RE.test(scopedCSS)).toBe(true)
+    expect(scopedCSS).not.toContain('background')
     // .section should remain scoped normally
     expect(scopedCSS).toContain(`${SCOPE_PREFIX} .section`)
   })
@@ -483,10 +529,10 @@ describe('RESUME_DOCUMENT_CLASS and SCOPE_PREFIX', () => {
 // ─── processScopedCSS ──────────────────────────────────────────────
 
 describe('processScopedCSS', () => {
-  it('scopes, strips container dimensions, and promotes background in one call', () => {
+  it('scopes and strips generated page-shell properties in one call', () => {
     const rawCSS = `
-      body { font-family: sans-serif; }
-      .resume { width: 210mm; padding: 18mm; background: #f5f5f5; }
+      body { font-family: sans-serif; display: flex; justify-content: center; background: #eee; padding: 40px; }
+      .resume { width: 210mm; padding: 18mm; background: #f5f5f5; box-shadow: 0 4px 24px rgba(0,0,0,.12); }
       .section { margin-bottom: 10pt; }
     `
     const containerClasses = ['resume']
@@ -494,11 +540,16 @@ describe('processScopedCSS', () => {
 
     // body should be scoped away
     expect(result).not.toContain('body')
+    // Body shell layout and generated page card visuals should be stripped
+    expect(result).not.toContain('display:')
+    expect(result).not.toContain('justify-content')
+    expect(result).not.toContain('background')
+    expect(result).not.toContain('box-shadow')
     // Container dimensions should be stripped
     expect(result).not.toContain('width: 210mm')
     expect(result).not.toContain('padding: 18mm')
-    // Background should be promoted to .resume-document
-    expect(SCOPE_PREFIX_BLOCK_RE.test(result)).toBe(true)
+    // Typography from body should still survive
+    expect(result).toContain('font-family: sans-serif')
     // .section should be scoped normally
     expect(result).toContain(`${SCOPE_PREFIX} .section`)
   })
