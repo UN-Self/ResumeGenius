@@ -266,9 +266,18 @@ export default function EditorPage() {
     })
   }, [assets])
 
-  const handleExport = () => {
-    if (draftId) {
+  const handleExport = async () => {
+    if (!draftId || !editor) return
+
+    try {
+      await flush()
+      await request(`/drafts/${draftId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ html_content: getPersistableHTML() }),
+      })
       exportPdf(Number(draftId))
+    } catch (exportSaveError) {
+      toast(exportSaveError instanceof Error ? exportSaveError.message : '导出前保存失败')
     }
   }
 

@@ -37,6 +37,7 @@ export function useAutoSave({
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isSaving = useRef(false)
   const currentSaveHtml = useRef<string | null>(null)
+  const activeSave = useRef<Promise<void> | null>(null)
 
   const clearTimers = () => {
     if (debounceTimer.current) {
@@ -49,42 +50,50 @@ export function useAutoSave({
     }
   }
 
-  const doSave = useCallback(async (html: string) => {
-    if (isSaving.current) return
+  const doSave = useCallback((html: string): Promise<void> => {
+    if (isSaving.current) return activeSave.current ?? Promise.resolve()
     isSaving.current = true
     currentSaveHtml.current = html
     setStatus('saving')
 
-    try {
-      await save(reconstruct ? reconstruct(html) : html)
-      setStatus('saved')
-      setLastSavedAt(new Date())
-      setError(null)
-      retryCount.current = 0
-      isSaving.current = false
-      currentSaveHtml.current = null
-      pendingHtml.current = null // Clear pending since save succeeded
+    const run = (async () => {
+      try {
+        await save(reconstruct ? reconstruct(html) : html)
+        setStatus('saved')
+        setLastSavedAt(new Date())
+        setError(null)
+        retryCount.current = 0
+        if (pendingHtml.current === html) {
+          pendingHtml.current = null
+        }
 
-      // Reset to idle after 5 seconds
-      setTimeout(() => {
-        setStatus('idle')
-      }, 5000)
-    } catch (err) {
-      isSaving.current = false
-      retryCount.current++
+        // Reset to idle after 5 seconds
+        setTimeout(() => {
+          setStatus('idle')
+        }, 5000)
+      } catch (err) {
+        retryCount.current++
 
-      if (retryCount.current < maxRetries) {
-        // Exponential backoff: 1s, 2s, 4s
-        const delay = Math.pow(2, retryCount.current - 1) * 1000
-        setStatus('saving')
-        retryTimer.current = setTimeout(() => {
-          doSave(html) // Use captured html, not pendingHtml
-        }, delay)
-      } else {
-        setStatus('error')
-        setError(err as Error)
+        if (retryCount.current < maxRetries) {
+          // Exponential backoff: 1s, 2s, 4s
+          const delay = Math.pow(2, retryCount.current - 1) * 1000
+          setStatus('saving')
+          retryTimer.current = setTimeout(() => {
+            doSave(html) // Use captured html, not pendingHtml
+          }, delay)
+        } else {
+          setStatus('error')
+          setError(err as Error)
+        }
+      } finally {
+        isSaving.current = false
+        currentSaveHtml.current = null
+        activeSave.current = null
       }
-    }
+    })()
+
+    activeSave.current = run
+    return run
   }, [save, reconstruct, maxRetries])
 
   const scheduleSave = useCallback((html: string) => {
@@ -101,15 +110,16 @@ export function useAutoSave({
     }, debounceMs)
   }, [doSave, debounceMs])
 
-  const flush = useCallback((): Promise<void> => {
+  const flush = useCallback(async (): Promise<void> => {
     clearTimers()
+    if (activeSave.current) {
+      await activeSave.current
+    }
     if (pendingHtml.current !== null) {
       const htmlToSave = pendingHtml.current
-      pendingHtml.current = null
       currentSaveHtml.current = htmlToSave
-      return doSave(htmlToSave) ?? Promise.resolve()
+      await doSave(htmlToSave)
     }
-    return Promise.resolve()
   }, [doSave])
 
   const retry = useCallback(() => {
