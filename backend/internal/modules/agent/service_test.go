@@ -185,7 +185,7 @@ func TestEstimateTokens(t *testing.T) {
 func TestCompactMessages_TooFewMessages(t *testing.T) {
 	db := SetupTestDB(t)
 	provider := &MockAdapter{}
-	svc := NewChatService(db, provider, &MockToolExecutor{}, 3)
+	svc := NewChatService(db, provider, &MockToolExecutor{}, 3, nil)
 
 	msgs := []models.AIMessage{
 		{Role: "user", Content: "hello"},
@@ -274,7 +274,7 @@ func TestChatService_StreamChatReAct_ContinuesAfterTextAndToolCall(t *testing.T)
 	draftID := createTestDraftDirect(t, db)
 	sessionSvc := NewSessionService(db)
 	mock := &TextAndToolCallMock{}
-	chatSvc := NewChatService(db, mock, &MockToolExecutor{}, 3)
+	chatSvc := NewChatService(db, mock, &MockToolExecutor{}, 3, nil)
 
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
@@ -314,7 +314,7 @@ func TestChatService_StreamChatReAct_FullSequence(t *testing.T) {
 	db := SetupTestDB(t)
 	draftID := createTestDraftDirect(t, db)
 	sessionSvc := NewSessionService(db)
-	chatSvc := NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3)
+	chatSvc := NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3, nil)
 
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
@@ -370,7 +370,7 @@ func TestChatService_StreamChatReAct_SavesUserMessage(t *testing.T) {
 	db := SetupTestDB(t)
 	draftID := createTestDraftDirect(t, db)
 	sessionSvc := NewSessionService(db)
-	chatSvc := NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3)
+	chatSvc := NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3, nil)
 
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
@@ -392,7 +392,7 @@ func TestChatService_StreamChatReAct_SavesAssistantWithThinking(t *testing.T) {
 	db := SetupTestDB(t)
 	draftID := createTestDraftDirect(t, db)
 	sessionSvc := NewSessionService(db)
-	chatSvc := NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3)
+	chatSvc := NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3, nil)
 
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
@@ -418,7 +418,7 @@ func TestChatService_StreamChatReAct_SavesToolCalls(t *testing.T) {
 	db := SetupTestDB(t)
 	draftID := createTestDraftDirect(t, db)
 	sessionSvc := NewSessionService(db)
-	chatSvc := NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3)
+	chatSvc := NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3, nil)
 
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
@@ -443,7 +443,7 @@ func TestChatService_StreamChatReAct_SessionNotFound(t *testing.T) {
 	t.Setenv("USE_MOCK", "true")
 
 	db := SetupTestDB(t)
-	chatSvc := NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3)
+	chatSvc := NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3, nil)
 
 	err := chatSvc.StreamChatReAct(context.Background(), 9999, "hello", func(string) error { return nil })
 	assert.ErrorIs(t, err, ErrSessionNotFound)
@@ -457,7 +457,7 @@ func TestChatService_StreamChatReAct_MaxIterationsExceeded(t *testing.T) {
 	sessionSvc := NewSessionService(db)
 
 	// Use a mock that only produces tool calls (no text), causing the loop to hit maxIterations
-	chatSvc := NewChatService(db, &ToolCallLoopMock{}, &MockToolExecutor{}, 3)
+	chatSvc := NewChatService(db, &ToolCallLoopMock{}, &MockToolExecutor{}, 3, nil)
 
 	session, err := sessionSvc.Create(draftID)
 	require.NoError(t, err)
@@ -473,7 +473,7 @@ func TestChatService_StreamChatReAct_MaxIterationsExceeded(t *testing.T) {
 
 func TestNewChatService_Defaults(t *testing.T) {
 	db := SetupTestDB(t)
-	svc := NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, -1)
+	svc := NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, -1, nil)
 
 	assert.Equal(t, 3, svc.maxIterations, "default maxIterations should be 3")
 	assert.Equal(t, 128000, svc.contextWindowSize, "default contextWindowSize should be 128000")

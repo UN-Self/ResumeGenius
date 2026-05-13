@@ -61,7 +61,7 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 			maxIterations = parsed
 		}
 	}
-	chatSvc := NewChatService(db, provider, toolExecutor, maxIterations)
+	chatSvc := NewChatService(db, provider, toolExecutor, maxIterations, skillLoader)
 	editSvc := NewEditService(db)
 	h := NewHandler(sessionSvc, chatSvc, editSvc)
 

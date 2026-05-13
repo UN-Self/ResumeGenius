@@ -1,0 +1,44 @@
+name: a4-template
+content: |
+  ## A4 简历精确尺寸与模板
+
+  ### 关键尺寸（96dpi 下的像素值）
+  - 画布宽高：794px x 1123px（对应 210mm x 297mm）
+  - 页边距：上 68px、下 68px、左 76px、右 76px（对应 18mm / 20mm）
+  - 有效内容区：642px x 987px（794-76-76 x 1123-68-68）
+  - 分页间距：32px（仅前端显示，不影响内容计算）
+
+  ### 内容容量参考
+  - 正文字号 14px、行高 1.5 → 每行约 21px，有效区可容纳约 47 行
+  - 每行约 45-50 个中文字符（642px 宽度下）
+  - 单栏布局一页约 1500-2000 字纯文本
+  - 双栏布局因列间距损耗，总容量约减少 10-15%
+
+  ### HTML 模板骨架
+  生成简历时应遵循以下结构，确保内容自然适配 A4：
+
+  ```html
+  <!-- 顶部联系信息区：不超过 60px 高度 -->
+  <header style="padding-bottom: 8px; border-bottom: 1px solid #ddd;">
+    <div style="font-size: 20px; font-weight: 600;">姓名</div>
+    <div style="font-size: 12px; color: #666;">电话 | 邮箱 | 地址</div>
+  </header>
+
+  <!-- 内容分区：紧凑标题 + bullet 列表 -->
+  <section style="margin-top: 8px;">
+    <h2 style="font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 2px;">工作经历</h2>
+    <div style="margin-top: 4px;">
+      <div><strong>公司名</strong> | 职位 | 时间</div>
+      <ul style="margin: 2px 0; padding-left: 16px; font-size: 13px;">
+        <li>成果描述</li>
+      </ul>
+    </div>
+  </section>
+  ```
+
+  ### 控制篇幅的具体操作
+  1. 减少 bullet 条目（每个经历 2-3 条而非 4-5 条）
+  2. 合并短条目为一段描述
+  3. 技能用逗号分隔文本，不用大块色卡
+  4. 减小段间距至 4-8px
+  5. 缩短描述文案，删掉修饰性形容词

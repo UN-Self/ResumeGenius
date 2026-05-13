@@ -117,3 +117,59 @@ func TestSkillLoader_Skills_ReturnsAllDescriptors(t *testing.T) {
 	assert.True(t, names["resume-interview"])
 	assert.True(t, names["resume-design"])
 }
+
+// --- BuildSkillListing tests ---
+
+func TestBuildSkillListing(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+
+	listing := loader.BuildSkillListing()
+	assert.NotEmpty(t, listing, "listing should not be empty when skills exist")
+	assert.Contains(t, listing, "resume-design", "listing should mention resume-design skill")
+	assert.Contains(t, listing, "load_skill", "listing should tell AI how to invoke")
+}
+
+func TestBuildSkillListing_Empty(t *testing.T) {
+	loader := &SkillLoader{
+		skills:     map[string]*SkillDescriptor{},
+		references: map[string]map[string]*ReferenceContent{},
+	}
+	listing := loader.BuildSkillListing()
+	assert.Empty(t, listing, "listing should be empty when no skills loaded")
+}
+
+func TestBuildSkillListing_ContainsTrigger(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+
+	listing := loader.BuildSkillListing()
+	assert.Contains(t, listing, "调整样式", "listing should include trigger info from skill.yaml")
+}
+
+// --- A4 template reference ---
+
+func TestSkillLoader_A4TemplateReference(t *testing.T) {
+	loader, err := NewSkillLoader()
+	require.NoError(t, err)
+
+	result, err := loader.LoadSkillWithReferences("resume-design")
+	require.NoError(t, err)
+
+	refNames := make([]string, len(result.References))
+	for i, ref := range result.References {
+		refNames[i] = ref.Name
+	}
+	assert.Contains(t, refNames, "a4-guidelines", "should have a4-guidelines reference")
+	assert.Contains(t, refNames, "a4-template", "should have a4-template reference")
+
+	for _, ref := range result.References {
+		if ref.Name == "a4-template" {
+			assert.Contains(t, ref.Content, "794px", "should contain canvas width")
+			assert.Contains(t, ref.Content, "987px", "should contain content area height")
+			assert.Contains(t, ref.Content, "1500-2000", "should contain capacity estimate")
+			return
+		}
+	}
+	t.Fatal("a4-template reference not found")
+}

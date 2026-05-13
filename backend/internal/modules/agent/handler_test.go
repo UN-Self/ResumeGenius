@@ -24,7 +24,7 @@ func setupTestHandler(t *testing.T) (*Handler, *gin.Engine, *gorm.DB) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db := SetupTestDB(t)
-	h := NewHandler(NewSessionService(db), NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3), NewEditService(db))
+	h := NewHandler(NewSessionService(db), NewChatService(db, &MockAdapter{}, &MockToolExecutor{}, 3, nil), NewEditService(db))
 	r := gin.New()
 	r.Use(func(c *gin.Context) { c.Set(middleware.ContextUserID, "test-user-1"); c.Next() })
 	return h, r, db
@@ -216,7 +216,7 @@ func TestHandler_Chat_MaxIterations(t *testing.T) {
 	t.Setenv("USE_MOCK", "true")
 
 	db := SetupTestDB(t)
-	h := NewHandler(NewSessionService(db), NewChatService(db, &ToolCallLoopMock{}, &MockToolExecutor{}, 3), NewEditService(db))
+	h := NewHandler(NewSessionService(db), NewChatService(db, &ToolCallLoopMock{}, &MockToolExecutor{}, 3, nil), NewEditService(db))
 	r := gin.New()
 	r.POST("/ai/sessions", h.CreateSession)
 	r.POST("/ai/sessions/:session_id/chat", h.Chat)
@@ -422,7 +422,7 @@ func TestHandler_Chat_FullPipeline(t *testing.T) {
 		},
 	}
 
-	chatSvc := NewChatService(db, adapter, executor, 3)
+	chatSvc := NewChatService(db, adapter, executor, 3, nil)
 	sessionSvc := NewSessionService(db)
 	h := NewHandler(sessionSvc, chatSvc, NewEditService(db))
 
@@ -528,7 +528,7 @@ func TestHandler_Chat_ToolExecutionError(t *testing.T) {
 		},
 	}
 
-	chatSvc := NewChatService(db, &ToolCallLoopMock{}, executor, 3)
+	chatSvc := NewChatService(db, &ToolCallLoopMock{}, executor, 3, nil)
 	sessionSvc := NewSessionService(db)
 	h := NewHandler(sessionSvc, chatSvc, NewEditService(db))
 
@@ -586,7 +586,7 @@ func TestHandler_Chat_NoToolsNeeded(t *testing.T) {
 	adapter := &textOnlyMockAdapter{response: "你好！我是简历助手，有什么可以帮你的吗？"}
 	executor := &mockToolExecutor{results: map[string]string{}}
 
-	chatSvc := NewChatService(db, adapter, executor, 3)
+	chatSvc := NewChatService(db, adapter, executor, 3, nil)
 	sessionSvc := NewSessionService(db)
 	h := NewHandler(sessionSvc, chatSvc, NewEditService(db))
 
@@ -652,7 +652,7 @@ func TestHandler_Chat_HTMLPreviewInText(t *testing.T) {
 	adapter := &htmlMarkerMockAdapter{}
 	executor := &mockToolExecutor{results: map[string]string{}}
 
-	chatSvc := NewChatService(db, adapter, executor, 3)
+	chatSvc := NewChatService(db, adapter, executor, 3, nil)
 	sessionSvc := NewSessionService(db)
 	h := NewHandler(sessionSvc, chatSvc, NewEditService(db))
 
@@ -719,7 +719,7 @@ func TestHandler_Undo(t *testing.T) {
 	sessionSvc := NewSessionService(db)
 	provider := &MockAdapter{}
 	toolExecutor := NewAgentToolExecutor(db, nil)
-	chatSvc := NewChatService(db, provider, toolExecutor, 10)
+	chatSvc := NewChatService(db, provider, toolExecutor, 10, nil)
 	h := NewHandler(sessionSvc, chatSvc, editSvc)
 
 	r := gin.New()
@@ -767,7 +767,7 @@ func TestHandler_Undo_NoMoreEdits(t *testing.T) {
 	sessionSvc := NewSessionService(db)
 	provider := &MockAdapter{}
 	toolExecutor := NewAgentToolExecutor(db, nil)
-	chatSvc := NewChatService(db, provider, toolExecutor, 10)
+	chatSvc := NewChatService(db, provider, toolExecutor, 10, nil)
 	h := NewHandler(sessionSvc, chatSvc, editSvc)
 
 	r := gin.New()

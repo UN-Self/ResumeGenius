@@ -598,6 +598,13 @@ func mockBodyMarkerEdit(messages []Message) (string, string) {
 	if draftHTML == "" {
 		return "", ""
 	}
+	// get_draft full mode returns JSON {"html":"...","page_count":N}; extract html field
+	var parsed struct {
+		HTML string `json:"html"`
+	}
+	if json.Unmarshal([]byte(draftHTML), &parsed) == nil && parsed.HTML != "" {
+		draftHTML = parsed.HTML
+	}
 	lower := strings.ToLower(draftHTML)
 	start := strings.Index(lower, "<body")
 	if start < 0 {

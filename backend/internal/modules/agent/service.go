@@ -112,10 +112,11 @@ type ChatService struct {
 	recorder          *ThinkingRecorder
 	maxIterations     int
 	contextWindowSize int
+	skillLoader       *SkillLoader
 }
 
 // NewChatService creates a ChatService. contextWindowSize defaults to 128000.
-func NewChatService(db *gorm.DB, provider ProviderAdapter, toolExecutor ToolExecutor, maxIterations int) *ChatService {
+func NewChatService(db *gorm.DB, provider ProviderAdapter, toolExecutor ToolExecutor, maxIterations int, skillLoader *SkillLoader) *ChatService {
 	if maxIterations <= 0 {
 		maxIterations = 3
 	}
@@ -126,6 +127,7 @@ func NewChatService(db *gorm.DB, provider ProviderAdapter, toolExecutor ToolExec
 		toolExecutor:      toolExecutor,
 		maxIterations:     maxIterations,
 		contextWindowSize: windowSize,
+		skillLoader:       skillLoader,
 	}
 }
 
@@ -272,7 +274,11 @@ func (s *ChatService) StreamChatReAct(ctx context.Context, sessionID uint, userM
 	if session.ProjectID != nil {
 		assetInfo = s.preloadAssets(*session.ProjectID)
 	}
-	sections = DefaultPromptSections(assetInfo, "")
+	skillListing := ""
+	if s.skillLoader != nil {
+		skillListing = s.skillLoader.BuildSkillListing()
+	}
+	sections = DefaultPromptSections(assetInfo, skillListing)
 	augmentedPrompt = BuildSystemPrompt(sections)
 	debugLog("service", "资源预加载完成，system prompt 长度 %d 字符", len(augmentedPrompt))
 

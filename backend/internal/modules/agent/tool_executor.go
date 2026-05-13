@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/PuerkitoBio/goquery"
 	"gorm.io/gorm"
@@ -291,7 +294,7 @@ func (e *AgentToolExecutor) getDraft(ctx context.Context, params map[string]inte
 	}
 
 	var draft models.Draft
-	if err := e.db.WithContext(ctx).Select("id", "html_content").First(&draft, draftID).Error; err != nil {
+	if err := e.db.WithContext(ctx).Select("id", "html_content", "page_count").First(&draft, draftID).Error; err != nil {
 		return "", fmt.Errorf("get draft: %w", err)
 	}
 
@@ -348,8 +351,16 @@ func (e *AgentToolExecutor) getDraft(ctx context.Context, params map[string]inte
 		if len(runes) == 0 {
 			return "当前简历 HTML 为空，请直接使用 apply_edits 创建完整简历内容。", nil
 		}
-		debugLog("tools", "get_draft mode=full len=%d", len(draft.HTMLContent))
-		return draft.HTMLContent, nil
+		debugLog("tools", "get_draft mode=full len=%d page_count=%d", len(draft.HTMLContent), draft.PageCount)
+		resultData := map[string]interface{}{
+			"html":       draft.HTMLContent,
+			"page_count": draft.PageCount,
+		}
+		b, err := json.Marshal(resultData)
+		if err != nil {
+			return "", fmt.Errorf("marshal get_draft result: %w", err)
+		}
+		return string(b), nil
 
 	default:
 		return "", fmt.Errorf("未知 mode: %s，支持 structure/section/search/full", mode)
@@ -479,14 +490,19 @@ func (e *AgentToolExecutor) applyEdits(ctx context.Context, params map[string]in
 
 		// 3. Apply ops step by step
 		for i, op := range ops {
-			if !strings.Contains(html, op.OldString) {
+			if strings.Contains(html, op.OldString) {
+				// Exact match path
+				debugLog("tools", "操作 %d/%d: old=%s → new=%s", i+1, len(ops), truncateHTML(op.OldString), truncateHTML(op.NewString))
+				html = strings.ReplaceAll(html, op.OldString, op.NewString)
+			} else if start, end := findWithCSSNormalization(html, op.OldString); start >= 0 {
+				// CSS normalization fallback
+				debugLog("tools", "操作 %d/%d: 通过 CSS 规范化匹配成功", i+1, len(ops))
+				html = html[:start] + op.NewString + html[end:]
+			} else {
 				lastErr = fmt.Errorf("op #%d 匹配失败:\n%s", i+1, buildEditMatchError(op.OldString, html))
 				resultData.Failed++
 				continue
 			}
-
-			debugLog("tools", "操作 %d/%d: old=%s → new=%s", i+1, len(ops), truncateHTML(op.OldString), truncateHTML(op.NewString))
-			html = strings.ReplaceAll(html, op.OldString, op.NewString)
 
 			edit := models.DraftEdit{
 				DraftID:      draftID,
@@ -650,4 +666,63 @@ func getIntParam(params map[string]interface{}, name string) (int, error) {
 	default:
 		return 0, fmt.Errorf("parameter %s must be a number, got %T", name, v)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// CSS whitespace normalization
+// ---------------------------------------------------------------------------
+
+var multiWhitespace = regexp.MustCompile(`\s+`)
+
+func normalizeCSSWhitespace(s string) string {
+	return strings.TrimSpace(multiWhitespace.ReplaceAllString(s, " "))
+}
+
+// findWithCSSNormalization searches for oldString in HTML after normalizing
+// whitespace in both. Returns the start and end positions in the original HTML,
+// or (-1, -1) if not found. This handles cases where the AI model generates
+// CSS in a different whitespace format (e.g., single-line) than what's stored.
+func findWithCSSNormalization(html, oldString string) (start, end int) {
+	normalizedOld := normalizeCSSWhitespace(oldString)
+	if normalizedOld == "" {
+		return -1, -1
+	}
+
+	// Cheap check: normalize html without position tracking first
+	normalizedHTML := normalizeCSSWhitespace(html)
+	idx := strings.Index(normalizedHTML, normalizedOld)
+	if idx == -1 {
+		return -1, -1
+	}
+
+	// Build position mapping only when a match is confirmed
+	var normBuilder strings.Builder
+	positionMap := make([]int, 0, len(html))
+	lastWasSpace := false
+
+	for i, r := range html {
+		if unicode.IsSpace(r) {
+			if !lastWasSpace {
+				normBuilder.WriteRune(' ')
+				positionMap = append(positionMap, i)
+				lastWasSpace = true
+			}
+		} else {
+			normBuilder.WriteRune(r)
+			positionMap = append(positionMap, i)
+			lastWasSpace = false
+		}
+	}
+
+	// Convert byte offset from strings.Index to rune offset for positionMap indexing
+	runeIdx := utf8.RuneCountInString(normalizedHTML[:idx])
+	start = positionMap[runeIdx]
+	// Use the start position of the rune AFTER the match for correct multi-byte handling
+	afterRuneIdx := runeIdx + utf8.RuneCountInString(normalizedOld)
+	if afterRuneIdx < len(positionMap) {
+		end = positionMap[afterRuneIdx]
+	} else {
+		end = len(html)
+	}
+	return start, end
 }

@@ -53,6 +53,7 @@ type ReferenceContent struct {
 type SkillLoader struct {
 	skills     map[string]*SkillDescriptor
 	references map[string]map[string]*ReferenceContent // skillName -> refName -> content
+	listing    string // cached BuildSkillListing result
 }
 
 // NewSkillLoader creates a SkillLoader by walking the embedded skills directory.
@@ -115,6 +116,8 @@ func NewSkillLoader() (*SkillLoader, error) {
 		debugLog("skills", "技能 %s 加载了 %d 个参考文档", name, len(refs))
 	}
 
+	loader.listing = loader.buildSkillListingUncached()
+
 	return loader, nil
 }
 
@@ -125,6 +128,28 @@ func (l *SkillLoader) Skills() []*SkillDescriptor {
 		result = append(result, s)
 	}
 	return result
+}
+
+// BuildSkillListing returns the cached skill listing string for the system prompt.
+func (l *SkillLoader) BuildSkillListing() string {
+	return l.listing
+}
+
+func (l *SkillLoader) buildSkillListingUncached() string {
+	if len(l.skills) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("## 可用技能\n")
+	for _, desc := range l.skills {
+		sb.WriteString(fmt.Sprintf("- %s: %s\n", desc.Name, strings.TrimSpace(desc.Description)))
+		if desc.Trigger != "" {
+			sb.WriteString(fmt.Sprintf("  触发条件：%s\n", desc.Trigger))
+		}
+		sb.WriteString(fmt.Sprintf("  调用 load_skill(skill_name=\"%s\") 获取完整规范和参考。\n", desc.Name))
+	}
+	return sb.String()
 }
 
 // HasSkill reports whether a skill with the given name exists.

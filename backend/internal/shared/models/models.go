@@ -73,6 +73,7 @@ type Draft struct {
 	Project     Project        `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
 	Versions    []Version      `gorm:"foreignKey:DraftID" json:"versions,omitempty"`
 	AISessions  []AISession    `gorm:"foreignKey:DraftID" json:"ai_sessions,omitempty"`
+	PageCount             int            `gorm:"default:0" json:"page_count"`
 	CreatedAt             time.Time      `json:"created_at"`
 	UpdatedAt             time.Time      `json:"updated_at"`
 	CurrentEditSequence   int            `gorm:"default:0" json:"-"`

@@ -142,7 +142,50 @@ func TestGetDraft_Full(t *testing.T) {
 	ctx := WithDraftID(context.Background(), draft.ID)
 	result, err := executor.Execute(ctx, "get_draft", nil)
 	require.NoError(t, err)
-	assert.Equal(t, html, result)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &data))
+	assert.Equal(t, html, data["html"])
+	assert.Contains(t, data, "page_count")
+}
+
+func TestGetDraft_Full_ReturnsPageCount(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db, nil)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: "<html><body><p>hello</p></body></html>", PageCount: 2}
+	require.NoError(t, db.Create(&draft).Error)
+
+	ctx := WithDraftID(context.Background(), draft.ID)
+	result, err := executor.Execute(ctx, "get_draft", nil)
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &data))
+	assert.Equal(t, float64(2), data["page_count"], "should return page_count from DB")
+	assert.Contains(t, data, "html", "should still contain html")
+}
+
+func TestGetDraft_Full_PageCountZero(t *testing.T) {
+	db := SetupTestDB(t)
+	executor := NewAgentToolExecutor(db, nil)
+
+	proj := models.Project{Title: "Test", Status: "active"}
+	require.NoError(t, db.Create(&proj).Error)
+
+	draft := models.Draft{ProjectID: proj.ID, HTMLContent: "<html><body><p>hello</p></body></html>"}
+	require.NoError(t, db.Create(&draft).Error)
+
+	ctx := WithDraftID(context.Background(), draft.ID)
+	result, err := executor.Execute(ctx, "get_draft", nil)
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &data))
+	assert.Equal(t, float64(0), data["page_count"], "default page_count should be 0")
 }
 
 func TestGetDraft_Selector(t *testing.T) {
@@ -984,4 +1027,204 @@ func TestLoadSkill_MissingParam(t *testing.T) {
 	result, err := executor.Execute(context.Background(), "load_skill", nil)
 	require.NoError(t, err)
 	assert.Contains(t, result, "skill_name")
+}
+
+// ---------------------------------------------------------------------------
+// CSS whitespace normalization tests
+// ---------------------------------------------------------------------------
+
+func TestNormalizeCSSWhitespace_MultiLineToSingleLine(t *testing.T) {
+	input := ".resume-document .header {\n  color: rgb(255, 255, 255);\n  position: relative;\n}"
+	expected := ".resume-document .header { color: rgb(255, 255, 255); position: relative; }"
+	assert.Equal(t, expected, normalizeCSSWhitespace(input))
+}
+
+func TestNormalizeCSSWhitespace_AlreadySingleLine(t *testing.T) {
+	input := ".name { font-size: 16px; }"
+	expected := ".name { font-size: 16px; }"
+	assert.Equal(t, expected, normalizeCSSWhitespace(input))
+}
+
+func TestNormalizeCSSWhitespace_TabsAndSpaces(t *testing.T) {
+	input := ".name {\tfont-size: 16px;\t\tcolor: red;\n}"
+	expected := ".name { font-size: 16px; color: red; }"
+	assert.Equal(t, expected, normalizeCSSWhitespace(input))
+}
+
+func TestNormalizeCSSWhitespace_EmptyString(t *testing.T) {
+	assert.Equal(t, "", normalizeCSSWhitespace(""))
+}
+
+func TestNormalizeCSSWhitespace_OnlyWhitespace(t *testing.T) {
+	assert.Equal(t, "", normalizeCSSWhitespace("  \n\t  "))
+}
+
+// ---------------------------------------------------------------------------
+// findWithCSSNormalization tests
+// ---------------------------------------------------------------------------
+
+func TestFindWithCSSNormalization_MultiLineVsSingleLine(t *testing.T) {
+	html := `<style>
+.resume-document .header {
+  color: rgb(255, 255, 255);
+  position: relative;
+}
+</style>`
+	oldString := ".resume-document .header { color: rgb(255, 255, 255); position: relative; }"
+
+	start, end := findWithCSSNormalization(html, oldString)
+	assert.True(t, start >= 0, "should find match")
+	assert.True(t, end > start, "end should be after start")
+	// Verify the matched region in original HTML
+	assert.Equal(t, ".resume-document .header {\n  color: rgb(255, 255, 255);\n  position: relative;\n}", html[start:end])
+}
+
+func TestFindWithCSSNormalization_ExactMatchStillWorks(t *testing.T) {
+	html := `<style>.name { font-size: 16px; }</style>`
+	oldString := ".name { font-size: 16px; }"
+
+	start, end := findWithCSSNormalization(html, oldString)
+	assert.True(t, start >= 0)
+	assert.Equal(t, ".name { font-size: 16px; }", html[start:end])
+}
+
+func TestFindWithCSSNormalization_NoMatch(t *testing.T) {
+	html := `<style>.name { font-size: 16px; }</style>`
+	oldString := ".nonexistent { color: red; }"
+
+	start, end := findWithCSSNormalization(html, oldString)
+	assert.Equal(t, -1, start)
+	assert.Equal(t, -1, end)
+}
+
+func TestFindWithCSSNormalization_EmptyOldString(t *testing.T) {
+	html := `<style>.name { font-size: 16px; }</style>`
+	start, end := findWithCSSNormalization(html, "")
+	assert.Equal(t, -1, start)
+	assert.Equal(t, -1, end)
+}
+
+func TestFindWithCSSNormalization_PreservesOriginalPosition(t *testing.T) {
+	// Ensure the returned positions point to the correct region in original HTML
+	html := `<div>prefix</div><style>
+.class-a {
+  margin: 0;
+}
+</style><div>suffix</div>`
+	oldString := ".class-a { margin: 0; }"
+
+	start, end := findWithCSSNormalization(html, oldString)
+	require.True(t, start >= 0)
+	matched := html[start:end]
+	assert.Contains(t, matched, ".class-a")
+	assert.Contains(t, matched, "margin: 0")
+}
+
+// ---------------------------------------------------------------------------
+// applyEdits CSS normalization integration tests
+// ---------------------------------------------------------------------------
+
+func TestApplyEdits_CSSNormalization_MultiLineCSS(t *testing.T) {
+	db := SetupTestDB(t)
+
+	html := `<html><head><style>
+.resume-document .header {
+  color: rgb(255, 255, 255);
+  position: relative;
+}
+.resume-document .name {
+  font-size: 18px;
+  font-weight: 700;
+}
+</style></head><body><div class="header"><p class="name">John</p></div></body></html>`
+
+	draft := models.Draft{ProjectID: 1, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	executor := NewAgentToolExecutor(db, nil)
+	ctx := WithDraftID(context.Background(), draft.ID)
+
+	// Model generates single-line CSS as old_string
+	result, err := executor.Execute(ctx, "apply_edits", map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string":  ".resume-document .name { font-size: 18px; font-weight: 700; }",
+				"new_string":  ".resume-document .name { font-size: 16px; font-weight: 700; }",
+				"description": "reduce name font size",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &data))
+	assert.Equal(t, float64(1), data["applied"])
+	assert.Equal(t, float64(0), data["failed"])
+
+	// Verify the replacement was applied correctly
+	var updated models.Draft
+	require.NoError(t, db.First(&updated, draft.ID).Error)
+	assert.Contains(t, updated.HTMLContent, "font-size: 16px")
+	assert.NotContains(t, updated.HTMLContent, "font-size: 18px")
+	// Other CSS should be untouched
+	assert.Contains(t, updated.HTMLContent, "color: rgb(255, 255, 255)")
+}
+
+func TestApplyEdits_CSSNormalization_FallbackBehavior(t *testing.T) {
+	db := SetupTestDB(t)
+
+	html := `<html><body><h1>Hello</h1></body></html>`
+	draft := models.Draft{ProjectID: 1, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	executor := NewAgentToolExecutor(db, nil)
+	ctx := WithDraftID(context.Background(), draft.ID)
+
+	// Both exact and normalized should fail for truly nonexistent content
+	_, err := executor.Execute(ctx, "apply_edits", map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string": "nonexistent content",
+				"new_string": "replacement",
+			},
+		},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "匹配失败")
+}
+
+func TestApplyEdits_CSSNormalization_ChineseContent(t *testing.T) {
+	db := SetupTestDB(t)
+
+	// Test with Chinese text before CSS to verify byte/rune offset handling
+	html := `<html><head><style>
+.resume-document .header {
+  color: rgb(255, 255, 255);
+}
+</style></head><body><p>你好世界</p></body></html>`
+
+	draft := models.Draft{ProjectID: 1, HTMLContent: html}
+	require.NoError(t, db.Create(&draft).Error)
+
+	executor := NewAgentToolExecutor(db, nil)
+	ctx := WithDraftID(context.Background(), draft.ID)
+
+	result, err := executor.Execute(ctx, "apply_edits", map[string]interface{}{
+		"ops": []interface{}{
+			map[string]interface{}{
+				"old_string": ".resume-document .header { color: rgb(255, 255, 255); }",
+				"new_string": ".resume-document .header { color: rgb(200, 200, 200); }",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	var data map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(result), &data))
+	assert.Equal(t, float64(1), data["applied"])
+
+	var updated models.Draft
+	require.NoError(t, db.First(&updated, draft.ID).Error)
+	assert.Contains(t, updated.HTMLContent, "color: rgb(200, 200, 200)")
+	assert.Contains(t, updated.HTMLContent, "你好世界", "Chinese content should be preserved")
 }

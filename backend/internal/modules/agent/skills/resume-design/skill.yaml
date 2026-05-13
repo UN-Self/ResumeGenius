@@ -21,3 +21,5 @@ tools:
 references:
   - name: a4-guidelines
     description: A4 单页简历设计规范，包含推荐样式、禁止样式和修改策略
+  - name: a4-template
+    description: A4 精确像素尺寸、内容容量参考和 HTML 模板骨架
