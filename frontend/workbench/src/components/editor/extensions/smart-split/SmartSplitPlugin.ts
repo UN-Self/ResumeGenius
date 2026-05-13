@@ -165,7 +165,7 @@ function syncPageBreaks(
   // Add break-before: page to page-start nodes
   for (const pos of pageStarts) {
     const node = tr.doc.nodeAt(pos)
-    if (!node) continue
+    if (!node || !node.isBlock) continue
     const currentStyle = (node.attrs.style as string) || ''
     const newStyle = appendBreakBefore(currentStyle)
     tr.setNodeMarkup(pos, undefined, { ...node.attrs, style: newStyle })
