@@ -5,8 +5,8 @@ export const A4_LAYOUT = {
   pageWidth: 794,
   /** 297mm @ 96dpi */
   pageHeight: 1123,
-  /** 15mm top ≈ 56px */
-  marginTop: 56,
+  /** ≈ 11mm top */
+  marginTop: 42,
   /** 18mm bottom ≈ 68px */
   marginBottom: 68,
   /** 20mm left ≈ 76px */
