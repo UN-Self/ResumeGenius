@@ -1,5 +1,5 @@
 import type { BreakerPosition, CrossingInfo } from './types'
-import { BLOCK_TAGS } from './types'
+import { BLOCK_TAGS, PAGE_START_TAGS } from './types'
 
 /** Read breaker Y positions from the editor DOM */
 export function getBreakerPositions(editorDom: Element): BreakerPosition[] {
@@ -25,7 +25,7 @@ export function findPageStartPositions(
     NodeFilter.SHOW_ELEMENT,
     {
       acceptNode: (node: Element) =>
-        BLOCK_TAGS.has(node.tagName) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP,
+        PAGE_START_TAGS.has(node.tagName) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP,
     },
   )
 

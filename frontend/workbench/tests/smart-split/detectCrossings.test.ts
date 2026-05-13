@@ -276,4 +276,116 @@ describe('findPageStartPositions', () => {
 
     document.body.removeChild(wrapper)
   })
+
+  it('detects UL element as page start (not in BLOCK_TAGS but in PAGE_START_TAGS)', () => {
+    const wrapper = document.createElement('div')
+
+    const block1 = document.createElement('div')
+    block1.textContent = 'Page 1 content'
+    block1.getBoundingClientRect = () => ({ top: 0, bottom: 400, height: 400 } as DOMRect)
+
+    const ul = document.createElement('ul')
+    const li = document.createElement('li')
+    li.textContent = 'List item on page 2'
+    ul.appendChild(li)
+    ul.getBoundingClientRect = () => ({ top: 650, bottom: 900, height: 250 } as DOMRect)
+
+    wrapper.appendChild(block1)
+    wrapper.appendChild(ul)
+    document.body.appendChild(wrapper)
+
+    const breakers: BreakerPosition[] = [{ top: 500, bottom: 600 }]
+    const mockView = { posAtDOM: vi.fn().mockReturnValue(15) }
+
+    const results = findPageStartPositions(mockView as any, wrapper, breakers)
+    expect(results).toHaveLength(1)
+    expect(results[0]).toBe(15)
+    expect(mockView.posAtDOM).toHaveBeenCalledWith(ul, 0)
+
+    document.body.removeChild(wrapper)
+  })
+
+  it('detects OL element as page start', () => {
+    const wrapper = document.createElement('div')
+
+    const block1 = document.createElement('div')
+    block1.textContent = 'Page 1'
+    block1.getBoundingClientRect = () => ({ top: 0, bottom: 400, height: 400 } as DOMRect)
+
+    const ol = document.createElement('ol')
+    const li = document.createElement('li')
+    li.textContent = 'Ordered item'
+    ol.appendChild(li)
+    ol.getBoundingClientRect = () => ({ top: 650, bottom: 900, height: 250 } as DOMRect)
+
+    wrapper.appendChild(block1)
+    wrapper.appendChild(ol)
+    document.body.appendChild(wrapper)
+
+    const breakers: BreakerPosition[] = [{ top: 500, bottom: 600 }]
+    const mockView = { posAtDOM: vi.fn().mockReturnValue(20) }
+
+    const results = findPageStartPositions(mockView as any, wrapper, breakers)
+    expect(results).toHaveLength(1)
+    expect(mockView.posAtDOM).toHaveBeenCalledWith(ol, 0)
+
+    document.body.removeChild(wrapper)
+  })
+
+  it('detects LI element as page start when LI is direct child of wrapper', () => {
+    const wrapper = document.createElement('div')
+
+    const block1 = document.createElement('div')
+    block1.textContent = 'Page 1'
+    block1.getBoundingClientRect = () => ({ top: 0, bottom: 400, height: 400 } as DOMRect)
+
+    const li = document.createElement('li')
+    li.textContent = 'Standalone list item on page 2'
+    li.getBoundingClientRect = () => ({ top: 650, bottom: 900, height: 250 } as DOMRect)
+
+    wrapper.appendChild(block1)
+    wrapper.appendChild(li)
+    document.body.appendChild(wrapper)
+
+    const breakers: BreakerPosition[] = [{ top: 500, bottom: 600 }]
+    const mockView = { posAtDOM: vi.fn().mockReturnValue(25) }
+
+    const results = findPageStartPositions(mockView as any, wrapper, breakers)
+    expect(results).toHaveLength(1)
+    expect(mockView.posAtDOM).toHaveBeenCalledWith(li, 0)
+
+    document.body.removeChild(wrapper)
+  })
+
+  it('returns first matching element in document order after breaker', () => {
+    const wrapper = document.createElement('div')
+
+    const block1 = document.createElement('div')
+    block1.textContent = 'Page 1'
+    block1.getBoundingClientRect = () => ({ top: 0, bottom: 400, height: 400 } as DOMRect)
+
+    const ul = document.createElement('ul')
+    const li = document.createElement('li')
+    li.textContent = 'List at page start'
+    ul.appendChild(li)
+    ul.getBoundingClientRect = () => ({ top: 650, bottom: 800, height: 150 } as DOMRect)
+
+    const p = document.createElement('p')
+    p.textContent = 'Paragraph after list'
+    p.getBoundingClientRect = () => ({ top: 820, bottom: 950, height: 130 } as DOMRect)
+
+    wrapper.appendChild(block1)
+    wrapper.appendChild(ul)
+    wrapper.appendChild(p)
+    document.body.appendChild(wrapper)
+
+    const breakers: BreakerPosition[] = [{ top: 500, bottom: 600 }]
+    const mockView = { posAtDOM: vi.fn().mockReturnValue(30) }
+
+    const results = findPageStartPositions(mockView as any, wrapper, breakers)
+    expect(results).toHaveLength(1)
+    expect(mockView.posAtDOM).toHaveBeenCalledWith(ul, 0)
+
+    document.body.removeChild(wrapper)
+  })
 })

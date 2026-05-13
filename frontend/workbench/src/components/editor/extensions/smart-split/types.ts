@@ -49,3 +49,13 @@ export const BLOCK_TAGS = new Set([
   ...CONTAINER_TAGS.map(t => t.toUpperCase()),
   ...EXTRA_BLOCK_TAGS,
 ])
+
+/** Extended tag set for page-start detection (broader than BLOCK_TAGS) */
+const PAGE_START_EXTRA_TAGS = [
+  'UL', 'OL', 'LI', 'DL', 'DT', 'DD',
+] as const
+
+export const PAGE_START_TAGS = new Set([
+  ...BLOCK_TAGS,
+  ...PAGE_START_EXTRA_TAGS,
+])
