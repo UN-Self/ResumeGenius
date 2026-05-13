@@ -166,7 +166,7 @@ func TestSkillLoader_A4TemplateReference(t *testing.T) {
 	for _, ref := range result.References {
 		if ref.Name == "a4-template" {
 			assert.Contains(t, ref.Content, "794px", "should contain canvas width")
-			assert.Contains(t, ref.Content, "987px", "should contain content area height")
+			assert.Contains(t, ref.Content, "999px", "should contain content area height")
 			assert.Contains(t, ref.Content, "1500-2000", "should contain capacity estimate")
 			return
 		}
