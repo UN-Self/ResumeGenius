@@ -19,6 +19,7 @@ export function findPageStartPositions(
 
   const results: number[] = []
   let breakerIdx = 0
+  let bestMatch: Element | null = null
 
   const walker = document.createTreeWalker(
     editorDom,
@@ -32,6 +33,17 @@ export function findPageStartPositions(
   let el = walker.nextNode() as Element | null
   if (el === editorDom) el = walker.nextNode() as Element | null
 
+  const recordMatch = () => {
+    if (!bestMatch) return
+    try {
+      results.push(view.posAtDOM(bestMatch, 0))
+    } catch {
+      // decoration element — not in ProseMirror doc
+    }
+    breakerIdx++
+    bestMatch = null
+  }
+
   while (el && breakerIdx < breakers.length) {
     const rect = el.getBoundingClientRect()
     if (rect.height === 0 || (el.textContent ?? '').trim() === '') {
@@ -39,21 +51,39 @@ export function findPageStartPositions(
       continue
     }
 
-    // Match the first element that extends past the breaker's top edge.
-    // This catches both: elements entirely after the breaker AND elements
-    // that cross the boundary (start before breaker, end after it).
-    if (rect.bottom > breakers[breakerIdx].top) {
-      try {
-        results.push(view.posAtDOM(el, 0))
-      } catch {
-        // decoration element — not in ProseMirror doc
+    const matches = rect.bottom > breakers[breakerIdx].top
+
+    if (matches) {
+      if (!bestMatch || bestMatch.contains(el)) {
+        // First match or deeper descendant — keep descending
+        bestMatch = el
+      } else {
+        // Sibling of bestMatch — flush deepest match and re-check
+        // against the next breaker
+        recordMatch()
+        continue
       }
-      breakerIdx++
+      el = walker.nextNode() as Element | null
+      continue
+    }
+
+    // Element doesn't match current breaker
+    if (bestMatch) {
+      if (bestMatch.contains(el)) {
+        // Still inside bestMatch subtree
+        el = walker.nextNode() as Element | null
+        continue
+      }
+      // Left the subtree — record deepest match
+      recordMatch()
       continue
     }
 
     el = walker.nextNode() as Element | null
   }
+
+  // Flush remaining match
+  recordMatch()
 
   return results
 }
