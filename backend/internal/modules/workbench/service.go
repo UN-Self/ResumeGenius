@@ -127,3 +127,16 @@ func (s *DraftService) Update(id uint, htmlContent string, createVersion bool, v
 
 	return &draft, createdVersionID, nil
 }
+
+// UpdateMeta updates metadata fields (e.g. page_count) for a draft.
+// Returns ErrDraftNotFound if the draft doesn't exist.
+func (s *DraftService) UpdateMeta(id uint, pageCount int) error {
+	result := s.db.Model(&models.Draft{}).Where("id = ?", id).Update("page_count", pageCount)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrDraftNotFound
+	}
+	return nil
+}

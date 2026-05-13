@@ -572,7 +572,6 @@ func TestCreateDraft_RouteMountedCorrectly(t *testing.T) {
 	v1 := router.Group("/api/v1")
 	RegisterRoutes(v1, tx)
 
-	// Create a project so we can make a valid request
 	project := models.Project{Title: "test", Status: "active"}
 	if err := tx.Create(&project).Error; err != nil {
 		t.Fatal(err)
@@ -580,6 +579,93 @@ func TestCreateDraft_RouteMountedCorrectly(t *testing.T) {
 
 	body := `{"project_id": ` + strconv.FormatUint(uint64(project.ID), 10) + `}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/drafts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code == http.StatusNotFound {
+		t.Fatalf("route not mounted: got 404")
+	}
+}
+
+func TestUpdateDraftMeta_Succeeds(t *testing.T) {
+	db := mustOpenTestDB(t)
+	tx := rollbackTestDB(t, db)
+
+	project := models.Project{Title: "test", Status: "active"}
+	if err := tx.Create(&project).Error; err != nil {
+		t.Fatal(err)
+	}
+	draft := models.Draft{ProjectID: project.ID, HTMLContent: "<html><body>test</body></html>"}
+	if err := tx.Create(&draft).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	h := NewHandler(NewDraftService(tx))
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	draftIDStr := strconv.FormatUint(uint64(draft.ID), 10)
+	c.Params = gin.Params{{Key: "draft_id", Value: draftIDStr}}
+	body := `{"page_count": 2}`
+	c.Request = httptest.NewRequest(http.MethodPatch, "/api/v1/drafts/"+draftIDStr+"/meta", strings.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	h.UpdateDraftMeta(c)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var updated models.Draft
+	if err := tx.First(&updated, draft.ID).Error; err != nil {
+		t.Fatalf("failed to fetch draft: %v", err)
+	}
+	if updated.PageCount != 2 {
+		t.Fatalf("expected page_count 2, got %d", updated.PageCount)
+	}
+}
+
+func TestUpdateDraftMeta_Returns404WhenDraftNotFound(t *testing.T) {
+	db := mustOpenTestDB(t)
+	tx := rollbackTestDB(t, db)
+
+	h := NewHandler(NewDraftService(tx))
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Params = gin.Params{{Key: "draft_id", Value: "99999"}}
+	body := `{"page_count": 1}`
+	c.Request = httptest.NewRequest(http.MethodPatch, "/api/v1/drafts/99999/meta", strings.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	h.UpdateDraftMeta(c)
+
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestUpdateDraftMeta_RouteMountedCorrectly(t *testing.T) {
+	db := mustOpenTestDB(t)
+	tx := rollbackTestDB(t, db)
+
+	project := models.Project{Title: "test", Status: "active"}
+	if err := tx.Create(&project).Error; err != nil {
+		t.Fatal(err)
+	}
+	draft := models.Draft{ProjectID: project.ID, HTMLContent: "<html><body>test</body></html>"}
+	if err := tx.Create(&draft).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	v1 := router.Group("/api/v1")
+	RegisterRoutes(v1, tx)
+
+	draftIDStr := strconv.FormatUint(uint64(draft.ID), 10)
+	req := httptest.NewRequest(http.MethodPatch, "/api/v1/drafts/"+draftIDStr+"/meta", strings.NewReader(`{"page_count":1}`))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)

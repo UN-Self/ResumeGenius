@@ -41,6 +41,11 @@ type CreateDraftRequest struct {
 	ProjectID uint `json:"project_id" binding:"required"`
 }
 
+// UpdateDraftMetaRequest represents the request body for PATCH /drafts/:draft_id/meta
+type UpdateDraftMetaRequest struct {
+	PageCount int `json:"page_count"`
+}
+
 // UpdateDraftResponse represents the response for PUT /drafts/:draft_id
 type UpdateDraftResponse struct {
 	ID        uint   `json:"id"`
@@ -139,4 +144,31 @@ func (h *Handler) UpdateDraft(c *gin.Context) {
 		UpdatedAt: draft.UpdatedAt.UTC().Format(time.RFC3339),
 		VersionID: versionID,
 	})
+}
+
+// UpdateDraftMeta handles PATCH /drafts/:draft_id/meta
+func (h *Handler) UpdateDraftMeta(c *gin.Context) {
+	draftIDStr := c.Param("draft_id")
+	draftID, err := strconv.ParseUint(draftIDStr, 10, 32)
+	if err != nil {
+		response.Error(c, 40000, "invalid draft id")
+		return
+	}
+
+	var req UpdateDraftMetaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 40000, "invalid request body")
+		return
+	}
+
+	if err := h.service.UpdateMeta(uint(draftID), req.PageCount); err != nil {
+		if errors.Is(err, ErrDraftNotFound) {
+			response.ErrorWithStatus(c, http.StatusNotFound, 4001, "draft not found")
+			return
+		}
+		response.Error(c, 50000, "internal server error")
+		return
+	}
+
+	response.Success(c, nil)
 }
