@@ -152,6 +152,11 @@ export const workbenchApi = {
       method: 'POST',
       body: JSON.stringify({ project_id: projectId }),
     }),
+  updateDraftMeta: (id: number, meta: { page_count: number }) =>
+    request<void>(`/drafts/${id}/meta`, {
+      method: 'PATCH',
+      body: JSON.stringify(meta),
+    }),
 }
 
 // --- Parsing API ---

@@ -473,6 +473,32 @@ export default function EditorPage() {
   }, [editor, getPersistableHTML, scheduleSave])
 
   useEffect(() => {
+    if (!editor) return
+
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let lastPageCount = -1
+
+    const handlePageCountUpdate = () => {
+      if (!draftIdRef.current) return
+      const container = editor.view.dom.closest('.resume-document')
+      const pages = container?.querySelectorAll('.rm-page').length ?? 0
+      if (pages === lastPageCount || pages === 0) return
+      lastPageCount = pages
+
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        workbenchApi.updateDraftMeta(Number(draftIdRef.current!), { page_count: pages }).catch(() => {})
+      }, 500)
+    }
+
+    editor.on('update', handlePageCountUpdate)
+    return () => {
+      editor.off('update', handlePageCountUpdate)
+      if (timer) clearTimeout(timer)
+    }
+  }, [editor])
+
+  useEffect(() => {
     return () => {
       flush()
     }
