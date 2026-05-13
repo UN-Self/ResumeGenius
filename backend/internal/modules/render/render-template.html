@@ -53,6 +53,9 @@
 .resume-page ol { list-style-type: decimal; }
 .resume-page li { margin-bottom: 4px; }
 .resume-page li p { display: inline; }
+.resume-content.ProseMirror > .page + p:last-child:empty,
+.resume-content.ProseMirror > .resume + p:last-child:empty,
+.resume-content.ProseMirror > .resume-document + p:last-child:empty { display: none; }
 /* bottom margin 0 < editor 18mm: PDF content area is intentionally larger
    so content that fits one page in the editor won't spill to two pages in PDF */
 /* ≈ 18mm at 96dpi top margin */

@@ -465,8 +465,37 @@ export function processScopedCSS(rawCSS: string, containerClasses: string[]): st
  * If rawCSS is empty, returns bodyHtml as-is (no wrapping needed).
  */
 export function reconstructHtml(bodyHtml: string, rawCSS: string): string {
-  if (!rawCSS.trim()) return bodyHtml
-  return `<!DOCTYPE html><html><head><style>${rawCSS}</style></head><body>${bodyHtml}</body></html>`
+  const cleanBodyHtml = stripTrailingEditorEmptyParagraphs(bodyHtml)
+  if (!rawCSS.trim()) return cleanBodyHtml
+  return `<!DOCTYPE html><html><head><style>${rawCSS}</style></head><body>${cleanBodyHtml}</body></html>`
+}
+
+export function stripTrailingEditorEmptyParagraphs(html: string): string {
+  if (!html.trim()) return html
+
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(`<body>${html}</body>`, 'text/html')
+  const body = doc.body
+
+  function isEditorTrailingParagraph(el: Element): boolean {
+    if (el.tagName !== 'P') return false
+    if (el.attributes.length > 0) return false
+    if ((el.textContent ?? '').trim() !== '') return false
+
+    return Array.from(el.childNodes).every((node) => (
+      node.nodeType === Node.TEXT_NODE
+        ? (node.textContent ?? '').trim() === ''
+        : node.nodeType === Node.ELEMENT_NODE && (node as Element).tagName === 'BR'
+    ))
+  }
+
+  let last = body.lastElementChild
+  while (last && isEditorTrailingParagraph(last)) {
+    last.remove()
+    last = body.lastElementChild
+  }
+
+  return body.innerHTML
 }
 
 // ─── extractStyles (main entry point) ─────────────────────────────────
@@ -497,7 +526,7 @@ export function extractStyles(html: string): ExtractedStyles {
     .join('\n')
 
   // Extract body innerHTML
-  const bodyHtml = doc.body?.innerHTML ?? ''
+  const bodyHtml = stripTrailingEditorEmptyParagraphs(doc.body?.innerHTML ?? '')
 
   // If no styles found, return body only
   if (!rawCSS.trim()) {
