@@ -76,7 +76,7 @@ func newTestExportServiceWithDB(t *testing.T, db *gorm.DB) (*ExportService, *Moc
 }
 
 // waitForTask polls a task until it reaches a terminal state or timeout.
-func waitForTask(t *testing.T, svc *ExportService, taskID string, timeout time.Duration) *ExportTask {
+func waitForTask(t *testing.T, svc *ExportService, taskID string, timeout time.Duration) ExportTask {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -88,7 +88,7 @@ func waitForTask(t *testing.T, svc *ExportService, taskID string, timeout time.D
 		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatalf("task %s did not reach terminal state within %v", taskID, timeout)
-	return nil
+	return ExportTask{}
 }
 
 // ---------------------------------------------------------------------------
