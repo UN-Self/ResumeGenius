@@ -11,7 +11,10 @@ const pluginKey = new PluginKey('smartSplit')
 
 interface SmartSplitState {
   isOwnDispatch: boolean
+  disabled?: boolean
 }
+
+export const SMART_SPLIT_PLUGIN_KEY = pluginKey
 
 export function smartSplitPlugin(options: SmartSplitOptions) {
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -34,7 +37,11 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
         return { isOwnDispatch: false }
       },
       apply(tr, value: SmartSplitState): SmartSplitState {
-        const isOwnDispatch = !!tr.getMeta(pluginKey)?.ownDispatch
+        const meta = tr.getMeta(pluginKey)
+        if (meta?.disabled) {
+          return { ...value, disabled: true }
+        }
+        const isOwnDispatch = !!meta?.ownDispatch
         if (isOwnDispatch !== value.isOwnDispatch) {
           // Preserve ownDispatch for meta-only transactions (PaginationPlus
           // page-count updates via rAF, etc). These don't change the
@@ -51,6 +58,12 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
     view(_editorView: EditorView) {
       return {
         update(_view: EditorView) {
+          // Guard: if pagination was force-disabled, skip SmartSplit too
+          const pluginState = pluginKey.getState(_view.state) as SmartSplitState | undefined
+          if ((pluginState as any)?.disabled) {
+            log('skipping — pagination guard disabled')
+            return
+          }
           // Drain one suppress slot per view.update. When suppressCount > 0,
           // the update was triggered (directly or indirectly) by our own
           // dispatches — skip re-detection.
@@ -60,7 +73,6 @@ export function smartSplitPlugin(options: SmartSplitOptions) {
             return
           }
 
-          const pluginState = pluginKey.getState(_view.state) as SmartSplitState | undefined
           if (pluginState?.isOwnDispatch) {
             log('skipping re-detection after own dispatch')
             return
