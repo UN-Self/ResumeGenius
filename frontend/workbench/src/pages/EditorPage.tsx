@@ -20,6 +20,7 @@ import { request, intakeApi, workbenchApi, ApiError, type Asset } from '@/lib/ap
 import { captureCopy, sliceFromJson, getMimeType } from '@/lib/clipboard'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useExport } from '@/hooks/useExport'
+import { usePaginationGuard } from '@/hooks/usePaginationGuard'
 import { FullPageState } from '@/components/ui/full-page-state'
 import { ContextMenu } from '@/components/editor/ContextMenu'
 import { BubbleToolbar } from '@/components/editor/BubbleToolbar'
@@ -173,6 +174,7 @@ export default function EditorPage() {
   const [savingSnapshot, setSavingSnapshot] = useState(false)
   const [rollbacking, setRollbacking] = useState(false)
   const { toasts, toast, dismissToast } = useToast()
+  usePaginationGuard(editor)
 
   // Save editor content before preview so we can restore it on exit
   const savedContentBeforePreview = useRef<{ html: string; scopedCSS: string } | null>(null)
