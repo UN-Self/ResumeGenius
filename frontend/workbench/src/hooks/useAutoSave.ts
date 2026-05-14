@@ -35,6 +35,7 @@ export function useAutoSave({
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const retryCount = useRef(0)
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const statusResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isSaving = useRef(false)
   const currentSaveHtml = useRef<string | null>(null)
   const activeSave = useRef<Promise<void> | null>(null)
@@ -47,6 +48,10 @@ export function useAutoSave({
     if (retryTimer.current) {
       clearTimeout(retryTimer.current)
       retryTimer.current = null
+    }
+    if (statusResetTimer.current) {
+      clearTimeout(statusResetTimer.current)
+      statusResetTimer.current = null
     }
   }
 
@@ -68,7 +73,7 @@ export function useAutoSave({
         }
 
         // Reset to idle after 5 seconds
-        setTimeout(() => {
+        statusResetTimer.current = setTimeout(() => {
           setStatus('idle')
         }, 5000)
       } catch (err) {

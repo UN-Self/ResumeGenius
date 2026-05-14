@@ -34,6 +34,8 @@ type PDFExporter interface {
 
 // ExportTask represents an async PDF export job.
 type ExportTask struct {
+	mu sync.RWMutex `json:"-"`
+
 	ID          string    `json:"task_id"`
 	DraftID     uint      `json:"draft_id"`
 	Status      string    `json:"status"`   // pending | processing | completed | failed
@@ -44,6 +46,21 @@ type ExportTask struct {
 
 	htmlContent string // unexported: HTML payload passed to the worker
 	fileKey     string // unexported: logical key returned by store.Save
+}
+
+// Snapshot returns a copy of the task's public fields, safe for concurrent reads.
+func (t *ExportTask) Snapshot() ExportTask {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return ExportTask{
+		ID:          t.ID,
+		DraftID:     t.DraftID,
+		Status:      t.Status,
+		Progress:    t.Progress,
+		DownloadURL: t.DownloadURL,
+		Error:       t.Error,
+		CreatedAt:   t.CreatedAt,
+	}
 }
 
 // ExportService manages async PDF export tasks.
@@ -106,13 +123,13 @@ func (s *ExportService) CreateTask(draftID uint) (string, error) {
 	return taskID, nil
 }
 
-// GetTask returns the current state of an export task by its ID.
-func (s *ExportService) GetTask(taskID string) (*ExportTask, error) {
+// GetTask returns a snapshot of the task's public fields, safe for concurrent reads.
+func (s *ExportService) GetTask(taskID string) (ExportTask, error) {
 	val, ok := s.tasks.Load(taskID)
 	if !ok {
-		return nil, ErrTaskNotFound
+		return ExportTask{}, ErrTaskNotFound
 	}
-	return val.(*ExportTask), nil
+	return val.(*ExportTask).Snapshot(), nil
 }
 
 // GetFile reads the PDF bytes for a completed task.
@@ -123,12 +140,17 @@ func (s *ExportService) GetFile(taskID string) ([]byte, error) {
 	}
 
 	task := val.(*ExportTask)
-	if task.Status != "completed" {
+	task.mu.RLock()
+	status := task.Status
+	fileKey := task.fileKey
+	task.mu.RUnlock()
+
+	if status != "completed" {
 		return nil, ErrTaskNotCompleted
 	}
 
 	// Resolve the logical key to an absolute path and read the file.
-	absPath, err := s.store.Resolve(task.fileKey)
+	absPath, err := s.store.Resolve(fileKey)
 	if err != nil {
 		return nil, fmt.Errorf("resolve file: %w", err)
 	}
@@ -171,6 +193,9 @@ func (s *ExportService) worker() {
 
 // processTask performs the actual HTML-to-PDF conversion for a single task.
 func (s *ExportService) processTask(task *ExportTask) {
+	task.mu.Lock()
+	defer task.mu.Unlock()
+
 	// Transition to processing.
 	task.Status = "processing"
 	task.Progress = 30
