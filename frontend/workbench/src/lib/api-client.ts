@@ -54,11 +54,17 @@ export interface Asset {
   project_id: number
   type: string
   uri?: string
-  // Canonical asset body for AI / sidebar consumption.
-  // Notes write it directly; file and git assets are expected to be backfilled by parsing after cleanup.
   content?: string
   label?: string
+  key_id?: number
+  status: string
   metadata?: Record<string, unknown>
+  created_at: string
+}
+
+export interface SSHKey {
+  id: number
+  alias: string
   created_at: string
 }
 
@@ -108,10 +114,23 @@ export const intakeApi = {
       method: 'POST',
       body: JSON.stringify({ project_id: projectId, name, parent_folder_id: parentFolderId ?? null }),
     }),
-  createGitRepo: (projectId: number, repoUrls: string[]) =>
+  // SSH Key management
+  listSSHKeys: () =>
+    request<SSHKey[]>('/ssh-keys'),
+
+  createSSHKey: (alias: string, privateKey: string) =>
+    request<SSHKey>('/ssh-keys', {
+      method: 'POST',
+      body: JSON.stringify({ alias, private_key: privateKey }),
+    }),
+
+  deleteSSHKey: (id: number) =>
+    request<null>(`/ssh-keys/${id}`, { method: 'DELETE' }),
+
+  createGitRepo: (projectId: number, repoUrls: string[], keyId?: number) =>
     request<Asset[]>('/assets/git', {
       method: 'POST',
-      body: JSON.stringify({ project_id: projectId, repo_urls: repoUrls }),
+      body: JSON.stringify({ project_id: projectId, repo_urls: repoUrls, key_id: keyId }),
     }),
   updateAsset: (id: number, payload: { content?: string; label?: string }) =>
     request<Asset>(`/assets/${id}`, {

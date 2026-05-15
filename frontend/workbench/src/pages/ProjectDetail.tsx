@@ -44,10 +44,10 @@ export default function ProjectDetail() {
     }
   }
 
-  const handleCreateGit = async (repoUrls: string[]) => {
+  const handleCreateGit = async (repoUrls: string[], keyId?: number) => {
     setAssetActionError('')
     try {
-      await intakeApi.createGitRepo(pid, repoUrls)
+      await intakeApi.createGitRepo(pid, repoUrls, keyId)
       reload()
     } catch (createGitError) {
       setAssetActionError(createGitError instanceof Error ? createGitError.message : '创建 Git 素材失败')
