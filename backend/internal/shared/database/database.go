@@ -3,11 +3,11 @@ package database
 import (
 	"fmt"
 	"log"
-	"os"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/env"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/models"
 )
 
@@ -16,20 +16,13 @@ func buildDSN(host, port, user, password, dbname string) string {
 		host, port, user, password, dbname)
 }
 
-func envOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
 func Connect() *gorm.DB {
 	dsn := buildDSN(
-		envOrDefault("DB_HOST", "localhost"),
-		envOrDefault("DB_PORT", "5432"),
-		envOrDefault("DB_USER", "postgres"),
-		envOrDefault("DB_PASSWORD", "postgres"),
-		envOrDefault("DB_NAME", "resume_genius"),
+		env.DefaultOr("DB_HOST", "localhost"),
+		env.DefaultOr("DB_PORT", "5432"),
+		env.DefaultOr("DB_USER", "postgres"),
+		env.DefaultOr("DB_PASSWORD", "postgres"),
+		env.DefaultOr("DB_NAME", "resume_genius"),
 	)
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		DisableForeignKeyConstraintWhenMigrating: true,
@@ -45,6 +38,7 @@ func Migrate(db *gorm.DB) {
 		&models.User{},
 		&models.Project{},
 		&models.Asset{},
+		&models.SSHKey{},
 		&models.Draft{},
 		&models.Version{},
 		&models.AISession{},

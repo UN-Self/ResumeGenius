@@ -61,6 +61,8 @@ type Asset struct {
 	Label     *string        `gorm:"size:100" json:"label,omitempty"`
 	FileHash  *string        `gorm:"size:64;index" json:"file_hash,omitempty"`
 	Metadata  JSONB          `gorm:"type:jsonb" json:"metadata,omitempty"`
+	KeyID     *uint          `gorm:"index" json:"key_id,omitempty"`
+	Status    string         `gorm:"size:20;not null;default:'active'" json:"status"`
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
