@@ -1,6 +1,10 @@
 package database
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/env"
+)
 
 func TestBuildDSN(t *testing.T) {
 	dsn := buildDSN("localhost", "5432", "testuser", "testpass", "testdb")
@@ -17,12 +21,12 @@ func TestBuildDSNWithEnvDefaults(t *testing.T) {
 	}
 }
 
-func TestEnvOrDefault(t *testing.T) {
+func TestEnvDefaultOr(t *testing.T) {
 	t.Setenv("TEST_KEY", "from_env")
-	if v := envOrDefault("TEST_KEY", "default"); v != "from_env" {
+	if v := env.DefaultOr("TEST_KEY", "default"); v != "from_env" {
 		t.Errorf("expected from_env, got %s", v)
 	}
-	if v := envOrDefault("MISSING_KEY", "fallback"); v != "fallback" {
+	if v := env.DefaultOr("MISSING_KEY", "fallback"); v != "fallback" {
 		t.Errorf("expected fallback, got %s", v)
 	}
 }
