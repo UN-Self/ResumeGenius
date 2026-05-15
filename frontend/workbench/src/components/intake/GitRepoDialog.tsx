@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import { Modal, ModalHeader, ModalFooter } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
+import SSHKeySelector from './SSHKeySelector'
 
 interface GitRepoDialogProps {
   open: boolean
   onClose: () => void
-  onSubmit: (repoUrls: string[]) => Promise<void>
+  onSubmit: (repoUrls: string[], keyId?: number) => Promise<void>
 }
 
 export default function GitRepoDialog({ open, onClose, onSubmit }: GitRepoDialogProps) {
   const [repoUrlsText, setRepoUrlsText] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [selectedKeyId, setSelectedKeyId] = useState<number | null>(null)
 
   const handleSubmit = async () => {
     const urls = repoUrlsText
@@ -26,7 +28,7 @@ export default function GitRepoDialog({ open, onClose, onSubmit }: GitRepoDialog
     try {
       setSubmitting(true)
       setError('')
-      await onSubmit(urls)
+      await onSubmit(urls, selectedKeyId ?? undefined)
       setRepoUrlsText('')
       onClose()
     } catch (e) {
@@ -39,6 +41,7 @@ export default function GitRepoDialog({ open, onClose, onSubmit }: GitRepoDialog
   const handleClose = () => {
     setRepoUrlsText('')
     setError('')
+    setSelectedKeyId(null)
     onClose()
   }
 
@@ -60,6 +63,10 @@ export default function GitRepoDialog({ open, onClose, onSubmit }: GitRepoDialog
       {error && (
         <p className="text-xs text-destructive mt-2">{error}</p>
       )}
+
+      <div className="mt-4">
+        <SSHKeySelector value={selectedKeyId} onChange={setSelectedKeyId} />
+      </div>
 
       <ModalFooter>
         <Button variant="secondary" onClick={handleClose}>

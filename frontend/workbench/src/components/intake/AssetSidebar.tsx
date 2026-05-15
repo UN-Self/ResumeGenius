@@ -188,10 +188,10 @@ export default function AssetSidebar({
     }
   }
 
-  const handleCreateGit = async (repoUrls: string[]) => {
+  const handleCreateGit = async (repoUrls: string[], keyId?: number) => {
     setError('')
     try {
-      await intakeApi.createGitRepo(projectId, repoUrls)
+      await intakeApi.createGitRepo(projectId, repoUrls, keyId)
       await refreshAssets()
     } catch (createGitError) {
       setError(createGitError instanceof Error ? createGitError.message : '创建 Git 素材失败')
