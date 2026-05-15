@@ -13,6 +13,13 @@ interface LoginPageProps {
   onSuccess: (user: User) => void
 }
 
+function safeRedirectPath(value: string | null): string | null {
+  if (!value) return null
+  if (!value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return null
+  if (/[\u0000-\u001f\u007f]/.test(value)) return null
+  return value
+}
+
 export default function LoginPage({ onSuccess }: LoginPageProps) {
   const navigate = useNavigate()
   const [username, setUsername] = useState('')
@@ -23,7 +30,7 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
   const [searchParams] = useSearchParams()
   const justRegistered = searchParams.get('registered') === 'true'
   const redirectParam = searchParams.get('redirect')
-  const redirectOut = redirectParam !== null
+  const redirectPath = safeRedirectPath(redirectParam)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -33,8 +40,8 @@ export default function LoginPage({ onSuccess }: LoginPageProps) {
       setError('')
       const user = await authApi.login(username.trim(), password)
       onSuccess(user)
-      if (redirectOut) {
-        window.location.assign(redirectParam || '/')
+      if (redirectPath) {
+        window.location.assign(redirectPath)
       } else {
         navigate('/', { replace: true })
       }

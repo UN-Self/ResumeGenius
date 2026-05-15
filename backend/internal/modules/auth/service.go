@@ -22,17 +22,18 @@ import (
 )
 
 var (
-	ErrInvalidCredentials      = errors.New("invalid credentials")
-	ErrInvalidUsername         = errors.New("invalid username")
-	ErrInvalidPassword         = errors.New("invalid password")
-	ErrInvalidEmail            = errors.New("invalid email")
-	ErrUsernameTaken           = errors.New("username already taken")
-	ErrEmailTaken              = errors.New("email already taken")
-	ErrEmailNotFound           = errors.New("email not found")
-	ErrEmailAlreadyVerified    = errors.New("email already verified")
-	ErrEmailNotVerified        = errors.New("email not verified")
-	ErrInvalidVerificationCode = errors.New("invalid verification code")
-	ErrVerificationCodeExpired = errors.New("verification code expired")
+	ErrInvalidCredentials            = errors.New("invalid credentials")
+	ErrInvalidUsername               = errors.New("invalid username")
+	ErrInvalidPassword               = errors.New("invalid password")
+	ErrInvalidEmail                  = errors.New("invalid email")
+	ErrUsernameTaken                 = errors.New("username already taken")
+	ErrEmailTaken                    = errors.New("email already taken")
+	ErrEmailNotFound                 = errors.New("email not found")
+	ErrEmailAlreadyVerified          = errors.New("email already verified")
+	ErrEmailNotVerified              = errors.New("email not verified")
+	ErrAccountNeedsEmailRegistration = errors.New("account needs email registration")
+	ErrInvalidVerificationCode       = errors.New("invalid verification code")
+	ErrVerificationCodeExpired       = errors.New("verification code expired")
 )
 
 type Service struct {
@@ -46,8 +47,7 @@ func NewService(db *gorm.DB, email *EmailService) *Service {
 
 // Login authenticates a user by username and password.
 // It does NOT auto-register — returns ErrInvalidCredentials if user not found.
-// Returns ErrEmailNotVerified if the user exists but email is not yet verified
-// (only for accounts with a non-empty email — legacy accounts are exempt).
+// Only accounts with a verified email are allowed to log in.
 func (s *Service) Login(account, password string) (*models.User, error) {
 	account = strings.TrimSpace(account)
 	if len(account) < 3 {
@@ -78,6 +78,12 @@ func (s *Service) Login(account, password string) (*models.User, error) {
 	if compareErr := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); compareErr != nil {
 		return nil, ErrInvalidCredentials
 	}
+	if user.Email == nil || strings.TrimSpace(*user.Email) == "" {
+		return nil, ErrAccountNeedsEmailRegistration
+	}
+	if !user.EmailVerified {
+		return nil, ErrEmailNotVerified
+	}
 	return &user, nil
 }
 
@@ -102,83 +108,131 @@ func (s *Service) Register(username, password, email string) (*models.User, erro
 		return nil, ErrInvalidEmail
 	}
 
-	// Email is the unique identity. Check it first.
-	var byEmail models.User
-	if err := s.db.Where("email = ?", email).First(&byEmail).Error; err == nil {
-		// Email already exists.
-		if byEmail.EmailVerified {
-			return nil, ErrEmailTaken
+	var registered models.User
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		// Email is the unique identity. Check it first.
+		var byEmail models.User
+		if err := tx.Where("email = ?", email).First(&byEmail).Error; err == nil {
+			// Email already exists.
+			if byEmail.EmailVerified {
+				return ErrEmailTaken
+			}
+			if err := ensureUsernameAvailable(tx, username, byEmail.ID); err != nil {
+				return err
+			}
+			// Unverified: overwrite this account.
+			hash, hashErr := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+			if hashErr != nil {
+				return fmt.Errorf("hash password: %w", hashErr)
+			}
+			code, codeErr := GenerateCode()
+			if codeErr != nil {
+				return codeErr
+			}
+			expiry := time.Now().Add(15 * time.Minute)
+			byEmail.Username = username
+			byEmail.PasswordHash = string(hash)
+			byEmail.VerificationCode = code
+			byEmail.CodeExpiry = &expiry
+			byEmail.EmailVerified = false
+			if saveErr := tx.Save(&byEmail).Error; saveErr != nil {
+				if mapped := mapUserConstraintError(saveErr); mapped != nil {
+					return mapped
+				}
+				return fmt.Errorf("update user: %w", saveErr)
+			}
+			registered = byEmail
+			return nil
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("query user by email: %w", err)
 		}
-		// Unverified: overwrite this account.
-		hash, hashErr := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-		if hashErr != nil {
-			return nil, fmt.Errorf("hash password: %w", hashErr)
-		}
-		code, codeErr := GenerateCode()
-		if codeErr != nil {
-			return nil, codeErr
-		}
-		expiry := time.Now().Add(15 * time.Minute)
-		byEmail.Username = username
-		byEmail.PasswordHash = string(hash)
-		byEmail.VerificationCode = code
-		byEmail.CodeExpiry = &expiry
-		byEmail.EmailVerified = false
-		if saveErr := s.db.Save(&byEmail).Error; saveErr != nil {
-			return nil, fmt.Errorf("update user: %w", saveErr)
-		}
-		if sendErr := s.email.SendVerificationCode(email, code); sendErr != nil {
-			return nil, fmt.Errorf("send verification code: %w", sendErr)
-		}
-		return &byEmail, nil
-	}
 
-	// Email is new. Check username uniqueness (must be globally unique).
-	var byUser models.User
-	if err := s.db.Where("username = ?", username).First(&byUser).Error; err == nil {
-		return nil, ErrUsernameTaken
-	}
+		// Email is new. Check username uniqueness (must be globally unique).
+		if err := ensureUsernameAvailable(tx, username, ""); err != nil {
+			return err
+		}
 
-	// Both email and username are new — create fresh account.
-
-	// No existing account — create new.
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("hash password: %w", err)
-	}
-	code, err := GenerateCode()
-	if err != nil {
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("hash password: %w", err)
+		}
+		code, err := GenerateCode()
+		if err != nil {
+			return err
+		}
+		now := time.Now()
+		expiry := now.Add(15 * time.Minute)
+		user := models.User{
+			ID:               uuid.NewString(),
+			Username:         username,
+			Email:            &email,
+			EmailVerified:    false,
+			VerificationCode: code,
+			CodeExpiry:       &expiry,
+			PasswordHash:     string(hash),
+			Plan:             "free",
+			Points:           100,
+			PlanStartedAt:    &now,
+		}
+		if createErr := tx.Create(&user).Error; createErr != nil {
+			if mapped := mapUserConstraintError(createErr); mapped != nil {
+				return mapped
+			}
+			return fmt.Errorf("create user: %w", createErr)
+		}
+		if err := tx.Create(&models.PointsRecord{
+			UserID:  user.ID,
+			Amount:  100,
+			Balance: 100,
+			Type:    "register_bonus",
+			Note:    "首次注册赠送",
+		}).Error; err != nil {
+			return fmt.Errorf("create registration bonus: %w", err)
+		}
+		registered = user
+		return nil
+	}); err != nil {
 		return nil, err
 	}
-	now := time.Now()
-	expiry := now.Add(15 * time.Minute)
-	user := models.User{
-		ID:               uuid.NewString(),
-		Username:         username,
-		Email:            &email,
-		EmailVerified:    false,
-		VerificationCode: code,
-		CodeExpiry:       &expiry,
-		PasswordHash:     string(hash),
-		Plan:             "free",
-		Points:           100,
-		PlanStartedAt:    &now,
-	}
-	if createErr := s.db.Create(&user).Error; createErr != nil {
-		return nil, fmt.Errorf("create user: %w", createErr)
-	}
-	// Registration bonus
-	s.db.Create(&models.PointsRecord{
-		UserID:  user.ID,
-		Amount:  100,
-		Balance: 100,
-		Type:    "register_bonus",
-		Note:    "首次注册赠送",
-	})
-	if sendErr := s.email.SendVerificationCode(email, code); sendErr != nil {
+
+	if sendErr := s.email.SendVerificationCode(email, registered.VerificationCode); sendErr != nil {
 		return nil, fmt.Errorf("send verification code: %w", sendErr)
 	}
-	return &user, nil
+	return &registered, nil
+}
+
+func ensureUsernameAvailable(db *gorm.DB, username string, exceptID string) error {
+	var user models.User
+	query := db.Where("username = ?", username)
+	if exceptID != "" {
+		query = query.Where("id <> ?", exceptID)
+	}
+	if err := query.First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		return fmt.Errorf("query user by username: %w", err)
+	}
+	return ErrUsernameTaken
+}
+
+func mapUserConstraintError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := strings.ToLower(err.Error())
+	if !errors.Is(err, gorm.ErrDuplicatedKey) &&
+		!strings.Contains(msg, "duplicate") &&
+		!strings.Contains(msg, "unique") {
+		return nil
+	}
+	if strings.Contains(msg, "email") {
+		return ErrEmailTaken
+	}
+	if strings.Contains(msg, "username") {
+		return ErrUsernameTaken
+	}
+	return nil
 }
 
 // SendVerificationCode generates a new code and sends it to the given email.
@@ -385,9 +439,9 @@ type PointsStats struct {
 }
 
 type DailyUsage struct {
-	Date  string `json:"date"`
-	Used  int64  `json:"used"`
-	Earned int64 `json:"earned"`
+	Date   string `json:"date"`
+	Used   int64  `json:"used"`
+	Earned int64  `json:"earned"`
 }
 
 type CategoryUsage struct {
@@ -396,11 +450,11 @@ type CategoryUsage struct {
 }
 
 type PointsDashboard struct {
-	Balance     int              `json:"balance"`
-	MonthUsed   int64            `json:"month_used"`
-	TotalEarned int64            `json:"total_earned"`
-	DailyUsage  []DailyUsage     `json:"daily_usage"`
-	Categories  []CategoryUsage  `json:"categories"`
+	Balance     int             `json:"balance"`
+	MonthUsed   int64           `json:"month_used"`
+	TotalEarned int64           `json:"total_earned"`
+	DailyUsage  []DailyUsage    `json:"daily_usage"`
+	Categories  []CategoryUsage `json:"categories"`
 }
 
 // GetPointsStats returns aggregated points stats for a user.

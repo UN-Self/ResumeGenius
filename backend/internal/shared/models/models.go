@@ -33,7 +33,7 @@ func (j *JSONB) Scan(value interface{}) error {
 type User struct {
 	ID               string     `gorm:"type:char(36);primaryKey" json:"id"`
 	Username         string     `gorm:"size:64;not null;uniqueIndex" json:"username"`
-	Email            *string    `gorm:"size:255" json:"email,omitempty"`
+	Email            *string    `gorm:"size:255;uniqueIndex" json:"email,omitempty"`
 	EmailVerified    bool       `gorm:"not null;default:false" json:"email_verified"`
 	VerificationCode string     `gorm:"size:6" json:"-"`
 	CodeExpiry       *time.Time `gorm:"index" json:"-"`
@@ -86,16 +86,16 @@ type Asset struct {
 }
 
 type Draft struct {
-	ID          uint           `gorm:"primaryKey" json:"id"`
-	ProjectID   uint           `gorm:"not null;index" json:"project_id"`
-	HTMLContent string         `gorm:"type:text;not null" json:"html_content"`
-	Project     Project        `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
-	Versions    []Version      `gorm:"foreignKey:DraftID" json:"versions,omitempty"`
-	AISessions  []AISession    `gorm:"foreignKey:DraftID" json:"ai_sessions,omitempty"`
-	CreatedAt             time.Time      `json:"created_at"`
-	UpdatedAt             time.Time      `json:"updated_at"`
-	CurrentEditSequence   int            `gorm:"default:0" json:"-"`
-	DeletedAt             gorm.DeletedAt `gorm:"index" json:"-"`
+	ID                  uint           `gorm:"primaryKey" json:"id"`
+	ProjectID           uint           `gorm:"not null;index" json:"project_id"`
+	HTMLContent         string         `gorm:"type:text;not null" json:"html_content"`
+	Project             Project        `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
+	Versions            []Version      `gorm:"foreignKey:DraftID" json:"versions,omitempty"`
+	AISessions          []AISession    `gorm:"foreignKey:DraftID" json:"ai_sessions,omitempty"`
+	CreatedAt           time.Time      `json:"created_at"`
+	UpdatedAt           time.Time      `json:"updated_at"`
+	CurrentEditSequence int            `gorm:"default:0" json:"-"`
+	DeletedAt           gorm.DeletedAt `gorm:"index" json:"-"`
 }
 
 type Version struct {

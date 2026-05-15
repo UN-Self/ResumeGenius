@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"time"
 
@@ -55,21 +56,23 @@ type verifyEmailReq struct {
 }
 
 type userResp struct {
-	ID            string `json:"id"`
-	Username      string `json:"username"`
-	Email         string `json:"email,omitempty"`
-	EmailVerified bool   `json:"email_verified,omitempty"`
-	AvatarURL     string `json:"avatar_url,omitempty"`
-	Points           int        `json:"points"`
-	Plan             string     `json:"plan"`
-	PlanStartedAt    *time.Time `json:"plan_started_at,omitempty"`
-	PlanExpiresAt    *time.Time `json:"plan_expires_at,omitempty"`
-	DevCode          string     `json:"dev_code,omitempty"`
+	ID            string     `json:"id"`
+	Username      string     `json:"username"`
+	Email         string     `json:"email,omitempty"`
+	EmailVerified bool       `json:"email_verified,omitempty"`
+	AvatarURL     string     `json:"avatar_url,omitempty"`
+	Points        int        `json:"points"`
+	Plan          string     `json:"plan"`
+	PlanStartedAt *time.Time `json:"plan_started_at,omitempty"`
+	PlanExpiresAt *time.Time `json:"plan_expires_at,omitempty"`
+	DevCode       string     `json:"dev_code,omitempty"`
 }
 
 func toUserResp(u *models.User, devMode bool) userResp {
 	r := userResp{ID: u.ID, Username: u.Username, Points: u.Points, Plan: u.Plan, PlanStartedAt: u.PlanStartedAt, PlanExpiresAt: u.PlanExpiresAt}
-	if r.Plan == "" { r.Plan = "free" }
+	if r.Plan == "" {
+		r.Plan = "free"
+	}
 	if u.Email != nil {
 		r.Email = *u.Email
 	}
@@ -103,6 +106,10 @@ func (h *Handler) Login(c *gin.Context) {
 			response.Error(c, 40000, "密码需 6-128 个字符")
 		case ErrInvalidCredentials:
 			response.Error(c, 40100, "用户名或密码错误")
+		case ErrAccountNeedsEmailRegistration:
+			response.Error(c, 40300, "当前账号缺少邮箱，请使用邮箱重新注册")
+		case ErrEmailNotVerified:
+			response.Error(c, 40300, "邮箱未验证，请先完成邮箱验证")
 		default:
 			response.Error(c, 50000, "登录失败")
 		}
@@ -347,14 +354,17 @@ func (h *Handler) UploadAvatar(c *gin.Context) {
 
 	// Validate: max 5MB
 	const maxSize = 5 << 20
-	buf := make([]byte, maxSize+1)
-	n, _ := file.Read(buf)
-	if n > maxSize {
+	data, err := io.ReadAll(io.LimitReader(file, maxSize+1))
+	if err != nil {
+		response.Error(c, 40000, "图片读取失败")
+		return
+	}
+	if len(data) > maxSize {
 		response.Error(c, 40000, "图片不能超过 5MB")
 		return
 	}
 
-	user, err := h.service.UpdateAvatar(userID, bytes.NewReader(buf[:n]), h.uploadDir)
+	user, err := h.service.UpdateAvatar(userID, bytes.NewReader(data), h.uploadDir)
 	if err != nil {
 		response.Error(c, 40000, "图片格式不支持或处理失败")
 		return
