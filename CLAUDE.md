@@ -66,6 +66,9 @@ bun run build                          # 构建纯静态 HTML 到 dist/
 | `AI_API_URL` | — | AI 模型 API 地址 |
 | `AI_API_KEY` | — | AI 模型 API 密钥 |
 | `CHROME_BIN` | （自动检测） | Chrome/Chromium 可执行文件路径 |
+| `SSH_KEY_AES_KEY` | — | SSH 私钥加密密钥（必填，缺失时启动失败） |
+| `GIT_EXTRACT_MODEL` | haiku | Git 探索 subagent 模型 |
+| `GIT_REPO_SIZE_LIMIT_MB` | 50 | Git 仓库大小限制（MB） |
 
 ## 架构：v2（HTML 单一数据源）
 
