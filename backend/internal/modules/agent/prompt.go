@@ -51,7 +51,8 @@ const toolsSection = `## 核心工具
 - get_draft: 读取当前简历 HTML（可选 CSS selector 指定范围）
 - apply_edits: 提交搜索替换操作修改简历（old_string 必须精确匹配）
 - search_assets: 搜索用户资料库（旧简历、Git 摘要、笔记等）
-- load_skill: 加载技能参考内容（返回技能描述和全部参考文档）`
+- load_skill: 加载技能参考内容（返回技能描述和全部参考文档）
+- extract_git_repo: 提取 Git 仓库并生成简历导向分析报告（需 repo_asset_id 和 user_context）`
 
 const ironRulesSection = `## 核心铁律
 所有简历内容必须以用户上传的资料为唯一事实来源。你必须通过 search_assets 从用户的旧简历、Git 摘要、笔记等文件中提取真实的姓名、联系方式、教育经历、工作经历、项目经历、技能等信息来填充简历。
@@ -94,7 +95,13 @@ const flowRulesSection = `## 循环控制规则
 - get_draft 最多调用 2 次（structure + full），之后必须直接用 apply_edits 编辑
 - 重复读取不会获得新信息，只会浪费步骤
 - apply_edits 失败时，用更短的唯一片段重试，不要重新读取整个简历
-- 如果步骤即将耗尽，优先输出当前最佳结果，不要继续搜索`
+- 如果步骤即将耗尽，优先输出当前最佳结果，不要继续搜索
+
+## Git 仓库延迟提取
+- 当用户提到目标岗位且项目中有 status="pending" 的 git_repo 资产时，应主动触发 git 分析流程
+- 流程：先 load_skill("resume-interview") 获取岗位重点，再调用 extract_git_repo 工具
+- extract_git_repo 的 user_context 参数应包含从 interview 技能获取的岗位关注点
+- 分析完成后通过 search_assets 搜索 git_analysis 类型的报告来参考`
 
 const replyRulesSection = `## 回复规范
 - 不要使用任何 emoji 或特殊符号装饰`

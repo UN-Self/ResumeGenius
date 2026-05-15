@@ -9,6 +9,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
+
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/env"
 )
 
 func normalizeAIURL(raw string) string {
@@ -26,7 +28,7 @@ func normalizeAIURL(raw string) string {
 	return raw + "/v1/chat/completions"
 }
 
-func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
+func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, extractGitTool *ExtractGitRepoTool) {
 	skillLoader, err := NewSkillLoader()
 	if err != nil {
 		log.Printf("agent: failed to load skills (non-fatal): %v", err)
@@ -48,13 +50,13 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 			provider = NewOpenAIAdapterWithTimeout(
 				normalizeAIURL(apiURL),
 				apiKey,
-				envOrDefault("AI_MODEL", "default"),
+				env.DefaultOr("AI_MODEL", "default"),
 				envDurationSeconds("AI_HTTP_TIMEOUT_SECONDS", 180),
 			)
 		}
 	}
 
-	toolExecutor := NewAgentToolExecutor(db, skillLoader)
+	toolExecutor := NewAgentToolExecutor(db, skillLoader, extractGitTool)
 	maxIterations := 3
 	if v := os.Getenv("AGENT_MAX_ITERATIONS"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
@@ -73,13 +75,6 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB) {
 	rg.GET("/ai/sessions/:session_id/history", h.GetHistory)
 	rg.POST("/ai/drafts/:draft_id/undo", h.Undo)
 	rg.POST("/ai/drafts/:draft_id/redo", h.Redo)
-}
-
-func envOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
 
 func envDurationSeconds(key string, fallbackSeconds int) time.Duration {

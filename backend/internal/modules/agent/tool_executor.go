@@ -108,13 +108,18 @@ type AssetResult struct {
 type AgentToolExecutor struct {
 	db               *gorm.DB
 	skillLoader      *SkillLoader
+	extractGitTool   *ExtractGitRepoTool
 	getDraftCallCount sync.Map // sessionID -> int
 	cachedTools      []ToolDef
 }
 
 // NewAgentToolExecutor creates a new AgentToolExecutor.
-func NewAgentToolExecutor(db *gorm.DB, skillLoader *SkillLoader) *AgentToolExecutor {
-	e := &AgentToolExecutor{db: db, skillLoader: skillLoader}
+func NewAgentToolExecutor(db *gorm.DB, skillLoader *SkillLoader, extractGitTool *ExtractGitRepoTool) *AgentToolExecutor {
+	e := &AgentToolExecutor{
+		db:             db,
+		skillLoader:    skillLoader,
+		extractGitTool: extractGitTool,
+	}
 	e.cachedTools = e.buildTools()
 	return e
 }
@@ -187,6 +192,14 @@ func (e *AgentToolExecutor) buildTools() []ToolDef {
 		},
 	}
 
+	if e.extractGitTool != nil {
+		tools = append(tools, ToolDef{
+			Name:        e.extractGitTool.Name(),
+			Description: e.extractGitTool.Description(),
+			Parameters:  e.extractGitTool.Parameters(),
+		})
+	}
+
 	if e.skillLoader != nil {
 		tools = append(tools, ToolDef{
 			Name:        "load_skill",
@@ -224,6 +237,12 @@ func (e *AgentToolExecutor) Execute(ctx context.Context, toolName string, params
 		result, err = e.applyEdits(ctx, params)
 	case "search_assets":
 		result, err = e.searchAssets(ctx, params)
+	case "extract_git_repo":
+		if e.extractGitTool != nil {
+			result, err = e.extractGitTool.Execute(ctx, params)
+		} else {
+			return "", fmt.Errorf("extract_git_repo tool not available")
+		}
 	case "load_skill":
 		result, err = e.loadSkill(ctx, params)
 	default:

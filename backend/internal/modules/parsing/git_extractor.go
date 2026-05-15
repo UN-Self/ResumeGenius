@@ -1,5 +1,8 @@
 package parsing
 
+// DEPRECATED: Git extraction logic has moved to agent/git_extractor_tool.go.
+// These files are retained for reference but should not be used in new code.
+
 import (
 	"bytes"
 	"context"

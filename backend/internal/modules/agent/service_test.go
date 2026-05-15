@@ -205,7 +205,7 @@ func TestCompactMessages_TooFewMessages(t *testing.T) {
 type MockToolExecutor struct{}
 
 func (e *MockToolExecutor) Tools(_ context.Context) []ToolDef {
-	return NewAgentToolExecutor(nil, nil).Tools(context.Background())
+	return NewAgentToolExecutor(nil, nil, nil).Tools(context.Background())
 }
 
 func (e *MockToolExecutor) Execute(_ context.Context, toolName string, _ map[string]interface{}) (string, error) {
