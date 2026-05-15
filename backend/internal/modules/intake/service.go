@@ -148,7 +148,7 @@ var allowedExtensions = map[string]string{
 var maxFileSize = 20 * 1024 * 1024
 var maxFolderDepth = 7
 
-var gitURLPattern = regexp.MustCompile(`^https?://[^\s/$.?#].[^\s]*$`)
+var gitURLPattern = regexp.MustCompile(`^(https?://[^\s/$.?#].[^\s]*|git@[a-zA-Z0-9._-]+:[a-zA-Z0-9._/-]+\.git)$`)
 
 // --- AssetService ---
 
@@ -280,9 +280,16 @@ func (s *AssetService) CreateFolder(userID string, projectID uint, name string, 
 	return &asset, nil
 }
 
-func (s *AssetService) CreateGitRepo(userID string, projectID uint, repoURLs []string) ([]models.Asset, error) {
+func (s *AssetService) CreateGitRepo(userID string, projectID uint, repoURLs []string, keyID *uint) ([]models.Asset, error) {
 	if err := s.validateProject(userID, projectID); err != nil {
 		return nil, err
+	}
+
+	if keyID != nil {
+		var key models.SSHKey
+		if err := s.db.Where("id = ? AND user_id = ?", *keyID, userID).First(&key).Error; err != nil {
+			return nil, fmt.Errorf("SSH key not found: %w", err)
+		}
 	}
 
 	// Deduplicate and trim
@@ -305,8 +312,10 @@ func (s *AssetService) CreateGitRepo(userID string, projectID uint, repoURLs []s
 		if !gitURLPattern.MatchString(repoURL) {
 			return nil, ErrInvalidGitURL
 		}
-		if _, err := url.Parse(repoURL); err != nil {
-			return nil, ErrInvalidGitURL
+		if !strings.HasPrefix(repoURL, "git@") {
+			if _, err := url.Parse(repoURL); err != nil {
+				return nil, ErrInvalidGitURL
+			}
 		}
 	}
 
@@ -318,6 +327,8 @@ func (s *AssetService) CreateGitRepo(userID string, projectID uint, repoURLs []s
 				ProjectID: projectID,
 				Type:      "git_repo",
 				URI:       &urlCopy,
+				KeyID:     keyID,
+				Status:    "pending",
 			}
 			if err := tx.Create(&asset).Error; err != nil {
 				return fmt.Errorf("create git repo asset: %w", err)

@@ -41,6 +41,7 @@ func SetupTestDB(t *testing.T) *gorm.DB {
 		&models.AISession{},
 		&models.AIMessage{},
 		&models.AIToolCall{},
+		&models.SSHKey{},
 	); err != nil {
 		t.Fatalf("migrate test db: %v", err)
 	}

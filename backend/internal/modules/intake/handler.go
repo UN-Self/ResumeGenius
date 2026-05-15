@@ -44,6 +44,7 @@ type createGitReq struct {
 	ProjectID uint     `json:"project_id"`
 	RepoURL   string   `json:"repo_url"`
 	RepoURLs  []string `json:"repo_urls"`
+	KeyID     *uint    `json:"key_id"`
 }
 
 type createNoteReq struct {
@@ -257,7 +258,7 @@ func (h *Handler) CreateGitRepo(c *gin.Context) {
 		urls = append(urls, req.RepoURL)
 	}
 
-	assets, err := h.assetSvc.CreateGitRepo(userID(c), req.ProjectID, urls)
+	assets, err := h.assetSvc.CreateGitRepo(userID(c), req.ProjectID, urls, req.KeyID)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidGitURL):

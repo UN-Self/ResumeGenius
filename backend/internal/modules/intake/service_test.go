@@ -456,7 +456,7 @@ func TestAssetService_CreateGitRepo(t *testing.T) {
 	proj, err := projSvc.Create("user-1", "测试项目")
 	require.NoError(t, err)
 
-	assets, err := svc.CreateGitRepo("user-1", proj.ID, []string{"https://github.com/example/resume.git"})
+	assets, err := svc.CreateGitRepo("user-1", proj.ID, []string{"https://github.com/example/resume.git"}, nil)
 	assert.NoError(t, err)
 	assert.Len(t, assets, 1)
 	assert.Equal(t, "git_repo", assets[0].Type)
@@ -472,7 +472,35 @@ func TestAssetService_CreateGitRepo_InvalidURL(t *testing.T) {
 	proj, err := projSvc.Create("user-1", "测试项目")
 	require.NoError(t, err)
 
-	_, err = svc.CreateGitRepo("user-1", proj.ID, []string{"not-a-url"})
+	_, err = svc.CreateGitRepo("user-1", proj.ID, []string{"not-a-url"}, nil)
+	assert.ErrorIs(t, err, ErrInvalidGitURL)
+}
+
+func TestAssetService_CreateGitRepo_SSHURL(t *testing.T) {
+	db := SetupTestDB(t)
+	storage := NewLocalStorage(t.TempDir())
+	svc := NewAssetService(db, storage)
+
+	projSvc := NewProjectService(db)
+	proj, err := projSvc.Create("user-1", "测试项目")
+	require.NoError(t, err)
+
+	assets, err := svc.CreateGitRepo("user-1", proj.ID, []string{"git@github.com:example/resume.git"}, nil)
+	assert.NoError(t, err)
+	assert.Len(t, assets, 1)
+	assert.Equal(t, "git@github.com:example/resume.git", *assets[0].URI)
+}
+
+func TestAssetService_CreateGitRepo_SSHURL_Invalid(t *testing.T) {
+	db := SetupTestDB(t)
+	storage := NewLocalStorage(t.TempDir())
+	svc := NewAssetService(db, storage)
+
+	projSvc := NewProjectService(db)
+	proj, err := projSvc.Create("user-1", "测试项目")
+	require.NoError(t, err)
+
+	_, err = svc.CreateGitRepo("user-1", proj.ID, []string{"git@evil user:repo.git"}, nil)
 	assert.ErrorIs(t, err, ErrInvalidGitURL)
 }
 
