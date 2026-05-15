@@ -280,7 +280,7 @@ type mockToolExecutor struct {
 }
 
 func (m *mockToolExecutor) Tools(_ context.Context) []ToolDef {
-	return NewAgentToolExecutor(nil, nil).Tools(context.Background())
+	return NewAgentToolExecutor(nil, nil, nil).Tools(context.Background())
 }
 
 func (m *mockToolExecutor) Execute(_ context.Context, name string, params map[string]interface{}) (string, error) {
@@ -718,7 +718,7 @@ func TestHandler_Undo(t *testing.T) {
 	editSvc := NewEditService(db)
 	sessionSvc := NewSessionService(db)
 	provider := &MockAdapter{}
-	toolExecutor := NewAgentToolExecutor(db, nil)
+	toolExecutor := NewAgentToolExecutor(db, nil, nil)
 	chatSvc := NewChatService(db, provider, toolExecutor, 10, nil)
 	h := NewHandler(sessionSvc, chatSvc, editSvc)
 
@@ -766,7 +766,7 @@ func TestHandler_Undo_NoMoreEdits(t *testing.T) {
 	editSvc := NewEditService(db)
 	sessionSvc := NewSessionService(db)
 	provider := &MockAdapter{}
-	toolExecutor := NewAgentToolExecutor(db, nil)
+	toolExecutor := NewAgentToolExecutor(db, nil, nil)
 	chatSvc := NewChatService(db, provider, toolExecutor, 10, nil)
 	h := NewHandler(sessionSvc, chatSvc, editSvc)
 

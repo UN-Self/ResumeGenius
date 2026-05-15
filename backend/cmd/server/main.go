@@ -19,6 +19,7 @@ import (
 	"github.com/UN-Self/ResumeGenius/backend/internal/modules/render"
 	"github.com/UN-Self/ResumeGenius/backend/internal/modules/workbench"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/database"
+	"github.com/UN-Self/ResumeGenius/backend/internal/shared/env"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/middleware"
 	"github.com/UN-Self/ResumeGenius/backend/internal/shared/storage"
 )
@@ -81,14 +82,30 @@ func setupRouter(db *gorm.DB) (*gin.Engine, func()) {
 	authed := v1.Group("")
 	authed.Use(middleware.AuthRequired(secret))
 	auth.RegisterRoutes(v1, authed, db, secret, ttl, secure)
-	intake.RegisterRoutes(authed, db, uploadDir)
+	aesKey := os.Getenv("SSH_KEY_AES_KEY")
+	if aesKey == "" {
+		log.Fatal("SSH_KEY_AES_KEY environment variable is required")
+	}
+	if len(aesKey) != 16 && len(aesKey) != 24 && len(aesKey) != 32 {
+		log.Fatalf("SSH_KEY_AES_KEY must be 16, 24, or 32 bytes, got %d", len(aesKey))
+	}
+	sshSvc := intake.RegisterRoutes(authed, db, uploadDir, aesKey)
 	parsing.RegisterRoutes(authed, db, store)
 
 	// 先创建 render services
 	_, _, renderCleanup := render.NewServices(db, store)
 
-	// agent 模块
-	agent.RegisterRoutes(authed, db)
+	// agent 模块：创建 extract_git_repo 工具并注入
+	extractModel := env.DefaultOr("GIT_EXTRACT_MODEL", "haiku")
+
+	sizeLimitMB := 50
+	if v := env.DefaultOr("GIT_REPO_SIZE_LIMIT_MB", "50"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			sizeLimitMB = parsed
+		}
+	}
+	extractTool := agent.NewExtractGitRepoTool(db, sshSvc, agent.NewOpenAIProvider(), extractModel, sizeLimitMB)
+	agent.RegisterRoutes(authed, db, extractTool)
 	workbench.RegisterRoutes(authed, db)
 
 	// render 路由注册（复用已有 services）

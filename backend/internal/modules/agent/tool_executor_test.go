@@ -18,7 +18,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func TestToolExecutor_Tools_Definitions(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, nil)
+	executor := NewAgentToolExecutor(nil, nil, nil)
 	tools := executor.Tools(context.Background())
 	require.Len(t, tools, 3, "without skillLoader should have 3 base tools")
 
@@ -38,7 +38,7 @@ func TestToolExecutor_Tools_Definitions(t *testing.T) {
 	// With skillLoader
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
-	executorWithSkills := NewAgentToolExecutor(nil, loader)
+	executorWithSkills := NewAgentToolExecutor(nil, loader, nil)
 	toolsWithSkills := executorWithSkills.Tools(context.Background())
 	require.Len(t, toolsWithSkills, 4, "with skillLoader should have 3 base + 1 load_skill")
 }
@@ -46,7 +46,7 @@ func TestToolExecutor_Tools_Definitions(t *testing.T) {
 func TestToolExecutor_Tools_NamesAreCorrect(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
+	executor := NewAgentToolExecutor(nil, loader, nil)
 	tools := executor.Tools(context.Background())
 
 	names := make([]string, len(tools))
@@ -66,7 +66,7 @@ func TestToolExecutor_Tools_NamesAreCorrect(t *testing.T) {
 func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
+	executor := NewAgentToolExecutor(nil, loader, nil)
 	tools := executor.Tools(context.Background())
 	toolByName := make(map[string]ToolDef)
 	for _, tool := range tools {
@@ -130,7 +130,7 @@ func TestToolExecutor_Tools_ParameterSchemas(t *testing.T) {
 
 func TestGetDraft_Full(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -151,7 +151,7 @@ func TestGetDraft_Full(t *testing.T) {
 
 func TestGetDraft_Full_ReturnsPageCount(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -171,7 +171,7 @@ func TestGetDraft_Full_ReturnsPageCount(t *testing.T) {
 
 func TestGetDraft_Full_PageCountZero(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -190,7 +190,7 @@ func TestGetDraft_Full_PageCountZero(t *testing.T) {
 
 func TestGetDraft_Selector(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -209,7 +209,7 @@ func TestGetDraft_Selector(t *testing.T) {
 
 func TestGetDraft_ContextMissing(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	_, err := executor.Execute(context.Background(), "get_draft", nil)
 	require.Error(t, err)
@@ -222,7 +222,7 @@ func TestGetDraft_ContextMissing(t *testing.T) {
 
 func TestApplyEdits_Success(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -294,7 +294,7 @@ func TestApplyEdits_Success(t *testing.T) {
 
 func TestApplyEdits_OldStringNotFound(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -335,7 +335,7 @@ func TestApplyEdits_OldStringNotFound(t *testing.T) {
 
 func TestApplyEdits_BaseSnapshot(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -368,7 +368,7 @@ func TestApplyEdits_BaseSnapshot(t *testing.T) {
 
 func TestSearchAssets(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -412,7 +412,7 @@ func TestSearchAssets(t *testing.T) {
 
 func TestSearchAssets_Empty(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -437,7 +437,7 @@ func TestSearchAssets_Empty(t *testing.T) {
 func TestToolExecutor_CompleteFlow(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
+	executor := NewAgentToolExecutor(nil, loader, nil)
 
 	ctx := WithSessionID(context.Background(), 100)
 
@@ -476,7 +476,7 @@ func TestToolExecutor_CompleteFlow(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestExecute_UnknownTool(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, nil)
+	executor := NewAgentToolExecutor(nil, nil, nil)
 	_, err := executor.Execute(context.Background(), "nonexistent_tool", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown tool")
@@ -517,7 +517,7 @@ func TestApplyEdits_StructuredErrorFeedback(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	params := map[string]interface{}{
@@ -548,7 +548,7 @@ func TestApplyEdits_ErrorIncludesNearbyHTML(t *testing.T) {
 	draft := models.Draft{ProjectID: 1, HTMLContent: longHTML}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	params := map[string]interface{}{
@@ -583,7 +583,7 @@ func TestGetDraft_ModeStructure(t *testing.T) {
 	draft := models.Draft{ProjectID: 1, HTMLContent: html}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	result, err := executor.Execute(ctx, "get_draft", map[string]interface{}{
@@ -615,7 +615,7 @@ func TestGetDraft_ModeSearch(t *testing.T) {
 	draft := models.Draft{ProjectID: 1, HTMLContent: html}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	result, err := executor.Execute(ctx, "get_draft", map[string]interface{}{
@@ -636,7 +636,7 @@ func TestGetDraft_ModeSearch_MultipleResults(t *testing.T) {
 	draft := models.Draft{ProjectID: 1, HTMLContent: html}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	result, err := executor.Execute(ctx, "get_draft", map[string]interface{}{
@@ -659,7 +659,7 @@ func TestGetDraft_ModeSection_BackwardCompatible(t *testing.T) {
 	draft := models.Draft{ProjectID: 1, HTMLContent: html}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	// Old selector param still works
@@ -687,7 +687,7 @@ func TestGetDraft_ModeFull(t *testing.T) {
 	draft := models.Draft{ProjectID: 1, HTMLContent: html}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	result, err := executor.Execute(ctx, "get_draft", map[string]interface{}{
@@ -713,7 +713,7 @@ func TestApplyEdits_StepByStep_PartialSuccess(t *testing.T) {
 	draft := models.Draft{ProjectID: 1, HTMLContent: html}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	params := map[string]interface{}{
@@ -749,7 +749,7 @@ func TestApplyEdits_StepByStep_ResultDetails(t *testing.T) {
 	draft := models.Draft{ProjectID: 1, HTMLContent: html}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	params := map[string]interface{}{
@@ -795,7 +795,7 @@ var _ time.Time
 
 func TestGetDraft_CallCounting_RejectsAfterLimit(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -827,7 +827,7 @@ func TestGetDraft_CallCounting_RejectsAfterLimit(t *testing.T) {
 
 func TestGetDraft_CallCounting_ResetsAfterClearSessionState(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -857,7 +857,7 @@ func TestGetDraft_CallCounting_ResetsAfterClearSessionState(t *testing.T) {
 
 func TestGetDraft_CallCounting_IndependentPerSession(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -881,7 +881,7 @@ func TestGetDraft_CallCounting_IndependentPerSession(t *testing.T) {
 }
 
 func TestGetDraft_ToolDescription_IncludesCallLimit(t *testing.T) {
-	executor := NewAgentToolExecutor(nil, nil)
+	executor := NewAgentToolExecutor(nil, nil, nil)
 	tools := executor.Tools(context.Background())
 
 	var getDraft ToolDef
@@ -900,7 +900,7 @@ func TestGetDraft_ToolDescription_IncludesCallLimit(t *testing.T) {
 
 func TestApplyEdits_FailureIncludesRecoveryHint(t *testing.T) {
 	db := SetupTestDB(t)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	proj := models.Project{Title: "Test", Status: "active"}
 	require.NoError(t, db.Create(&proj).Error)
@@ -959,7 +959,7 @@ func TestSkillLoader_LoadSkillWithReferences_NotFound(t *testing.T) {
 func TestTools_ContainsLoadSkill(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
+	executor := NewAgentToolExecutor(nil, loader, nil)
 	tools := executor.Tools(context.Background())
 
 	names := make([]string, len(tools))
@@ -976,7 +976,7 @@ func TestTools_ContainsLoadSkill(t *testing.T) {
 func TestLoadSkill_ExecutesAndReturnsFullContent(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
+	executor := NewAgentToolExecutor(nil, loader, nil)
 
 	ctx := WithSessionID(context.Background(), 600)
 	result, err := executor.Execute(ctx, "load_skill", map[string]interface{}{
@@ -1010,7 +1010,7 @@ func TestLoadSkill_ExecutesAndReturnsFullContent(t *testing.T) {
 func TestLoadSkill_NotFound(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
+	executor := NewAgentToolExecutor(nil, loader, nil)
 
 	result, err := executor.Execute(context.Background(), "load_skill", map[string]interface{}{
 		"skill_name": "nonexistent",
@@ -1022,7 +1022,7 @@ func TestLoadSkill_NotFound(t *testing.T) {
 func TestLoadSkill_MissingParam(t *testing.T) {
 	loader, err := NewSkillLoader()
 	require.NoError(t, err)
-	executor := NewAgentToolExecutor(nil, loader)
+	executor := NewAgentToolExecutor(nil, loader, nil)
 
 	result, err := executor.Execute(context.Background(), "load_skill", nil)
 	require.NoError(t, err)
@@ -1141,7 +1141,7 @@ func TestApplyEdits_CSSNormalization_MultiLineCSS(t *testing.T) {
 	draft := models.Draft{ProjectID: 1, HTMLContent: html}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	// Model generates single-line CSS as old_string
@@ -1177,7 +1177,7 @@ func TestApplyEdits_CSSNormalization_FallbackBehavior(t *testing.T) {
 	draft := models.Draft{ProjectID: 1, HTMLContent: html}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	// Both exact and normalized should fail for truly nonexistent content
@@ -1206,7 +1206,7 @@ func TestApplyEdits_CSSNormalization_ChineseContent(t *testing.T) {
 	draft := models.Draft{ProjectID: 1, HTMLContent: html}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	result, err := executor.Execute(ctx, "apply_edits", map[string]interface{}{

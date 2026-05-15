@@ -28,7 +28,7 @@ func TestFullFlow_Integration(t *testing.T) {
 
 	ctx := WithDraftID(context.Background(), draft.ID)
 	ctx = WithProjectID(ctx, project.ID)
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 
 	// 1. get_draft — full HTML
 	result, err := executor.Execute(ctx, "get_draft", nil)
@@ -94,7 +94,7 @@ func TestIntegration_StructuredWorkflow(t *testing.T) {
 	draft := models.Draft{ProjectID: 1, HTMLContent: html}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	// Step 1: Get structure overview
@@ -152,7 +152,7 @@ func TestIntegration_StepByStepWithFailure(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	// First succeeds, second fails
@@ -181,7 +181,7 @@ func TestIntegration_StructuredErrorFeedback(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&draft).Error)
 
-	executor := NewAgentToolExecutor(db, nil)
+	executor := NewAgentToolExecutor(db, nil, nil)
 	ctx := WithDraftID(context.Background(), draft.ID)
 
 	_, err := executor.Execute(ctx, "apply_edits", map[string]interface{}{
