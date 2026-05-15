@@ -6,17 +6,26 @@ import (
 	"gorm.io/gorm"
 )
 
-func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, uploadDir string) {
+func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, uploadDir string, aesKey string) *SSHKeyService {
 	store := storage.NewLocalStorage(uploadDir)
 	projectSvc := NewProjectService(db)
 	assetSvc := NewAssetService(db, store)
 	h := NewHandler(projectSvc, assetSvc)
+
+	// SSH Key management
+	sshSvc := NewSSHKeyService(db, aesKey)
+	sshH := NewSSHHandler(sshSvc)
 
 	// Project CRUD
 	rg.POST("/projects", h.CreateProject)
 	rg.GET("/projects", h.ListProjects)
 	rg.GET("/projects/:project_id", h.GetProject)
 	rg.DELETE("/projects/:project_id", h.DeleteProject)
+
+	// SSH Key management
+	rg.POST("/ssh-keys", sshH.CreateSSHKey)
+	rg.GET("/ssh-keys", sshH.ListSSHKeys)
+	rg.DELETE("/ssh-keys/:key_id", sshH.DeleteSSHKey)
 
 	// Asset management
 	rg.POST("/assets/upload", h.UploadFile)
@@ -31,4 +40,6 @@ func RegisterRoutes(rg *gin.RouterGroup, db *gorm.DB, uploadDir string) {
 	// Notes
 	rg.POST("/assets/notes", h.CreateNote)
 	rg.PUT("/assets/notes/:note_id", h.UpdateNote)
+
+	return sshSvc
 }
